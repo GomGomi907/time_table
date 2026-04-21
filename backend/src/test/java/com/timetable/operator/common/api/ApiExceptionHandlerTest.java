@@ -11,7 +11,9 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.jpa.hibernate.ddl-auto=update"
+})
 @AutoConfigureMockMvc
 class ApiExceptionHandlerTest {
 

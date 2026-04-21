@@ -27,6 +27,7 @@ public class SettingsService {
 
     @Transactional
     public UserPreferences update(SettingsUpdateRequest request) {
+        AppUser user = currentUserProvider.getCurrentUser();
         UserPreferences preferences = getOrCreatePreferences();
         if (request.quietHoursStart() != null) {
             preferences.setQuietHoursStart(request.quietHoursStart());
@@ -45,6 +46,15 @@ public class SettingsService {
         }
         if (request.interventionFrequency() != null && !request.interventionFrequency().isBlank()) {
             preferences.setInterventionFrequency(request.interventionFrequency());
+        }
+        if (request.timezone() != null && !request.timezone().isBlank()) {
+            user.setTimezone(request.timezone().trim());
+        }
+        if (request.autoRescheduleEnabled() != null) {
+            user.setAutoRescheduleEnabled(request.autoRescheduleEnabled());
+        }
+        if (request.focusAutoEnterEnabled() != null) {
+            user.setFocusAutoEnterEnabled(request.focusAutoEnterEnabled());
         }
         return userPreferencesRepository.save(preferences);
     }
@@ -67,7 +77,10 @@ public class SettingsService {
             Integer bufferMinutes,
             Integer overtimeTriggerMinutes,
             Integer openGapTriggerMinutes,
-            String interventionFrequency
+            String interventionFrequency,
+            String timezone,
+            Boolean autoRescheduleEnabled,
+            Boolean focusAutoEnterEnabled
     ) {
     }
 }

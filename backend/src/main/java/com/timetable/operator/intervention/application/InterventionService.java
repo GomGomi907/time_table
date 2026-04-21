@@ -4,6 +4,7 @@ import com.timetable.operator.auth.domain.AppUser;
 import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.intervention.domain.Intervention;
 import com.timetable.operator.intervention.domain.InterventionStatus;
+import com.timetable.operator.intervention.domain.InterventionTriggerType;
 import com.timetable.operator.intervention.infrastructure.InterventionRepository;
 import com.timetable.operator.schedule.application.ScheduleService;
 import java.util.List;

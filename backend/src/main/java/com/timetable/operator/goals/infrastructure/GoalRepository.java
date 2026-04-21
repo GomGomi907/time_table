@@ -10,4 +10,8 @@ public interface GoalRepository extends JpaRepository<Goal, UUID> {
     boolean existsByUserId(UUID userId);
 
     List<Goal> findByUserId(UUID userId);
+
+    List<Goal> findByUserIdOrderByPriorityAscCreatedAtAsc(UUID userId);
+
+    java.util.Optional<Goal> findByIdAndUserId(UUID id, UUID userId);
 }

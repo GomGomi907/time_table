@@ -27,4 +27,16 @@ public class AppUser extends AuditableEntity {
 
     @Column(nullable = false)
     private boolean demoUser;
+
+    @Column(nullable = false)
+    private String timezone = "Asia/Seoul";
+
+    @Column(nullable = false)
+    private boolean autoRescheduleEnabled;
+
+    @Column(nullable = false)
+    private boolean focusAutoEnterEnabled;
+
+    @Column(length = 1000)
+    private String profileImageUrl;
 }

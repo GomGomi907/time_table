@@ -1,5 +1,8 @@
 package com.timetable.operator.settings.api;
 
+import com.timetable.operator.auth.domain.AppUser;
+import com.timetable.operator.common.api.ApiEnvelope;
+import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.settings.application.SettingsService;
 import com.timetable.operator.settings.application.SettingsService.SettingsUpdateRequest;
 import com.timetable.operator.settings.domain.UserPreferences;
@@ -16,15 +19,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class SettingsController {
 
     private final SettingsService settingsService;
+    private final CurrentUserProvider currentUserProvider;
 
     @GetMapping
-    public SettingsResponse getSettings() {
-        return SettingsResponse.from(settingsService.getOrCreatePreferences());
+    public ApiEnvelope<SettingsResponse> getSettings() {
+        return ApiEnvelope.ok(SettingsResponse.from(
+                settingsService.getOrCreatePreferences(),
+                currentUserProvider.getCurrentUser()
+        ));
     }
 
     @PutMapping
-    public SettingsResponse updateSettings(@RequestBody SettingsUpdateRequest request) {
-        return SettingsResponse.from(settingsService.update(request));
+    public ApiEnvelope<SettingsResponse> updateSettings(@RequestBody SettingsUpdateRequest request) {
+        return ApiEnvelope.ok(SettingsResponse.from(
+                settingsService.update(request),
+                currentUserProvider.getCurrentUser()
+        ));
     }
 
     public record SettingsResponse(
@@ -34,9 +44,12 @@ public class SettingsController {
             Integer bufferMinutes,
             Integer overtimeTriggerMinutes,
             Integer openGapTriggerMinutes,
-            String interventionFrequency
+            String interventionFrequency,
+            String timezone,
+            boolean autoRescheduleEnabled,
+            boolean focusAutoEnterEnabled
     ) {
-        static SettingsResponse from(UserPreferences preferences) {
+        static SettingsResponse from(UserPreferences preferences, AppUser user) {
             return new SettingsResponse(
                     preferences.getId().toString(),
                     preferences.getQuietHoursStart().toString(),
@@ -44,7 +57,10 @@ public class SettingsController {
                     preferences.getBufferMinutes(),
                     preferences.getOvertimeTriggerMinutes(),
                     preferences.getOpenGapTriggerMinutes(),
-                    preferences.getInterventionFrequency()
+                    preferences.getInterventionFrequency(),
+                    user.getTimezone(),
+                    user.isAutoRescheduleEnabled(),
+                    user.isFocusAutoEnterEnabled()
             );
         }
     }

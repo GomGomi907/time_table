@@ -3,7 +3,6 @@ package com.timetable.operator.common.config;
 import java.time.LocalTime;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.util.StringUtils;
 
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
@@ -18,6 +17,7 @@ public record AppProperties(
             String defaultUserName,
             String googleClientId,
             String googleClientSecret,
+            String googleCredentialsFile,
             List<String> googleScopes
     ) {
     }
@@ -46,9 +46,11 @@ public record AppProperties(
     }
 
     public boolean googleOauthEnabled() {
-        return auth != null
-                && StringUtils.hasText(auth.googleClientId())
-                && StringUtils.hasText(auth.googleClientSecret());
+        return auth != null && GoogleOauthCredentialsSupport.hasConfiguredCredentials(
+                auth.googleClientId(),
+                auth.googleClientSecret(),
+                auth.googleCredentialsFile()
+        );
     }
 
     public List<String> googleOauthScopes() {

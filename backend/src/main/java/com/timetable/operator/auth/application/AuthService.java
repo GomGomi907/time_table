@@ -42,6 +42,9 @@ public class AuthService {
                 user.getId().toString(),
                 user.getEmail(),
                 user.getDisplayName(),
+                user.getTimezone(),
+                user.isAutoRescheduleEnabled(),
+                user.isFocusAutoEnterEnabled(),
                 connection.map(CalendarConnection::getStatus).orElse(CalendarConnectionStatus.NOT_CONNECTED).name(),
                 latestSync.map(CalendarSyncRun::getFinishedAt).orElse(null),
                 appProperties.frontendBaseUrl() + "/auth/callback"
@@ -90,6 +93,9 @@ public class AuthService {
             String userId,
             String email,
             String displayName,
+            String timezone,
+            boolean autoRescheduleEnabled,
+            boolean focusAutoEnterEnabled,
             String googleConnectionStatus,
             Instant lastSyncAt,
             String callbackUrl

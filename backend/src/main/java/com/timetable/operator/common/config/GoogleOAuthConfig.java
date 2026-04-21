@@ -1,5 +1,6 @@
 package com.timetable.operator.common.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
@@ -17,12 +18,20 @@ import org.springframework.security.oauth2.client.registration.InMemoryClientReg
 public class GoogleOAuthConfig {
 
     private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public ClientRegistrationRepository clientRegistrationRepository() {
+        GoogleOauthCredentials credentials = GoogleOauthCredentialsSupport.resolve(
+                appProperties.auth().googleClientId(),
+                appProperties.auth().googleClientSecret(),
+                appProperties.auth().googleCredentialsFile(),
+                objectMapper
+        );
+
         ClientRegistration googleRegistration = CommonOAuth2Provider.GOOGLE.getBuilder("google")
-                .clientId(appProperties.auth().googleClientId())
-                .clientSecret(appProperties.auth().googleClientSecret())
+                .clientId(credentials.clientId())
+                .clientSecret(credentials.clientSecret())
                 .scope(appProperties.googleOauthScopes())
                 .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
                 .build();

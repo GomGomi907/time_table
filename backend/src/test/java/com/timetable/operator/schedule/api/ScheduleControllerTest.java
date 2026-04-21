@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MvcResult;
         "spring.datasource.url=jdbc:h2:mem:schedule-controller-test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
+        "spring.jpa.hibernate.ddl-auto=update",
         "app.ai.enabled=false"
 })
 @AutoConfigureMockMvc
