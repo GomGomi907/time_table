@@ -1,83 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiClient } from "@/shared/api/client";
-import { getApiErrorMessage } from "@/shared/api/getApiErrorMessage";
-import type { GoalCreateRequest, GoalResponse } from "@/shared/api/types";
+import { useEffect, useMemo } from "react";
+import {
+  legacyGoalRequestToCreateGoalRequest,
+  toGoalResponse,
+} from "@/shared/api/compat";
+import type {
+  GoalCreateRequest,
+  GoalProgressUpdateRequest,
+  GoalResponse,
+} from "@/shared/api/types";
+import { useGoalsStore } from "./storeGoals";
 
-export const useGoals = () => {
-  const [data, setData] = useState<GoalResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isMutating, setIsMutating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = async () => {
-    setIsLoading(true);
-    try {
-      const response = await apiClient.get<GoalResponse[]>("/goals");
-      setData(response.data);
-      setError(null);
-    } catch (requestError) {
-      console.error("Failed to fetch goals", requestError);
-      setError(getApiErrorMessage(requestError, "목표를 불러오지 못했습니다."));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+export const useGoalsResource = () => {
+  const data = useGoalsStore((state) => state.items);
+  const meta = useGoalsStore((state) => state.meta);
+  const isLoading = useGoalsStore((state) => state.isLoading);
+  const isMutating = useGoalsStore((state) => state.isMutating);
+  const hasLoaded = useGoalsStore((state) => state.hasLoaded);
+  const error = useGoalsStore((state) => state.error);
+  const refresh = useGoalsStore((state) => state.refresh);
+  const createGoal = useGoalsStore((state) => state.createGoal);
+  const updateGoal = useGoalsStore((state) => state.updateGoal);
+  const deleteGoal = useGoalsStore((state) => state.deleteGoal);
+  const updateProgress = useGoalsStore((state) => state.updateProgress);
 
   useEffect(() => {
-    void refresh();
-  }, []);
-
-  const createGoal = async (payload: GoalCreateRequest) => {
-    setIsMutating(true);
-    try {
-      const response = await apiClient.post<GoalResponse>("/goals", payload);
-      setData((current) => [...current, response.data]);
-      setError(null);
-      return response.data;
-    } catch (requestError) {
-      console.error("Failed to create goal", requestError);
-      setError(getApiErrorMessage(requestError, "목표를 저장하지 못했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
+    if (!hasLoaded) {
+      void refresh();
     }
-  };
-
-  const updateGoal = async (id: string, payload: GoalCreateRequest) => {
-    setIsMutating(true);
-    try {
-      const response = await apiClient.put<GoalResponse>(`/goals/${id}`, payload);
-      setData((current) => current.map((g) => (g.id === id ? response.data : g)));
-      setError(null);
-      return response.data;
-    } catch (requestError) {
-      console.error("Failed to update goal", requestError);
-      setError(getApiErrorMessage(requestError, "목표 수정에 실패했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
-    }
-  };
-
-  const deleteGoal = async (id: string) => {
-    setIsMutating(true);
-    try {
-      await apiClient.delete(`/goals/${id}`);
-      setData((current) => current.filter((g) => g.id !== id));
-      setError(null);
-    } catch (requestError) {
-      console.error("Failed to delete goal", requestError);
-      setError(getApiErrorMessage(requestError, "목표 삭제에 실패했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
-    }
-  };
+  }, [hasLoaded, refresh]);
 
   return {
     data,
+    meta,
     isLoading,
     isMutating,
     error,
@@ -85,5 +41,34 @@ export const useGoals = () => {
     createGoal,
     updateGoal,
     deleteGoal,
+    updateProgress,
+  };
+};
+
+export const useGoals = () => {
+  const resource = useGoalsResource();
+
+  const data = useMemo<GoalResponse[]>(
+    () => resource.data.map(toGoalResponse),
+    [resource.data]
+  );
+
+  return {
+    data,
+    isLoading: resource.isLoading,
+    isMutating: resource.isMutating,
+    error: resource.error,
+    refresh: resource.refresh,
+    createGoal: async (payload: GoalCreateRequest) =>
+      toGoalResponse(
+        await resource.createGoal(legacyGoalRequestToCreateGoalRequest(payload))
+      ),
+    updateGoal: async (id: string, payload: GoalCreateRequest) =>
+      toGoalResponse(
+        await resource.updateGoal(id, legacyGoalRequestToCreateGoalRequest(payload))
+      ),
+    deleteGoal: resource.deleteGoal,
+    updateProgress: (id: string, payload: GoalProgressUpdateRequest) =>
+      resource.updateProgress(id, payload),
   };
 };

@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarRange, LayoutDashboard, LogOut, Settings2, Target } from "lucide-react";
+import {
+  CalendarRange,
+  Crosshair,
+  LayoutDashboard,
+  LogOut,
+  Settings2,
+  Target,
+} from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { AuthSessionResponse } from "@/shared/api/types";
 import { ThemeToggle } from "./ThemeToggle";
@@ -14,7 +21,8 @@ interface AppShellProps {
 }
 
 const navItems = [
-  { href: "/dashboard", label: "오늘", icon: LayoutDashboard },
+  { href: "/dashboard", label: "워크스페이스", icon: LayoutDashboard },
+  { href: "/focus", label: "집중", icon: Crosshair },
   { href: "/schedule", label: "시간표", icon: CalendarRange },
   { href: "/goals", label: "목표", icon: Target },
   { href: "/settings", label: "설정", icon: Settings2 },

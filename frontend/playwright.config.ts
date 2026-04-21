@@ -21,6 +21,8 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        locale: "ko-KR",
+        timezoneId: "Asia/Seoul",
         viewport: { width: 1440, height: 1080 },
       },
     },

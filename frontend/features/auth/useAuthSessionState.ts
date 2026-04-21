@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiClient } from "@/shared/api/client";
-import { getApiErrorMessage } from "@/shared/api/getApiErrorMessage";
+import { useEffect } from "react";
 import type { AuthSessionResponse, GoogleStartResponse } from "@/shared/api/types";
+import { useAuthSessionStore } from "./storeAuthSession";
 
 export interface AuthSessionState {
   session: AuthSessionResponse | null;
@@ -16,48 +15,28 @@ export interface AuthSessionState {
 }
 
 export const useAuthSessionState = (): AuthSessionState => {
-  const [session, setSession] = useState<AuthSessionResponse | null>(null);
-  const [googleStart, setGoogleStart] = useState<GoogleStartResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = async () => {
-    setIsLoading(true);
-    try {
-      const [{ data: sessionData }, { data: googleStartData }] = await Promise.all([
-        apiClient.get<AuthSessionResponse>("/auth/session"),
-        apiClient.get<GoogleStartResponse>("/auth/google/start"),
-      ]);
-      setSession(sessionData);
-      setGoogleStart(googleStartData);
-      setError(null);
-    } catch (requestError) {
-      console.error("Failed to load auth session state", requestError);
-      setSession(null);
-      setGoogleStart(null);
-      setError(getApiErrorMessage(requestError, "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const session = useAuthSessionStore((state) => state.session);
+  const googleStart = useAuthSessionStore((state) => state.googleStart);
+  const isLoading = useAuthSessionStore((state) => state.isLoading);
+  const hasLoaded = useAuthSessionStore((state) => state.hasLoaded);
+  const error = useAuthSessionStore((state) => state.error);
+  const refresh = useAuthSessionStore((state) => state.refresh);
+  const startGoogleLoginRequest = useAuthSessionStore((state) => state.startGoogleLogin);
+  const logoutRequest = useAuthSessionStore((state) => state.logout);
 
   useEffect(() => {
-    void refresh();
-  }, []);
+    if (!hasLoaded && !isLoading) {
+      void refresh();
+    }
+  }, [hasLoaded, isLoading, refresh]);
 
   const startGoogleLogin = async () => {
-    const { data } = await apiClient.get<GoogleStartResponse>("/auth/google/start");
-    setGoogleStart(data);
-
-    if (!data.enabled || !data.url) {
-      throw new Error(data.message ?? "Google 로그인을 지금 사용할 수 없습니다.");
-    }
-
-    window.location.assign(data.url);
+    const url = await startGoogleLoginRequest();
+    window.location.assign(url);
   };
 
   const logout = async () => {
-    await apiClient.post("/auth/logout");
+    await logoutRequest();
     window.location.assign("/login");
   };
 

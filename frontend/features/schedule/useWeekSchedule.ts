@@ -1,106 +1,63 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiClient } from "@/shared/api/client";
-import { getApiErrorMessage } from "@/shared/api/getApiErrorMessage";
+import { useMemo } from "react";
+import {
+  getCurrentWeekEventQuery,
+  scheduleBlockToCreateEventRequest,
+  toWeekScheduleResponse,
+} from "@/shared/api/compat";
+import { apiEnvelopeClient, requestApiData } from "@/shared/api/client";
 import type {
+  ApiResult,
+  ChatCommandResponse,
   ScheduleImportRequest,
-  ScheduleBlockResponse,
   ScheduleBlockWriteRequest,
-  WeekScheduleResponse,
 } from "@/shared/api/types";
+import { useEvents } from "@/features/events/useEvents";
 
 export const useWeekSchedule = () => {
-  const [data, setData] = useState<WeekScheduleResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isMutating, setIsMutating] = useState(false);
+  const events = useEvents(getCurrentWeekEventQuery());
 
-  const refresh = async () => {
-    setIsLoading(true);
-    try {
-      const response = await apiClient.get<WeekScheduleResponse>("/schedule/week");
-      setData(response.data);
-      setError(null);
-    } catch (requestError) {
-      console.error("Failed to fetch weekly schedule", requestError);
-      setError(getApiErrorMessage(requestError, "주간 시간표를 불러오지 못했습니다."));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const data = useMemo(
+    () => toWeekScheduleResponse(events.data),
+    [events.data]
+  );
 
   const importSchedule = async (request: ScheduleImportRequest) => {
-    setIsMutating(true);
-    try {
-      const response = await apiClient.post<WeekScheduleResponse>("/schedule/import", {
-        rawText: request.rawText,
-        replaceExisting: request.replaceExisting,
-      });
-      setData(response.data);
-      setError(null);
-      return response.data;
-    } catch (requestError) {
-      console.error("Failed to import weekly schedule", requestError);
-      setError(getApiErrorMessage(requestError, "일정을 자동으로 정리하지 못했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
-    }
+    const mode = request.replaceExisting
+      ? "기존 이번 주 일정을 대체하고"
+      : "기존 일정은 유지한 채로";
+    const message = `${mode} 다음 텍스트를 이번 주 일정으로 반영해줘.\n${request.rawText}`;
+
+    await requestApiData(
+      apiEnvelopeClient.post<ApiResult<ChatCommandResponse>>("/chat/command", {
+        message,
+      })
+    );
+
+    return toWeekScheduleResponse(await events.refresh());
   };
 
   const createBlock = async (payload: ScheduleBlockWriteRequest) => {
-    setIsMutating(true);
-    try {
-      await apiClient.post<ScheduleBlockResponse>("/schedule/blocks", payload);
-      await refresh();
-    } catch (requestError) {
-      console.error("Failed to create schedule block", requestError);
-      setError(getApiErrorMessage(requestError, "일정 블록을 추가하지 못했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
-    }
+    await events.createEvent(scheduleBlockToCreateEventRequest(payload));
   };
 
   const updateBlock = async (blockId: string, payload: ScheduleBlockWriteRequest) => {
-    setIsMutating(true);
-    try {
-      await apiClient.put<ScheduleBlockResponse>(`/schedule/blocks/${blockId}`, payload);
-      await refresh();
-    } catch (requestError) {
-      console.error("Failed to update schedule block", requestError);
-      setError(getApiErrorMessage(requestError, "일정 블록을 수정하지 못했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
-    }
+    await events.updateEvent(blockId, scheduleBlockToCreateEventRequest(payload));
   };
 
   const deleteBlock = async (blockId: string) => {
-    setIsMutating(true);
-    try {
-      await apiClient.delete(`/schedule/blocks/${blockId}`);
-      await refresh();
-    } catch (requestError) {
-      console.error("Failed to delete schedule block", requestError);
-      setError(getApiErrorMessage(requestError, "일정 블록을 삭제하지 못했습니다."));
-      throw requestError;
-    } finally {
-      setIsMutating(false);
-    }
+    await events.deleteEvent(blockId);
   };
 
   return {
     data,
-    isLoading,
-    isMutating,
-    error,
-    refresh,
+    isLoading: events.isLoading,
+    isMutating: events.isMutating,
+    error: events.error,
+    refresh: async () => {
+      await events.refresh();
+    },
     importSchedule,
     createBlock,
     updateBlock,

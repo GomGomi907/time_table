@@ -65,99 +65,71 @@ const tasksResponse = [
   },
 ] as const;
 
-const dayKeys = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-] as const;
+const FIXED_NOW_ISO = "2026-04-22T10:40:00+09:00";
 
-const clampMinutes = (minutes: number) => Math.max(0, Math.min(minutes, 23 * 60 + 59));
+const addMinutes = (date: Date, minutes: number) =>
+  new Date(date.getTime() + minutes * 60 * 1000);
 
-const formatTime = (minutes: number) => {
-  const safeMinutes = clampMinutes(minutes);
-  const hour = Math.floor(safeMinutes / 60)
-    .toString()
-    .padStart(2, "0");
-  const minute = (safeMinutes % 60).toString().padStart(2, "0");
-  return `${hour}:${minute}`;
-};
-
-function buildScheduleResponse(now = new Date()) {
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const anchor = Math.min(Math.max(currentMinutes, 9 * 60 + 30), 20 * 60);
-  const currentDay = dayKeys[now.getDay()];
-  const baseBlocks = {
-    Monday: [
-      { id: "mon-1", startTime: "09:00", endTime: "10:30", activity: "주간 계획 점검", category: "ADMIN", note: "회의 전 우선순위 정리", sourceType: "MANUAL", sourceRef: null },
-      { id: "mon-2", startTime: "14:00", endTime: "16:00", activity: "집중 작업", category: "WORK", note: "문서와 화면 정리", sourceType: "DEFAULT_ROUTINE", sourceRef: null },
-    ],
-    Tuesday: [
-      { id: "tue-1", startTime: "10:00", endTime: "11:00", activity: "고객 미팅", category: "WORK", note: null, sourceType: "DEFAULT_ROUTINE", sourceRef: null },
-      { id: "tue-2", startTime: "19:30", endTime: "20:30", activity: "영어 학습", category: "GROWTH", note: null, sourceType: "GEMMA_IMPORT", sourceRef: null },
-    ],
-    Wednesday: [
-      { id: "wed-1", startTime: "08:30", endTime: "09:30", activity: "운동", category: "LIFE", note: "가볍게 러닝", sourceType: "MANUAL", sourceRef: null },
-      { id: "wed-2", startTime: "13:00", endTime: "15:00", activity: "기획 검토", category: "WORK", note: null, sourceType: "DEFAULT_ROUTINE", sourceRef: null },
-    ],
-    Thursday: [
-      { id: "thu-1", startTime: "09:30", endTime: "11:30", activity: "리서치 정리", category: "WORK", note: null, sourceType: "DEFAULT_ROUTINE", sourceRef: null },
-    ],
-    Friday: [
-      { id: "fri-1", startTime: "11:00", endTime: "12:00", activity: "주간 회고", category: "ADMIN", note: "다음 주 준비", sourceType: "MANUAL", sourceRef: null },
-      { id: "fri-2", startTime: "15:00", endTime: "17:00", activity: "마감 작업", category: "WORK", note: null, sourceType: "DEFAULT_ROUTINE", sourceRef: null },
-    ],
-    Saturday: [
-      { id: "sat-1", startTime: "10:00", endTime: "11:30", activity: "개인 프로젝트", category: "HOBBY", note: null, sourceType: "MANUAL", sourceRef: null },
-    ],
-    Sunday: [
-      { id: "sun-1", startTime: "16:00", endTime: "17:00", activity: "주간 정리", category: "ADMIN", note: null, sourceType: "GEMMA_IMPORT", sourceRef: null },
-    ],
-  } as const;
-
-  return {
-    week: dayKeys.map((dayKey) => ({
-      dayOfWeek: dayKey,
-      blocks:
-        dayKey === currentDay
-          ? [
-              {
-                id: "block-1",
-                startTime: formatTime(anchor - 45),
-                endTime: formatTime(anchor + 50),
-                activity: "문서 작성 집중",
-                category: "WORK",
-                note: "초안 정리와 검토",
-                sourceType: "MANUAL",
-                sourceRef: null,
-              },
-              {
-                id: "block-2",
-                startTime: formatTime(anchor + 65),
-                endTime: formatTime(anchor + 120),
-                activity: "주간 시간표 정리",
-                category: "ADMIN",
-                note: "오후 일정 다시 배치",
-                sourceType: "MANUAL",
-                sourceRef: null,
-              },
-              {
-                id: "block-3",
-                startTime: formatTime(anchor + 150),
-                endTime: formatTime(anchor + 210),
-                activity: "리뷰 미팅",
-                category: "WORK",
-                note: null,
-                sourceType: "DEFAULT_ROUTINE",
-                sourceRef: null,
-              },
-            ]
-          : [...(baseBlocks[dayKey] ?? [])],
-    })),
-  };
+function buildEventsResponse(now = new Date(FIXED_NOW_ISO)) {
+  return [
+    {
+      id: "event-1",
+      title: "문서 작성 집중",
+      description: "초안 정리와 검토",
+      startAt: addMinutes(now, -40).toISOString(),
+      endAt: addMinutes(now, 20).toISOString(),
+      actualStartAt: addMinutes(now, -40).toISOString(),
+      actualEndAt: null,
+      priority: 2,
+      status: "in_progress",
+      category: "work",
+      goalId: "goal-1",
+      taskId: null,
+      sourceType: "local",
+      externalProvider: null,
+      externalSourceId: null,
+      createdAt: addMinutes(now, -90).toISOString(),
+      updatedAt: addMinutes(now, -5).toISOString(),
+    },
+    {
+      id: "event-2",
+      title: "주간 시간표 정리",
+      description: "오후 일정 다시 배치",
+      startAt: addMinutes(now, 35).toISOString(),
+      endAt: addMinutes(now, 90).toISOString(),
+      actualStartAt: null,
+      actualEndAt: null,
+      priority: 3,
+      status: "planned",
+      category: "admin",
+      goalId: null,
+      taskId: null,
+      sourceType: "local",
+      externalProvider: null,
+      externalSourceId: null,
+      createdAt: addMinutes(now, -120).toISOString(),
+      updatedAt: addMinutes(now, -10).toISOString(),
+    },
+    {
+      id: "event-3",
+      title: "리뷰 미팅",
+      description: null,
+      startAt: addMinutes(now, 150).toISOString(),
+      endAt: addMinutes(now, 210).toISOString(),
+      actualStartAt: null,
+      actualEndAt: null,
+      priority: 3,
+      status: "planned",
+      category: "meeting",
+      goalId: null,
+      taskId: null,
+      sourceType: "imported",
+      externalProvider: "google_calendar",
+      externalSourceId: "google-event-1",
+      createdAt: addMinutes(now, -180).toISOString(),
+      updatedAt: addMinutes(now, -15).toISOString(),
+    },
+  ] as const;
 }
 
 const fulfillJson = (route: Route, json: unknown, status = 200) =>
@@ -166,6 +138,10 @@ const fulfillJson = (route: Route, json: unknown, status = 200) =>
     contentType: "application/json",
     body: JSON.stringify(json),
   });
+
+async function freezeTime(page: Page) {
+  await page.clock.setFixedTime(FIXED_NOW_ISO);
+}
 
 async function enableDarkTheme(page: Page) {
   await page.addInitScript(() => {
@@ -219,8 +195,8 @@ async function mockAuthenticatedDashboard(page: Page) {
       });
     }
 
-    if (pathname.endsWith("/schedule/week")) {
-      return fulfillJson(route, buildScheduleResponse());
+    if (pathname.endsWith("/events") && method === "GET") {
+      return fulfillJson(route, buildEventsResponse());
     }
 
     if (pathname.endsWith("/goals")) {
@@ -282,12 +258,17 @@ test("로그인 화면이 제품답게 보인다", async ({ page }, testInfo) =>
 
 test("오늘 화면이 현재 블록 중심으로 정리되어 보인다", async ({ page }, testInfo) => {
   await mockAuthenticatedDashboard(page);
+  await freezeTime(page);
 
   await page.goto("/dashboard");
 
+  const currentFocusCard = page.getByRole("article").filter({ hasText: "진행 중" });
+
   await expect(page.getByRole("heading", { name: "오늘의 집중" })).toBeVisible();
-  await expect(page.getByText("문서 작성 집중")).toBeVisible();
-  await expect(page.getByText("초안 정리와 검토")).toBeVisible();
+  await expect(
+    currentFocusCard.getByRole("heading", { name: "문서 작성 집중" })
+  ).toBeVisible();
+  await expect(currentFocusCard.getByText("초안 정리와 검토")).toBeVisible();
   await expect(page.getByRole("link", { name: /시간표 보기/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /목표 보기/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "할 일 점검" })).toBeVisible();
@@ -318,6 +299,7 @@ test("로그인 화면의 다크 테마를 시각 점검한다", async ({ page }
 test("오늘 화면의 다크 테마를 시각 점검한다", async ({ page }, testInfo) => {
   await enableDarkTheme(page);
   await mockAuthenticatedDashboard(page);
+  await freezeTime(page);
 
   await page.goto("/dashboard");
 
@@ -331,6 +313,7 @@ test("오늘 화면의 다크 테마를 시각 점검한다", async ({ page }, t
 
 test("주간 시간표 화면을 시각 점검한다", async ({ page }, testInfo) => {
   await mockAuthenticatedDashboard(page);
+  await freezeTime(page);
 
   await page.goto("/schedule");
 
@@ -348,6 +331,7 @@ test("주간 시간표 화면을 시각 점검한다", async ({ page }, testInfo
 
 test("목표 화면을 시각 점검한다", async ({ page }, testInfo) => {
   await mockAuthenticatedDashboard(page);
+  await freezeTime(page);
 
   await page.goto("/goals");
 
@@ -364,6 +348,7 @@ test("목표 화면을 시각 점검한다", async ({ page }, testInfo) => {
 
 test("설정 화면을 시각 점검한다", async ({ page }, testInfo) => {
   await mockAuthenticatedDashboard(page);
+  await freezeTime(page);
 
   await page.goto("/settings");
 
