@@ -10,6 +10,7 @@
 .env.*
 !*.env.example
 /client_secret_*.json
+/client_secret_608682434352-84cplp66gcmc5eq29fpdb1mlidrv5rp9.apps.googleusercontent.com.json
 
 # root build / cache
 *.log
