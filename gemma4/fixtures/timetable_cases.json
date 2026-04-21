@@ -1,0 +1,106 @@
+[
+  {
+    "id": "basic_multiday_ko",
+    "description": "Korean free-form timetable with one multi-day class and two single-day classes.",
+    "input": "2026학년도 1학기\n월수 09:00-10:15 자료구조(001) 홍길동 공A-101\n화 13:30~14:45 운영체제 김교수 공B-201\n금 15:00-17:50 캡스톤디자인 박선우 실험동 302",
+    "expected": {
+      "entry_count": 3,
+      "required_entries": [
+        {
+          "title": "자료구조",
+          "days": [
+            "MON",
+            "WED"
+          ],
+          "start_time": "09:00",
+          "end_time": "10:15"
+        },
+        {
+          "title": "운영체제",
+          "days": [
+            "TUE"
+          ],
+          "start_time": "13:30",
+          "end_time": "14:45"
+        },
+        {
+          "title": "캡스톤디자인",
+          "days": [
+            "FRI"
+          ],
+          "start_time": "15:00",
+          "end_time": "17:50"
+        }
+      ],
+      "warnings_max": 0
+    }
+  },
+  {
+    "id": "mixed_english_online",
+    "description": "English/Korean mixed input with a remote class and a lab.",
+    "input": "Operating Systems [02]\nProf. Lee\nTue & Thu 1:30pm - 2:45pm\nZoom\nLab: Fri 16:00-17:50 Room B1",
+    "expected": {
+      "entry_count": 2,
+      "required_entries": [
+        {
+          "title": "Operating Systems",
+          "days": [
+            "TUE",
+            "THU"
+          ],
+          "start_time": "13:30",
+          "end_time": "14:45",
+          "delivery_mode": "online"
+        },
+        {
+          "title": "Operating Systems Lab",
+          "days": [
+            "FRI"
+          ],
+          "start_time": "16:00",
+          "end_time": "17:50"
+        }
+      ]
+    }
+  },
+  {
+    "id": "odd_week_evening_project",
+    "description": "Odd-week evening project course with an explicit note.",
+    "input": "캡스톤디자인\n금 18:30-21:20 산학협력관 302\n격주(홀수주)\n비고: 발표 주간은 오프라인 참석 필수",
+    "expected": {
+      "entry_count": 1,
+      "required_entries": [
+        {
+          "title": "캡스톤디자인",
+          "days": [
+            "FRI"
+          ],
+          "start_time": "18:30",
+          "end_time": "21:20",
+          "weeks": "ODD"
+        }
+      ],
+      "warnings_max": 0
+    }
+  },
+  {
+    "id": "missing_end_time_warning",
+    "description": "Missing end time should stay unresolved instead of being invented.",
+    "input": "영어회화 / 화 15:00 / 인문관 204 / 최지은",
+    "expected": {
+      "entry_count": 1,
+      "required_entries": [
+        {
+          "title": "영어회화",
+          "days": [
+            "TUE"
+          ],
+          "start_time": "15:00",
+          "end_time": null
+        }
+      ],
+      "warnings_min": 1
+    }
+  }
+]
+

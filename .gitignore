@@ -1,0 +1,45 @@
+# OS / editor
+.DS_Store
+.vscode/
+
+# local metadata backups
+/.git-metadata-backup/
+
+# secrets
+.env
+.env.*
+!*.env.example
+/client_secret_*.json
+
+# root build / cache
+*.log
+*.tsbuildinfo
+
+# backend
+/backend/.gradle/
+/backend/build/
+/backend/target/
+/backend/bin/
+/backend/data/
+/backend/*.db
+
+# frontend
+/frontend/node_modules/
+/frontend/.next/
+/frontend/out/
+/frontend/build/
+/frontend/coverage/
+/frontend/playwright-report/
+/frontend/test-results/
+/frontend/post-impl-review/
+
+# gemma
+/gemma4/.venv/
+/gemma4/__pycache__/
+/gemma4/.env
+/gemma4/runs/
+*.pyc
+
+# docs generators
+/docs/ppt_gen/venv/
+/docs/ppt_gen/__pycache__/
