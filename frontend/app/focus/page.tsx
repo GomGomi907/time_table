@@ -1,12 +1,5 @@
-"use client";
-
-import { AuthenticatedAppPage } from "@/components/auth/AuthenticatedAppPage";
-import { FocusWorkspace } from "@/features/focus/FocusWorkspace";
+import { FocusView } from "@/components/focus-view";
 
 export default function FocusPage() {
-  return (
-    <AuthenticatedAppPage>
-      {() => <FocusWorkspace />}
-    </AuthenticatedAppPage>
-  );
+  return <FocusView />;
 }

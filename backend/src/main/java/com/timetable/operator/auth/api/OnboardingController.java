@@ -1,12 +1,16 @@
 package com.timetable.operator.auth.api;
 
-import com.timetable.operator.auth.domain.AppUser;
-import com.timetable.operator.calendar.domain.CalendarConnectionStatus;
-import com.timetable.operator.calendar.infrastructure.CalendarConnectionRepository;
-import com.timetable.operator.common.security.CurrentUserProvider;
-import com.timetable.operator.settings.application.SettingsService;
+import com.timetable.operator.auth.application.OnboardingService;
+import com.timetable.operator.auth.application.OnboardingService.OnboardingAnswersRequest;
+import com.timetable.operator.auth.application.OnboardingService.OnboardingAnswersResponse;
+import com.timetable.operator.auth.application.OnboardingService.OnboardingBootstrapResponse;
+import com.timetable.operator.auth.application.OnboardingService.OnboardingCompletionRequest;
+import com.timetable.operator.auth.application.OnboardingService.OnboardingCompletionResponse;
+import com.timetable.operator.auth.application.OnboardingService.OnboardingStatusResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -15,37 +19,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OnboardingController {
 
-    private final CurrentUserProvider currentUserProvider;
-    private final CalendarConnectionRepository calendarConnectionRepository;
-    private final SettingsService settingsService;
+    private final OnboardingService onboardingService;
 
     @GetMapping("/status")
     public OnboardingStatusResponse getStatus() {
-        AppUser user = currentUserProvider.getCurrentUser();
-        boolean googleConnected = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
-                .map(connection -> connection.getStatus() == CalendarConnectionStatus.CONNECTED)
-                .orElse(false);
-
-        settingsService.getOrCreatePreferences();
-
-        String nextStep = googleConnected ? "routines" : "connect_google";
-        return new OnboardingStatusResponse(
-                googleConnected,
-                false,
-                false,
-                true,
-                false,
-                nextStep
-        );
+        return onboardingService.getStatus();
     }
 
-    public record OnboardingStatusResponse(
-            boolean googleConnected,
-            boolean routinesReady,
-            boolean goalsReady,
-            boolean preferencesReady,
-            boolean scheduleReady,
-            String nextStep
-    ) {
+    @PostMapping("/bootstrap")
+    public OnboardingBootstrapResponse bootstrap() {
+        return onboardingService.bootstrap();
+    }
+
+    @PostMapping("/answers")
+    public OnboardingAnswersResponse saveAnswers(@RequestBody OnboardingAnswersRequest request) {
+        return onboardingService.saveAnswers(request);
+    }
+
+    @PostMapping("/complete")
+    public OnboardingCompletionResponse complete(@RequestBody(required = false) OnboardingCompletionRequest request) {
+        return onboardingService.complete(request == null ? new OnboardingCompletionRequest(false, null) : request);
     }
 }

@@ -1,12 +1,5 @@
-'use client';
-
-import { AuthenticatedAppPage } from '@/components/auth/AuthenticatedAppPage';
-import { DashboardCanvas } from '@/features/dashboard/DashboardCanvas';
+import { DashboardView } from "@/components/dashboard-view";
 
 export default function DashboardPage() {
-    return (
-        <AuthenticatedAppPage>
-            {(auth) => <DashboardCanvas session={auth.session!} />}
-        </AuthenticatedAppPage>
-    );
+  return <DashboardView />;
 }

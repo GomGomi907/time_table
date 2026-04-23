@@ -4,6 +4,7 @@ import java.util.Locale;
 
 public enum RescheduleSuggestionTriggerType {
     MANUAL_REQUEST("manual_request"),
+    ONBOARDING_BOOTSTRAP("onboarding_bootstrap"),
     EARLY_COMPLETION("early_completion"),
     DELAY("delay"),
     POSTPONE("postpone"),

@@ -48,11 +48,11 @@ public class FocusService {
         Instant dayStart = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant();
         Instant dayEnd = dayStart.plus(Duration.ofDays(1));
 
-        List<Event> todayEvents = eventRepository.findByUserIdAndStatusNotAndStartAtBetweenOrderByStartAtAsc(
+        List<Event> todayEvents = eventRepository.findByUserIdAndStatusNotAndStartAtBeforeAndEndAtAfterOrderByStartAtAsc(
                 user.getId(),
                 EventStatus.CANCELLED,
-                dayStart,
-                dayEnd
+                dayEnd,
+                dayStart
         ).stream().filter(event -> event.getSyncState() != PlannerSyncState.DETACHED).toList();
 
         List<Event> currentEvents = todayEvents.stream()
@@ -62,6 +62,12 @@ public class FocusService {
                 .filter(event -> event.getStartAt().isAfter(now))
                 .min(Comparator.comparing(Event::getStartAt))
                 .orElse(null);
+        List<Task> activeTasks = taskRepository.findByUserIdAndStatusOrderByPriorityAscDueDateAsc(
+                user.getId(),
+                TaskStatus.IN_PROGRESS
+        ).stream()
+                .filter(task -> task.getEventId() == null && task.getSyncState() != PlannerSyncState.DETACHED)
+                .toList();
         List<Task> recommended = taskRepository.findByUserIdAndStatusInOrderByPriorityAscDueDateAsc(
                 user.getId(),
                 RECOMMENDABLE_TASK_STATUSES
@@ -92,6 +98,22 @@ public class FocusService {
                     recommended.stream().map(this::toRecommendedTask).toList(),
                     null,
                     remainingMinutes
+            );
+        }
+
+        if (!activeTasks.isEmpty()) {
+            Task task = activeTasks.getFirst();
+            ActiveTaskWindow taskWindow = resolveTaskWindow(user, task, nextEvent, now);
+            return new FocusCurrentView(
+                    "ACTIVE_TASK",
+                    toCurrentTaskItem(task, taskWindow),
+                    nextEvent == null ? null : toNextItem(nextEvent),
+                    recommended.stream()
+                            .filter(recommendedTask -> !recommendedTask.getId().equals(task.getId()))
+                            .map(this::toRecommendedTask)
+                            .toList(),
+                    null,
+                    taskWindow.remainingMinutes()
             );
         }
 
@@ -139,7 +161,6 @@ public class FocusService {
         log.setUserId(user.getId());
         log.setTaskId(task.getId());
         log.setStartedAt(Instant.now());
-        log.setCompletionType(FocusCompletionType.ON_TIME);
         log.setTriggerSource(FocusTriggerSource.MANUAL);
         focusSessionLogRepository.save(log);
         return getCurrentFocus();
@@ -168,7 +189,9 @@ public class FocusService {
             Task task = taskRepository.findByIdAndUserId(UUID.fromString(request.itemId()), user.getId())
                     .orElseThrow(() -> new IllegalArgumentException("집중 대상 태스크를 찾을 수 없습니다."));
             task.setStatus(TaskStatus.DONE);
+            task.setCompletedAt(request.completedAt());
             taskRepository.save(task);
+            closeLatestTaskLog(user.getId(), task.getId(), request.completedAt(), parseCompletion(request.completionType()), null);
         }
         return getCurrentFocus();
     }
@@ -235,6 +258,20 @@ public class FocusService {
         );
     }
 
+    private CurrentItem toCurrentTaskItem(Task task, ActiveTaskWindow taskWindow) {
+        Goal goal = task.getGoalId() == null ? null : goalRepository.findById(task.getGoalId()).orElse(null);
+        return new CurrentItem(
+                "task",
+                task.getId().toString(),
+                task.getTitle(),
+                taskWindow.startAt(),
+                taskWindow.endAt(),
+                taskWindow.remainingMinutes(),
+                task.getPriority(),
+                goal == null ? null : new GoalSummary(goal.getId().toString(), goal.getTitle())
+        );
+    }
+
     private NextItem toNextItem(Event event) {
         return new NextItem("event", event.getId().toString(), event.getTitle(), event.getStartAt());
     }
@@ -247,6 +284,38 @@ public class FocusService {
                 task.getEstimatedMinutes(),
                 task.getDueDate()
         );
+    }
+
+    private ActiveTaskWindow resolveTaskWindow(AppUser user, Task task, Event nextEvent, Instant now) {
+        Instant startedAt = focusSessionLogRepository.findByUserIdAndTaskIdOrderByStartedAtDesc(user.getId(), task.getId()).stream()
+                .findFirst()
+                .map(FocusSessionLog::getStartedAt)
+                .orElse(task.getUpdatedAt());
+        long plannedMinutes = Math.max(task.getEstimatedMinutes(), 30);
+        Instant plannedEndAt = startedAt.plus(Duration.ofMinutes(plannedMinutes));
+        Instant effectiveEndAt = nextEvent != null && nextEvent.getStartAt().isBefore(plannedEndAt)
+                ? nextEvent.getStartAt()
+                : plannedEndAt;
+        long remainingMinutes = Math.max(0, Duration.between(now, effectiveEndAt).toMinutes());
+        return new ActiveTaskWindow(startedAt, effectiveEndAt, remainingMinutes);
+    }
+
+    private void closeLatestTaskLog(
+            UUID userId,
+            UUID taskId,
+            Instant endedAt,
+            FocusCompletionType completionType,
+            String memo
+    ) {
+        focusSessionLogRepository.findByUserIdAndTaskIdOrderByStartedAtDesc(userId, taskId).stream()
+                .filter(log -> log.getEndedAt() == null)
+                .findFirst()
+                .ifPresent(log -> {
+                    log.setEndedAt(endedAt);
+                    log.setCompletionType(completionType);
+                    log.setMemo(memo);
+                    focusSessionLogRepository.save(log);
+                });
     }
 
     public record CompleteFocusRequest(
@@ -315,6 +384,13 @@ public class FocusService {
             short priority,
             int estimatedMinutes,
             Instant dueDate
+    ) {
+    }
+
+    private record ActiveTaskWindow(
+            Instant startAt,
+            Instant endAt,
+            long remainingMinutes
     ) {
     }
 }

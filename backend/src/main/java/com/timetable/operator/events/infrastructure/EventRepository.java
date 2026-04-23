@@ -12,6 +12,8 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
 
     Optional<Event> findByIdAndUserId(UUID id, UUID userId);
 
+    long countByUserId(UUID userId);
+
     List<Event> findByUserIdOrderByStartAtAsc(UUID userId);
 
     List<Event> findByUserIdAndStartAtBetweenOrderByStartAtAsc(UUID userId, Instant from, Instant to);
@@ -23,6 +25,13 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
             EventStatus status,
             Instant from,
             Instant to
+    );
+
+    List<Event> findByUserIdAndStatusNotAndStartAtBeforeAndEndAtAfterOrderByStartAtAsc(
+            UUID userId,
+            EventStatus status,
+            Instant before,
+            Instant after
     );
 
     List<Event> findByUserIdAndGoalIdOrderByStartAtAsc(UUID userId, UUID goalId);

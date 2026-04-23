@@ -10,6 +10,8 @@ public interface ScheduleBlockRepository extends JpaRepository<ScheduleBlock, UU
 
     boolean existsByUserId(UUID userId);
 
+    long countByUserId(UUID userId);
+
     List<ScheduleBlock> findByUserId(UUID userId);
 
     Optional<ScheduleBlock> findByIdAndUserId(UUID id, UUID userId);

@@ -29,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ScheduleService {
-    private static final LocalTime OVERNIGHT_DISPLAY_CUTOFF = LocalTime.of(5, 0);
-
     private static final List<DayOfWeek> DAY_ORDER = List.of(
             DayOfWeek.MONDAY,
             DayOfWeek.TUESDAY,
@@ -44,7 +42,8 @@ public class ScheduleService {
     private final ScheduleBlockRepository scheduleBlockRepository;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
-    private final LocalGemmaScheduleClient localGemmaScheduleClient;
+    private final VllmScheduleClient vllmScheduleClient;
+    private final ScheduleBlockRules scheduleBlockRules;
 
     @Transactional
     public WeekScheduleResponse getWeeklySchedule() {
@@ -56,16 +55,17 @@ public class ScheduleService {
     @Transactional
     public WeekScheduleResponse importSchedule(ImportScheduleRequest request) {
         AppUser user = currentUserProvider.getCurrentUser();
-        List<LocalGemmaScheduleClient.ImportedScheduleBlock> importedBlocks =
-                localGemmaScheduleClient.normalize(request.rawText().trim());
-
-        if (request.replaceExisting()) {
-            scheduleBlockRepository.deleteByUserId(user.getId());
-        }
+        List<VllmScheduleClient.ImportedScheduleBlock> importedBlocks =
+                vllmScheduleClient.normalize(request.rawText().trim());
 
         List<ScheduleBlock> persistedBlocks = importedBlocks.stream()
                 .map(block -> toEntity(user, block))
                 .toList();
+        scheduleBlockRules.validateBatch(user.getId(), persistedBlocks, request.replaceExisting());
+
+        if (request.replaceExisting()) {
+            scheduleBlockRepository.deleteByUserId(user.getId());
+        }
         scheduleBlockRepository.saveAll(persistedBlocks);
 
         return WeekScheduleResponse.fromBlocks(scheduleBlockRepository.findByUserId(user.getId()));
@@ -77,6 +77,7 @@ public class ScheduleService {
         ScheduleBlock block = new ScheduleBlock();
         block.setUserId(user.getId());
         applyManualBlock(block, request);
+        scheduleBlockRules.validateForUser(user.getId(), block);
         return TimeBlockResponse.from(scheduleBlockRepository.save(block));
     }
 
@@ -86,6 +87,7 @@ public class ScheduleService {
         ScheduleBlock block = scheduleBlockRepository.findByIdAndUserId(blockId, user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 일정 블록을 찾을 수 없습니다."));
         applyManualBlock(block, request);
+        scheduleBlockRules.validateForUser(user.getId(), block);
         return TimeBlockResponse.from(scheduleBlockRepository.save(block));
     }
 
@@ -128,7 +130,7 @@ public class ScheduleService {
         return scheduleBlock;
     }
 
-    private ScheduleBlock toEntity(AppUser user, LocalGemmaScheduleClient.ImportedScheduleBlock block) {
+    private ScheduleBlock toEntity(AppUser user, VllmScheduleClient.ImportedScheduleBlock block) {
         ScheduleBlock scheduleBlock = new ScheduleBlock();
         scheduleBlock.setUserId(user.getId());
         scheduleBlock.setDayOfWeek(block.dayOfWeek());
@@ -138,7 +140,7 @@ public class ScheduleService {
         scheduleBlock.setCategory(parseCategory(block.category()));
         scheduleBlock.setNote(blankToNull(block.note()));
         scheduleBlock.setSourceType(ScheduleSourceType.GEMMA_IMPORT);
-        scheduleBlock.setSourceRef("local-gemma4");
+        scheduleBlock.setSourceRef("vllm-gemma4");
         return scheduleBlock;
     }
 
@@ -215,7 +217,7 @@ public class ScheduleService {
 
         private static int displayOrder(LocalTime time) {
             int seconds = time.toSecondOfDay();
-            if (time.isBefore(OVERNIGHT_DISPLAY_CUTOFF)) {
+            if (time.isBefore(ScheduleBlockRules.OVERNIGHT_DISPLAY_CUTOFF)) {
                 return seconds + (24 * 60 * 60);
             }
             return seconds;

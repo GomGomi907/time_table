@@ -11,6 +11,8 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
 
     Optional<Task> findByIdAndUserId(UUID id, UUID userId);
 
+    long countByUserId(UUID userId);
+
     List<Task> findByUserIdOrderByPriorityAscDueDateAsc(UUID userId);
 
     List<Task> findByUserIdOrderByDueDateAsc(UUID userId);

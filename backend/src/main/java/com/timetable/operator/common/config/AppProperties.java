@@ -39,8 +39,11 @@ public record AppProperties(
 
     public record AiProperties(
             boolean enabled,
-            String pythonExecutable,
-            String gemmaScriptPath,
+            String baseUrl,
+            String apiKey,
+            String model,
+            int maxTokens,
+            double temperature,
             int timeoutSeconds
     ) {
     }

@@ -1,12 +1,5 @@
-"use client";
-
-import { AuthenticatedAppPage } from "@/components/auth/AuthenticatedAppPage";
-import { ScheduleWorkspace } from "@/features/schedule/ScheduleWorkspace";
+import { ScheduleView } from "@/components/schedule-view";
 
 export default function SchedulePage() {
-  return (
-    <AuthenticatedAppPage>
-      {() => <ScheduleWorkspace />}
-    </AuthenticatedAppPage>
-  );
+  return <ScheduleView />;
 }

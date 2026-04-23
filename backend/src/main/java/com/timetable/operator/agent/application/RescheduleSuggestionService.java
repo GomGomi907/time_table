@@ -15,6 +15,7 @@ import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.schedule.domain.ScheduleBlock;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.schedule.domain.ScheduleSourceType;
+import com.timetable.operator.schedule.application.ScheduleBlockRules;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import jakarta.validation.constraints.NotBlank;
 import java.io.IOException;
@@ -38,6 +39,7 @@ public class RescheduleSuggestionService {
     private final ScheduleBlockRepository scheduleBlockRepository;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
+    private final ScheduleBlockRules scheduleBlockRules;
 
     @Transactional
     public RescheduleSuggestionResponse createManualSuggestion(ManualRescheduleRequest request) {
@@ -89,6 +91,25 @@ public class RescheduleSuggestionService {
                 normalizedChatCommand.normalizedMessage(),
                 normalizedChatCommand.commandBatch().explanation(),
                 normalizedChatCommand.commandBatch()
+        );
+    }
+
+    @Transactional
+    public RescheduleSuggestionResponse createSuggestionFromBatch(
+            RescheduleSuggestionTriggerType triggerType,
+            String summary,
+            String reason,
+            String explanation,
+            StructuredAiCommandBatch batch
+    ) {
+        AppUser user = currentUserProvider.getCurrentUser();
+        return createSuggestion(
+                user.getId(),
+                triggerType,
+                summary,
+                reason,
+                explanation,
+                batch
         );
     }
 
@@ -261,8 +282,15 @@ public class RescheduleSuggestionService {
         String explicitEndTime = readString(command.payload(), "endTime", "end_time");
 
         if (shiftMinutes != null) {
-            block.setStartTime(block.getStartTime().plusMinutes(shiftMinutes));
-            block.setEndTime(block.getEndTime().plusMinutes(shiftMinutes));
+            ScheduleBlockRules.ShiftedScheduleBlock shifted = scheduleBlockRules.shift(
+                    block.getDayOfWeek(),
+                    block.getStartTime(),
+                    block.getEndTime(),
+                    shiftMinutes
+            );
+            block.setDayOfWeek(shifted.dayOfWeek());
+            block.setStartTime(shifted.startTime());
+            block.setEndTime(shifted.endTime());
         }
         if (explicitDayOfWeek != null) {
             block.setDayOfWeek(DayOfWeek.valueOf(explicitDayOfWeek.toUpperCase()));
@@ -278,6 +306,7 @@ public class RescheduleSuggestionService {
             return noExecutableTarget(command, "이동할 시간 정보가 payload에 없습니다.");
         }
 
+        scheduleBlockRules.validateForUser(userId, block);
         ScheduleBlock saved = scheduleBlockRepository.save(block);
         return new AppliedCommandSnapshot(
                 command.actionType(),
@@ -298,6 +327,7 @@ public class RescheduleSuggestionService {
         ScheduleBlockSnapshot beforeState = snapshot(block);
 
         applyScheduleBlockPayload(block, command.payload(), false);
+        scheduleBlockRules.validateForUser(userId, block);
         ScheduleBlock saved = scheduleBlockRepository.save(block);
         return new AppliedCommandSnapshot(
                 command.actionType(),
@@ -315,6 +345,7 @@ public class RescheduleSuggestionService {
         applyScheduleBlockPayload(block, command.payload(), true);
         block.setSourceType(ScheduleSourceType.MANUAL);
         block.setSourceRef("agent-suggestion");
+        scheduleBlockRules.validateForUser(userId, block);
         ScheduleBlock saved = scheduleBlockRepository.save(block);
         return new AppliedCommandSnapshot(
                 command.actionType(),
@@ -426,13 +457,13 @@ public class RescheduleSuggestionService {
             block.setEndTime(LocalTime.parse(endTime));
         }
         if (activity != null) {
-            block.setActivity(activity);
+            block.setActivity(activity.trim());
         }
         if (category != null) {
             block.setCategory(ScheduleCategory.valueOf(category.toUpperCase()));
         }
         if (note != null || requireAllFields) {
-            block.setNote(note);
+            block.setNote(note == null || note.isBlank() ? null : note.trim());
         }
     }
 
