@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time Table Mockup - Schedule</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="page-schedule">
+  <div class="planner-shell">
+    <header class="planner-top">
+      <div>
+        <p class="eyebrow">Schedule</p>
+        <h1>주간 시간표 중심 플래너</h1>
+      </div>
+      <div class="top-actions">
+        <a class="ghost-btn link-btn" href="./index.html">목업 허브</a>
+        <a class="solid-btn link-btn" href="./focus.html">집중 화면 보기</a>
+      </div>
+    </header>
+
+    <section class="planner-layout">
+      <article class="planner-board">
+        <div class="board-head">
+          <div class="week-chip">Apr 22 - Apr 28</div>
+          <div class="board-legend">
+            <span><i class="dot coral"></i> Deep Work</span>
+            <span><i class="dot sand"></i> Routine</span>
+            <span><i class="dot slate"></i> Meeting</span>
+          </div>
+        </div>
+
+        <div class="calendar-grid detailed-grid">
+          <div class="grid-header empty"></div>
+          <div class="grid-header">Mon</div>
+          <div class="grid-header">Tue</div>
+          <div class="grid-header">Wed</div>
+          <div class="grid-header">Thu</div>
+          <div class="grid-header">Fri</div>
+          <div class="grid-header">Sat</div>
+          <div class="grid-header">Sun</div>
+
+          <div class="grid-time">00:00</div>
+          <div class="grid-time half">00:30</div>
+          <div class="grid-time">01:00</div>
+          <div class="grid-time half">01:30</div>
+          <div class="grid-time">02:00</div>
+          <div class="grid-time half">02:30</div>
+          <div class="grid-time">03:00</div>
+          <div class="grid-time half">03:30</div>
+          <div class="grid-time">04:00</div>
+          <div class="grid-time half">04:30</div>
+          <div class="grid-time">05:00</div>
+          <div class="grid-time half">05:30</div>
+          <div class="grid-time">06:00</div>
+          <div class="grid-time half">06:30</div>
+          <div class="grid-time">07:00</div>
+          <div class="grid-time half">07:30</div>
+          <div class="grid-time">08:00</div>
+          <div class="grid-time half">08:30</div>
+          <div class="grid-time">09:00</div>
+          <div class="grid-time half">09:30</div>
+          <div class="grid-time">10:00</div>
+          <div class="grid-time half">10:30</div>
+          <div class="grid-time">11:00</div>
+          <div class="grid-time half">11:30</div>
+          <div class="grid-time">12:00</div>
+          <div class="grid-time half">12:30</div>
+          <div class="grid-time">13:00</div>
+          <div class="grid-time half">13:30</div>
+          <div class="grid-time">14:00</div>
+          <div class="grid-time half">14:30</div>
+          <div class="grid-time">15:00</div>
+          <div class="grid-time half">15:30</div>
+          <div class="grid-time">16:00</div>
+          <div class="grid-time half">16:30</div>
+          <div class="grid-time">17:00</div>
+          <div class="grid-time half">17:30</div>
+          <div class="grid-time">18:00</div>
+          <div class="grid-time half">18:30</div>
+          <div class="grid-time">19:00</div>
+          <div class="grid-time half">19:30</div>
+          <div class="grid-time">20:00</div>
+          <div class="grid-time half">20:30</div>
+          <div class="grid-time">21:00</div>
+          <div class="grid-time half">21:30</div>
+          <div class="grid-time">22:00</div>
+          <div class="grid-time half">22:30</div>
+          <div class="grid-time">23:00</div>
+          <div class="grid-time half">23:30</div>
+          <div class="grid-time final">24:00</div>
+
+          <div class="grid-day-column" style="grid-column: 2; grid-row: 2 / 50;"></div>
+          <div class="grid-day-column" style="grid-column: 3; grid-row: 2 / 50;"></div>
+          <div class="grid-day-column" style="grid-column: 4; grid-row: 2 / 50;"></div>
+          <div class="grid-day-column" style="grid-column: 5; grid-row: 2 / 50;"></div>
+          <div class="grid-day-column" style="grid-column: 6; grid-row: 2 / 50;"></div>
+          <div class="grid-day-column" style="grid-column: 7; grid-row: 2 / 50;"></div>
+          <div class="grid-day-column" style="grid-column: 8; grid-row: 2 / 50;"></div>
+
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 2;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 3;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 4;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 5;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 6;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 7;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 8;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 9;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 10;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 11;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 12;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 13;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 14;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 15;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 16;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 17;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 18;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 19;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 20;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 21;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 22;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 23;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 24;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 25;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 26;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 27;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 28;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 29;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 30;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 31;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 32;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 33;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 34;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 35;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 36;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 37;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 38;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 39;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 40;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 41;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 42;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 43;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 44;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 45;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 46;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 47;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 48;"></div>
+          <div class="grid-slot" style="grid-column: 2 / 9; grid-row: 49;"></div>
+
+          <article class="event-card routine detailed-card" style="grid-column: 2; grid-row: 15 / span 2;">
+            <strong>아침 루틴</strong>
+            <span class="event-time">06:30 - 07:30</span>
+            <p class="event-note">스트레칭 · 물 · 오늘 우선순위 점검</p>
+            <div class="event-meta">
+              <span>Routine</span>
+              <span>Home</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 2; grid-row: 22 / span 4;">
+            <strong>논문 리서치</strong>
+            <span class="event-time">10:00 - 12:00</span>
+            <p class="event-note">HCI 레퍼런스 3편 요약과 발표용 문장 정리</p>
+            <div class="event-meta">
+              <span>Deep Work</span>
+              <span>Research</span>
+            </div>
+          </article>
+
+          <article class="event-card meeting detailed-card" style="grid-column: 2; grid-row: 40 / span 4;">
+            <strong>세미나 준비</strong>
+            <span class="event-time">19:00 - 21:00</span>
+            <p class="event-note">슬라이드 리허설 · 질문 예상 리스트 정리</p>
+            <div class="event-meta">
+              <span>Meeting</span>
+              <span>Prep</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 3; grid-row: 18 / span 2;">
+            <strong>팀 체크인</strong>
+            <span class="event-time">08:00 - 09:00</span>
+            <p class="event-note">전일 이슈와 오늘 작업 범위 빠르게 합의</p>
+            <div class="event-meta">
+              <span>Standup</span>
+              <span>Lab</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 3; grid-row: 22 / span 4;">
+            <strong>캡스톤 구현</strong>
+            <span class="event-time">10:00 - 12:00</span>
+            <p class="event-note">대시보드 인터랙션 연결과 오류 상태 정리</p>
+            <div class="event-meta">
+              <span>Build</span>
+              <span>Issue #12</span>
+            </div>
+          </article>
+
+          <article class="event-card active detailed-card" style="grid-column: 3; grid-row: 28 / span 3;">
+            <strong>캡스톤 정리</strong>
+            <span class="event-time">13:00 - 14:30</span>
+            <p class="event-note">데모 흐름 · 발표 포인트 · 전환 화면 검토</p>
+            <div class="event-meta">
+              <span>Current</span>
+              <span>High Priority</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 3; grid-row: 33 / span 3;">
+            <strong>운동</strong>
+            <span class="event-time">15:30 - 17:00</span>
+            <p class="event-note">회복 러닝과 컨디션 리셋</p>
+            <div class="event-meta">
+              <span>Routine</span>
+              <span>Gym</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 3; grid-row: 44 / span 3;">
+            <strong>영어 발표 교정</strong>
+            <span class="event-time">21:00 - 22:30</span>
+            <p class="event-note">발표 원고와 강조 문장 다듬기</p>
+            <div class="event-meta">
+              <span>Review</span>
+              <span>EN</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 4; grid-row: 16 / span 3;">
+            <strong>운동</strong>
+            <span class="event-time">07:00 - 08:30</span>
+            <p class="event-note">가벼운 유산소와 샤워 후 정리</p>
+            <div class="event-meta">
+              <span>Morning</span>
+              <span>90m</span>
+            </div>
+          </article>
+
+          <article class="event-card meeting detailed-card" style="grid-column: 4; grid-row: 25 / span 2;">
+            <strong>멘토 피드백</strong>
+            <span class="event-time">11:30 - 12:30</span>
+            <p class="event-note">중간 결과 확인과 구현 우선순위 재정렬</p>
+            <div class="event-meta">
+              <span>Feedback</span>
+              <span>1:1</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 4; grid-row: 29 / span 4;">
+            <strong>알고리즘 블록</strong>
+            <span class="event-time">13:30 - 15:30</span>
+            <p class="event-note">DP 유형 4문제 풀이와 오답 기록</p>
+            <div class="event-meta">
+              <span>Deep Work</span>
+              <span>Practice</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 4; grid-row: 42 / span 3;">
+            <strong>저녁 루틴</strong>
+            <span class="event-time">20:00 - 21:30</span>
+            <p class="event-note">산책 · 식사 · 오늘 회고</p>
+            <div class="event-meta">
+              <span>Routine</span>
+              <span>Reset</span>
+            </div>
+          </article>
+
+          <article class="event-card meeting detailed-card" style="grid-column: 5; grid-row: 20 / span 3;">
+            <strong>멘토링</strong>
+            <span class="event-time">09:00 - 10:30</span>
+            <p class="event-note">주간 진행 리뷰와 위험도 점검</p>
+            <div class="event-meta">
+              <span>Meeting</span>
+              <span>Lab</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 5; grid-row: 32 / span 2;">
+            <strong>문서 정리</strong>
+            <span class="event-time">15:00 - 16:00</span>
+            <p class="event-note">API 문서와 데모 시나리오 갱신</p>
+            <div class="event-meta">
+              <span>Docs</span>
+              <span>Focus</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 5; grid-row: 35 / span 2;">
+            <strong>배포 점검</strong>
+            <span class="event-time">16:30 - 17:30</span>
+            <p class="event-note">QA 체크리스트와 릴리스 메모 확인</p>
+            <div class="event-meta">
+              <span>Release</span>
+              <span>QA</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 5; grid-row: 41 / span 2;">
+            <strong>가족 통화</strong>
+            <span class="event-time">19:30 - 20:30</span>
+            <p class="event-note">주간 일정 공유와 리프레시</p>
+            <div class="event-meta">
+              <span>Life</span>
+              <span>Call</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 6; grid-row: 22 / span 2;">
+            <strong>주간 회고 정리</strong>
+            <span class="event-time">10:00 - 11:00</span>
+            <p class="event-note">완료/미완료 흐름과 다음 액션 정리</p>
+            <div class="event-meta">
+              <span>Deep Work</span>
+              <span>Weekly</span>
+            </div>
+          </article>
+
+          <article class="event-card active detailed-card" style="grid-column: 6; grid-row: 28 / span 3;">
+            <strong>데모 리허설</strong>
+            <span class="event-time">13:00 - 14:30</span>
+            <p class="event-note">발표 흐름 · 화면 전환 · 마무리 멘트 점검</p>
+            <div class="event-meta">
+              <span>Demo</span>
+              <span>Rehearsal</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 6; grid-row: 33 / span 2;">
+            <strong>행정 처리</strong>
+            <span class="event-time">15:30 - 16:30</span>
+            <p class="event-note">메일 · 제출 · 결재 확인</p>
+            <div class="event-meta">
+              <span>Admin</span>
+              <span>Ops</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 6; grid-row: 38 / span 2;">
+            <strong>주간 마감</strong>
+            <span class="event-time">18:00 - 19:00</span>
+            <p class="event-note">커밋 정리와 다음 주 준비</p>
+            <div class="event-meta">
+              <span>Wrap-up</span>
+              <span>Git</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 7; grid-row: 24 / span 2;">
+            <strong>집안 정리</strong>
+            <span class="event-time">11:00 - 12:00</span>
+            <p class="event-note">세탁 · 장보기 체크 · 책상 리셋</p>
+            <div class="event-meta">
+              <span>Routine</span>
+              <span>Home</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 7; grid-row: 29 / span 4;">
+            <strong>사이드 프로젝트</strong>
+            <span class="event-time">13:30 - 15:30</span>
+            <p class="event-note">개인 실험 화면 구현과 아이디어 메모</p>
+            <div class="event-meta">
+              <span>Deep Work</span>
+              <span>Personal</span>
+            </div>
+          </article>
+
+          <article class="event-card meeting detailed-card" style="grid-column: 7; grid-row: 38 / span 4;">
+            <strong>친구 약속</strong>
+            <span class="event-time">18:00 - 20:00</span>
+            <p class="event-note">저녁 모임과 주간 환기</p>
+            <div class="event-meta">
+              <span>Meeting</span>
+              <span>Offline</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 8; grid-row: 20 / span 2;">
+            <strong>주간 계획</strong>
+            <span class="event-time">09:00 - 10:00</span>
+            <p class="event-note">다음 주 목표와 블록 재배치 초안 작성</p>
+            <div class="event-meta">
+              <span>Planning</span>
+              <span>Weekly</span>
+            </div>
+          </article>
+
+          <article class="event-card deep detailed-card" style="grid-column: 8; grid-row: 30 / span 4;">
+            <strong>개인 공부</strong>
+            <span class="event-time">14:00 - 16:00</span>
+            <p class="event-note">읽을거리 정리와 개념 복습</p>
+            <div class="event-meta">
+              <span>Reading</span>
+              <span>Focus</span>
+            </div>
+          </article>
+
+          <article class="event-card routine detailed-card" style="grid-column: 8; grid-row: 42 / span 2;">
+            <strong>리셋 블록</strong>
+            <span class="event-time">20:00 - 21:00</span>
+            <p class="event-note">가방 정리 · 수면 준비 · 알람 세팅</p>
+            <div class="event-meta">
+              <span>Routine</span>
+              <span>Reset</span>
+            </div>
+          </article>
+        </div>
+      </article>
+
+      <aside class="planner-rail">
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">Inbox</p>
+              <h2>미배치 할 일</h2>
+            </div>
+            <span class="accent-pill">7 items</span>
+          </div>
+
+          <div class="task-stack">
+            <div class="task-card urgent">
+              <strong>캡스톤 시연 스크립트</strong>
+              <p>90분 · 목표: 발표안 완성</p>
+            </div>
+            <div class="task-card">
+              <strong>API 응답 형식 정리</strong>
+              <p>45분 · 목표: 품질 안정화</p>
+            </div>
+            <div class="task-card">
+              <strong>영어 발표 교정</strong>
+              <p>30분 · 목표: 발표 준비</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">Goals</p>
+              <h2>연결 목표</h2>
+            </div>
+          </div>
+
+          <ul class="goal-mini-list">
+            <li>
+              <strong>캡스톤 발표안</strong>
+              <span>74%</span>
+            </li>
+            <li>
+              <strong>알고리즘 12시간</strong>
+              <span>82%</span>
+            </li>
+            <li>
+              <strong>수면 7일 유지</strong>
+              <span>71%</span>
+            </li>
+          </ul>
+        </article>
+
+        <article class="surface-card warning-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">Attention</p>
+              <h2>충돌 가능성</h2>
+            </div>
+          </div>
+
+          <p class="warning-copy">
+            화요일 15:30 운동 블록은 캡스톤 정리 세션이 길어지면 30분가량 뒤로 밀릴 가능성이 있습니다.
+          </p>
+          <button class="solid-btn wide-btn">AI 재배치 제안 보기</button>
+        </article>
+      </aside>
+    </section>
+  </div>
+</body>
+</html>

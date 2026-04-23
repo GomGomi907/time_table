@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time Table Mockup - Dashboard</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="page-dashboard">
+  <div class="app-frame">
+    <aside class="side-nav">
+      <div class="brand-block">
+        <span class="brand-mark">TT</span>
+        <div>
+          <p class="brand-name">Time Table</p>
+          <p class="brand-sub">Execution workspace</p>
+        </div>
+      </div>
+
+      <nav class="nav-links">
+        <a class="nav-link active" href="./dashboard.html">Dashboard</a>
+        <a class="nav-link" href="./schedule.html">Schedule</a>
+        <a class="nav-link" href="./focus.html">Focus</a>
+        <a class="nav-link" href="./index.html">Mockup Hub</a>
+      </nav>
+
+      <div class="sync-panel">
+        <p class="panel-kicker">Sync</p>
+        <strong>Google Calendar 연결됨</strong>
+        <span>2분 전 새로고침</span>
+      </div>
+    </aside>
+
+    <main class="content-shell">
+      <header class="top-bar">
+        <div>
+          <p class="eyebrow">Overview</p>
+          <h1>이번 주를 운영하는 한 화면</h1>
+        </div>
+        <div class="top-actions">
+          <button class="ghost-btn">AI 제안 4건</button>
+          <button class="solid-btn">오늘 계획 조정</button>
+        </div>
+      </header>
+
+      <section class="stats-row">
+        <article class="stat-card">
+          <span>오늘 완료율</span>
+          <strong>68%</strong>
+          <p>집중 세션 3개 완료</p>
+        </article>
+        <article class="stat-card">
+          <span>현재 집중 상태</span>
+          <strong>딥 워크 중</strong>
+          <p>다음 전환까지 42분</p>
+        </article>
+        <article class="stat-card">
+          <span>미배치 할 일</span>
+          <strong>7개</strong>
+          <p>90분 이상 소요 2개</p>
+        </article>
+        <article class="stat-card">
+          <span>목표 진행</span>
+          <strong>82%</strong>
+          <p>논문 읽기 목표 거의 달성</p>
+        </article>
+      </section>
+
+      <section class="dashboard-grid">
+        <article class="surface-card timeline-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">Today Flow</p>
+              <h2>오늘의 흐름</h2>
+            </div>
+            <span class="accent-pill">실행 우선</span>
+          </div>
+
+          <div class="timeline-list">
+            <div class="timeline-item live">
+              <span class="time-chip">13:00</span>
+              <div>
+                <strong>캡스톤 정리</strong>
+                <p>현재 집중 세션, 14:30 종료 예정</p>
+              </div>
+            </div>
+            <div class="timeline-item">
+              <span class="time-chip">15:00</span>
+              <div>
+                <strong>운동</strong>
+                <p>45분, 에너지 회복 블록</p>
+              </div>
+            </div>
+            <div class="timeline-item">
+              <span class="time-chip">17:00</span>
+              <div>
+                <strong>태스크 리캡</strong>
+                <p>미배치 할 일 2개 우선 정리</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">Goals</p>
+              <h2>이번 주 목표</h2>
+            </div>
+          </div>
+
+          <div class="goal-stack">
+            <div class="goal-row">
+              <div class="goal-copy">
+                <strong>알고리즘 12시간 확보</strong>
+                <span>9.8 / 12h</span>
+              </div>
+              <div class="progress-bar"><span style="width: 82%"></span></div>
+            </div>
+            <div class="goal-row">
+              <div class="goal-copy">
+                <strong>캡스톤 발표안 완성</strong>
+                <span>74%</span>
+              </div>
+              <div class="progress-bar warm"><span style="width: 74%"></span></div>
+            </div>
+            <div class="goal-row">
+              <div class="goal-copy">
+                <strong>수면 리듬 안정화</strong>
+                <span>5 / 7일</span>
+              </div>
+              <div class="progress-bar cool"><span style="width: 71%"></span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card suggestion-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">AI Assist</p>
+              <h2>추천 조정</h2>
+            </div>
+            <span class="accent-pill warm-pill">검토 필요</span>
+          </div>
+
+          <div class="suggestion-box">
+            <strong>운동 블록을 30분 뒤로 이동</strong>
+            <p>
+              현재 캡스톤 세션이 길어질 가능성이 높습니다. 운동을 15:30으로 미루면
+              과제 블록과 충돌 없이 유지할 수 있습니다.
+            </p>
+            <div class="suggestion-actions">
+              <button class="ghost-btn">무시</button>
+              <button class="solid-btn">제안 적용</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="surface-card compact-list-card">
+          <div class="card-head">
+            <div>
+              <p class="panel-kicker">Tasks</p>
+              <h2>미배치 할 일</h2>
+            </div>
+          </div>
+
+          <ul class="compact-list">
+            <li><span>캡스톤 시연 스크립트</span><b>90분</b></li>
+            <li><span>DB 마이그레이션 점검</span><b>45분</b></li>
+            <li><span>영어 발표 교정</span><b>30분</b></li>
+            <li><span>생활비 정리</span><b>15분</b></li>
+          </ul>
+        </article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

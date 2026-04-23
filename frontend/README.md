@@ -1,26 +1,25 @@
-# Frontend
+# Frontend Mockups
 
-Next.js App Router 기반 프론트엔드입니다. 현재 제품 기준은 소개형 랜딩이 아니라 작업용 워크스페이스이며, 핵심 경로는 아래와 같습니다.
+이 폴더는 Time Table 프론트엔드의 초기 UI 시안을 담습니다.
 
-- `/dashboard`: 오늘 실행 상태와 핵심 운영 카드
-- `/schedule`: 주간 시간표 편집과 import
-- `/goals`: 목표 보드와 목표 생성/수정
-- `/settings`: 엔진 설정, 연동 상태, 운영 정책
-- `/auth/callback`: Google 로그인 콜백 처리
-- `/mockups/today-workspace`: 내부 참고용 실험 화면
+현재는 빠르게 방향을 비교할 수 있도록 순수 HTML/CSS 기반 정적 목업을 먼저 구성했습니다.
 
-## Scripts
+## 포함된 시안
 
-```bash
-npm run dev
-npm run lint
-npm run build
-npm run test:e2e
+- `mockups/index.html`: 시안 허브
+- `mockups/dashboard.html`: 통합 운영 대시보드
+- `mockups/schedule.html`: 주간 시간표 중심 플래너
+- `mockups/focus.html`: 현재 집중 실행 화면
+
+## 열어보는 방법
+
+정적 파일이라 브라우저에서 바로 열어도 되고, 간단한 로컬 서버를 띄워도 됩니다.
+
+예시:
+
+```powershell
+cd frontend/mockups
+py -m http.server 3001
 ```
 
-기본 개발 서버는 `http://localhost:3000`입니다.
-
-## Notes
-
-- Playwright 산출물과 임시 캡처는 저장소 관리 대상이 아닙니다.
-- 화면/기능 기준 문서는 루트의 `DESIGN.md`와 `docs/reboot_*` 문서를 우선합니다.
+그다음 `http://localhost:3001` 로 접속하면 됩니다.
