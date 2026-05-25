@@ -18,7 +18,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
-class VllmScheduleClientTest {
+class GeminiScheduleClientTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private HttpServer server;
@@ -31,12 +31,12 @@ class VllmScheduleClientTest {
     }
 
     @Test
-    void normalizeCallsVllmAndCanonicalizesResponse() throws Exception {
+    void normalizeCallsGeminiAndCanonicalizesResponse() throws Exception {
         AtomicReference<String> requestBody = new AtomicReference<>();
-        AtomicReference<String> authorizationHeader = new AtomicReference<>();
+        AtomicReference<String> apiKeyHeader = new AtomicReference<>();
         server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/v1/chat/completions", exchange -> {
-            authorizationHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+        server.createContext("/v1beta/models/gemini-2.5-flash:generateContent", exchange -> {
+            apiKeyHeader.set(exchange.getRequestHeaders().getFirst("x-goog-api-key"));
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
 
             String content = objectMapper.writeValueAsString(Map.of(
@@ -62,9 +62,9 @@ class VllmScheduleClientTest {
             ));
 
             byte[] payload = objectMapper.writeValueAsBytes(Map.of(
-                    "choices", List.of(Map.of(
-                            "message", Map.of("content", content)
-                    ))
+                    "candidates", List.of(Map.of("content", Map.of(
+                            "parts", List.of(Map.of("text", content))
+                    )))
             ));
 
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -74,7 +74,7 @@ class VllmScheduleClientTest {
         });
         server.start();
 
-        VllmScheduleClient client = new VllmScheduleClient(
+        GeminiScheduleClient client = new GeminiScheduleClient(
                 new AppProperties(
                         "http://localhost:3000",
                         null,
@@ -82,9 +82,9 @@ class VllmScheduleClientTest {
                         null,
                         new AppProperties.AiProperties(
                                 true,
-                                "http://127.0.0.1:%d/v1".formatted(server.getAddress().getPort()),
-                                "test-token",
-                                "google/gemma-4-E2B-it",
+                                "http://127.0.0.1:%d/v1beta".formatted(server.getAddress().getPort()),
+                                "gemini-test-token",
+                                "gemini-2.5-flash",
                                 768,
                                 0.0,
                                 5
@@ -94,7 +94,7 @@ class VllmScheduleClientTest {
                 WebClient.builder().build()
         );
 
-        List<VllmScheduleClient.ImportedScheduleBlock> blocks = client.normalize("월요일 오전 딥워크");
+        List<GeminiScheduleClient.ImportedScheduleBlock> blocks = client.normalize("월요일 오전 딥워크");
 
         assertThat(blocks).hasSize(1);
         assertEquals(DayOfWeek.MONDAY, blocks.getFirst().dayOfWeek());
@@ -103,13 +103,17 @@ class VllmScheduleClientTest {
         assertEquals("딥 워크", blocks.getFirst().activity());
         assertEquals("WORK", blocks.getFirst().category());
         assertEquals("핵심 과제", blocks.getFirst().note());
-        assertEquals("Bearer test-token", authorizationHeader.get());
+        assertEquals("gemini-test-token", apiKeyHeader.get());
 
         JsonNode body = objectMapper.readTree(requestBody.get());
-        assertEquals("google/gemma-4-E2B-it", body.path("model").asText());
-        assertEquals("json_schema", body.path("response_format").path("type").asText());
-        assertThat(body.path("messages")).hasSize(2);
-        assertThat(body.path("response_format").path("json_schema").path("schema").path("properties").path("blocks"))
+        assertEquals("application/json",
+                body.path("generationConfig").path("responseFormat").path("text").path("mimeType").asText());
+        assertEquals(768, body.path("generationConfig").path("maxOutputTokens").asInt());
+        assertThat(body.path("systemInstruction").path("parts").get(0).path("text").asText())
+                .contains("strict JSON");
+        assertThat(body.path("contents").get(0).path("parts").get(0).path("text").asText())
+                .contains("월요일 오전 딥워크");
+        assertThat(body.path("generationConfig").path("responseFormat").path("text").path("schema").path("properties").path("blocks"))
                 .isNotNull();
     }
 }

@@ -5,7 +5,10 @@ import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -31,6 +34,26 @@ public class ApiExceptionHandler {
         return build(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage(), request.getRequestURI());
     }
 
+    @ExceptionHandler(WebClientResponseException.class)
+    public ResponseEntity<ApiErrorResponse> handleExternalServiceError(
+            WebClientResponseException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("External service request failed for {} {} with status {}",
+                request.getMethod(),
+                request.getRequestURI(),
+                exception.getStatusCode());
+        return build(HttpStatus.SERVICE_UNAVAILABLE, "외부 서비스 요청에 실패했습니다.", request.getRequestURI());
+    }
+
+    @ExceptionHandler(UserActionRequiredException.class)
+    public ResponseEntity<ApiErrorResponse> handleUserActionRequired(
+            UserActionRequiredException exception,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.CONFLICT, exception.getMessage(), request.getRequestURI());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleValidation(
             MethodArgumentNotValidException exception,
@@ -49,6 +72,23 @@ public class ApiExceptionHandler {
             HttpServletRequest request
     ) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnreadableMessage(
+            HttpMessageNotReadableException exception,
+            HttpServletRequest request
+    ) {
+        return build(HttpStatus.BAD_REQUEST, "요청 본문 형식이 올바르지 않습니다.", request.getRequestURI());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception,
+            HttpServletRequest request
+    ) {
+        String name = exception.getName() == null ? "요청 값" : exception.getName();
+        return build(HttpStatus.BAD_REQUEST, name + " 형식이 올바르지 않습니다.", request.getRequestURI());
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

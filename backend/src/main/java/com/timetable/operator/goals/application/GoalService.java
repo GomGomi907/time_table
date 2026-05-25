@@ -34,6 +34,13 @@ public class GoalService {
         return goalRepository.findByUserIdOrderByPriorityAscCreatedAtAsc(user.getId());
     }
 
+    @Transactional(readOnly = true)
+    public Goal getGoal(UUID id) {
+        AppUser user = currentUserProvider.getCurrentUser();
+        return goalRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("해당 목표를 찾을 수 없습니다."));
+    }
+
     @Transactional
     public Goal createGoal(CreateGoalRequest request) {
         AppUser user = currentUserProvider.getCurrentUser();

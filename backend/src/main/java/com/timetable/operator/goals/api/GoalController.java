@@ -32,6 +32,11 @@ public class GoalController {
         return ApiEnvelope.ok(goalService.listGoals().stream().map(GoalResponse::from).toList());
     }
 
+    @GetMapping("/{id}")
+    public ApiEnvelope<GoalResponse> getGoal(@PathVariable UUID id) {
+        return ApiEnvelope.ok(GoalResponse.from(goalService.getGoal(id)));
+    }
+
     @PostMapping
     public ApiEnvelope<GoalResponse> createGoal(@Validated @RequestBody GoalService.CreateGoalRequest request) {
         return ApiEnvelope.ok(GoalResponse.from(goalService.createGoal(request)));
@@ -85,7 +90,7 @@ public class GoalController {
             LocalDate endDate,
             short priority
     ) {
-        static GoalResponse from(Goal goal) {
+        public static GoalResponse from(Goal goal) {
             return new GoalResponse(
                     goal.getId().toString(),
                     goal.getParentGoalId() == null ? null : goal.getParentGoalId().toString(),

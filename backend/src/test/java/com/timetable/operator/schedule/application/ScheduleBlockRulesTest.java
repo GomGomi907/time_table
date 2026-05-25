@@ -60,4 +60,22 @@ class ScheduleBlockRulesTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("겹칩니다");
     }
+
+    @Test
+    void validateForUserRejectsBlocksShorterThanUiGranularity() {
+        UUID userId = UUID.randomUUID();
+        ScheduleBlock candidate = new ScheduleBlock();
+        candidate.setUserId(userId);
+        candidate.setDayOfWeek(DayOfWeek.MONDAY);
+        candidate.setStartTime(LocalTime.of(9, 0));
+        candidate.setEndTime(LocalTime.of(9, 1));
+        candidate.setActivity("너무 짧은 블록");
+        candidate.setCategory(ScheduleCategory.WORK);
+
+        when(scheduleBlockRepository.findByUserId(userId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> scheduleBlockRules.validateForUser(userId, candidate))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("최소 15분");
+    }
 }

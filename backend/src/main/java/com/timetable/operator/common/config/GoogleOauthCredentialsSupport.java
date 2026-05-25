@@ -9,12 +9,12 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import org.springframework.util.StringUtils;
 
-final class GoogleOauthCredentialsSupport {
+public final class GoogleOauthCredentialsSupport {
 
     private GoogleOauthCredentialsSupport() {
     }
 
-    static boolean hasConfiguredCredentials(
+    public static boolean hasConfiguredCredentials(
             String clientId,
             String clientSecret,
             String credentialsFile
@@ -34,7 +34,7 @@ final class GoogleOauthCredentialsSupport {
         }
     }
 
-    static GoogleOauthCredentials resolve(
+    public static GoogleOauthCredentials resolve(
             String clientId,
             String clientSecret,
             String credentialsFile,

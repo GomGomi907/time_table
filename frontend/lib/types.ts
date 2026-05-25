@@ -7,14 +7,23 @@ export interface AuthSession {
   autoRescheduleEnabled: boolean;
   focusAutoEnterEnabled: boolean;
   googleConnectionStatus: string;
+  calendarWriteEnabled?: boolean;
+  tasksWriteEnabled?: boolean;
+  googleCapabilityStatus?: string;
   lastSyncAt: string | null;
   callbackUrl: string;
 }
 
 export interface GoogleStartResponse {
   enabled: boolean;
-  url: string;
+  url: string | null;
   message: string | null;
+}
+
+export interface CsrfTokenResponse {
+  headerName: string;
+  parameterName: string;
+  token: string;
 }
 
 export interface OnboardingStatus {
@@ -62,6 +71,9 @@ export interface OnboardingProfile {
   dinnerTime: string;
   sleepTime: string;
   weekendStyle: string;
+  focusSessionMinutes: string;
+  focusBreakMinutes: string;
+  focusInterventionStyle: string;
   quietHoursStart: string;
   quietHoursEnd: string;
 }
@@ -107,6 +119,23 @@ export interface OnboardingCompletionResponse {
   message: string;
 }
 
+export interface DashboardSummaryResponse {
+  week: WeekScheduleResponse;
+  goals: Goal[];
+  focus: FocusCurrentView;
+  sync: SyncStatusEnvelope;
+  suggestions: RescheduleSuggestion[];
+  metrics: DashboardMetrics;
+}
+
+export interface DashboardMetrics {
+  averageGoalProgress: number;
+  weeklyShapeScore: number;
+  scheduleBlockCount: number;
+  growthBlockCount: number;
+  topGoal: Goal | null;
+}
+
 export interface SettingsResponse {
   id: string;
   quietHoursStart: string;
@@ -114,6 +143,8 @@ export interface SettingsResponse {
   bufferMinutes: number;
   overtimeTriggerMinutes: number;
   openGapTriggerMinutes: number;
+  preferredFocusMinutes: number;
+  breakBufferMinutes: number;
   interventionFrequency: string;
   timezone: string;
   autoRescheduleEnabled: boolean;
@@ -123,6 +154,8 @@ export interface SettingsResponse {
 export interface SettingsUpdateRequest {
   quietHoursStart?: string;
   quietHoursEnd?: string;
+  preferredFocusMinutes?: number;
+  breakBufferMinutes?: number;
   interventionFrequency?: string;
   timezone?: string;
   autoRescheduleEnabled?: boolean;
@@ -225,9 +258,29 @@ export interface FocusCurrentView {
   focusState: string;
   currentItem: FocusCurrentItem | null;
   nextItem: FocusNextItem | null;
+  scheduleContext: FocusScheduleContext | null;
+  preferenceContext: FocusPreferenceContext | null;
   recommendedTasks: RecommendedTask[];
   activeSuggestion: unknown;
   remainingMinutes: number | null;
+}
+
+export interface FocusScheduleContext {
+  state: string;
+  currentBlock: FocusScheduleBlock | null;
+  nextBlock: FocusScheduleBlock | null;
+}
+
+export interface FocusScheduleBlock extends ScheduleBlock {
+  dayOfWeek: string;
+}
+
+export interface FocusPreferenceContext {
+  preferredFocusMinutes: number;
+  breakBufferMinutes: number;
+  interventionStyle: string;
+  interventionLabel: string;
+  guidance: string;
 }
 
 export interface StructuredAiCommand {
@@ -249,14 +302,37 @@ export interface RescheduleSuggestion {
   id: string;
   triggerType: string;
   status: string;
+  statusLabel: string;
+  statusDetail: string;
   summary: string;
   reason: string | null;
   explanation: string;
   commandBatch: StructuredAiCommandBatch;
+  previewItems: SuggestionPreviewItem[];
+  executableCommandCount: number;
+  executable: boolean;
+  executionSummary: SuggestionExecutionSummary | null;
   createdAt: string;
   appliedAt: string | null;
   rejectedAt: string | null;
   revertedAt: string | null;
+}
+
+export interface SuggestionPreviewItem {
+  actionType: string;
+  targetType: string;
+  targetId: string | null;
+  title: string;
+  detail: string | null;
+  reason: string | null;
+  executable: boolean;
+}
+
+export interface SuggestionExecutionSummary {
+  totalCount: number;
+  appliedCount: number;
+  noOpCount: number;
+  detail: string;
 }
 
 export interface SyncStatusTarget {
@@ -277,7 +353,19 @@ export interface SyncStatusMeta {
   webhookTarget?: string;
   pollingTarget?: string;
   pollingEnabled?: boolean;
+  adapterMode?: string;
+  externalReadEnabled?: boolean;
+  externalWriteEnabled?: boolean;
+  calendarWriteEnabled?: boolean;
+  tasksWriteEnabled?: boolean;
+  capabilityStatus?: string;
+  adapterDetail?: string;
   pendingConflictCount?: number;
+  pendingProviderWriteCount?: number;
+  providerWritePendingCount?: number;
+  providerWriteRetryableFailureCount?: number;
+  providerWriteReconnectRequiredCount?: number;
+  providerWriteConflictCount?: number;
 }
 
 export interface SyncStatusEnvelope {

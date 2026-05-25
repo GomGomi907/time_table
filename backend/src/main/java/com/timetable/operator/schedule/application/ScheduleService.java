@@ -42,7 +42,7 @@ public class ScheduleService {
     private final ScheduleBlockRepository scheduleBlockRepository;
     private final CurrentUserProvider currentUserProvider;
     private final ObjectMapper objectMapper;
-    private final VllmScheduleClient vllmScheduleClient;
+    private final GeminiScheduleClient geminiScheduleClient;
     private final ScheduleBlockRules scheduleBlockRules;
 
     @Transactional
@@ -55,8 +55,8 @@ public class ScheduleService {
     @Transactional
     public WeekScheduleResponse importSchedule(ImportScheduleRequest request) {
         AppUser user = currentUserProvider.getCurrentUser();
-        List<VllmScheduleClient.ImportedScheduleBlock> importedBlocks =
-                vllmScheduleClient.normalize(request.rawText().trim());
+        List<GeminiScheduleClient.ImportedScheduleBlock> importedBlocks =
+                geminiScheduleClient.normalize(request.rawText().trim());
 
         List<ScheduleBlock> persistedBlocks = importedBlocks.stream()
                 .map(block -> toEntity(user, block))
@@ -130,7 +130,7 @@ public class ScheduleService {
         return scheduleBlock;
     }
 
-    private ScheduleBlock toEntity(AppUser user, VllmScheduleClient.ImportedScheduleBlock block) {
+    private ScheduleBlock toEntity(AppUser user, GeminiScheduleClient.ImportedScheduleBlock block) {
         ScheduleBlock scheduleBlock = new ScheduleBlock();
         scheduleBlock.setUserId(user.getId());
         scheduleBlock.setDayOfWeek(block.dayOfWeek());
@@ -139,8 +139,8 @@ public class ScheduleService {
         scheduleBlock.setActivity(block.activity());
         scheduleBlock.setCategory(parseCategory(block.category()));
         scheduleBlock.setNote(blankToNull(block.note()));
-        scheduleBlock.setSourceType(ScheduleSourceType.GEMMA_IMPORT);
-        scheduleBlock.setSourceRef("vllm-gemma4");
+        scheduleBlock.setSourceType(ScheduleSourceType.AI_IMPORT);
+        scheduleBlock.setSourceRef("gemini-api");
         return scheduleBlock;
     }
 

@@ -20,7 +20,7 @@ const displayFont = Space_Grotesk({
 
 export const metadata: Metadata = {
   title: "Time Table",
-  description: "Execution workspace for weekly planning, focus, and AI-assisted rescheduling.",
+  description: "Execution workspace for weekly planning, focus, and approval-first schedule adjustment.",
 };
 
 export default function RootLayout({

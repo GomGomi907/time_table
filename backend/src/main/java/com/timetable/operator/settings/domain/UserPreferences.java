@@ -34,5 +34,11 @@ public class UserPreferences extends AuditableEntity {
     private Integer openGapTriggerMinutes;
 
     @Column(nullable = false)
+    private Integer preferredFocusMinutes = 45;
+
+    @Column(nullable = false)
+    private Integer breakBufferMinutes = 10;
+
+    @Column(nullable = false)
     private String interventionFrequency;
 }

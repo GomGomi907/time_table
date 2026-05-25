@@ -47,3 +47,7 @@
 # docs generators
 /docs/ppt_gen/venv/
 /docs/ppt_gen/__pycache__/
+
+# codex/OMX local runtime
+/.omx/
+/oh-my-codex/

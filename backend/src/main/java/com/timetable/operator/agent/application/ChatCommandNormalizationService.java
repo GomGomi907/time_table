@@ -97,10 +97,10 @@ public class ChatCommandNormalizationService {
             if (targetId != null) {
                 commands.add(new StructuredAiCommand(
                         AgentCommandActionType.MOVE_EVENT.wireValue(),
-                        AgentCommandTargetType.EVENT.wireValue(),
+                        targetType,
                         targetId,
                         Map.of("suggestedShiftMinutes", suggestedShiftMinutes),
-                        "현재 일정 모델에서는 schedule block 이동안으로 해석합니다.",
+                        "대상 타입에 맞춰 canonical Event/Task 또는 legacy schedule block 이동안으로 해석합니다.",
                         true
                 ));
             }

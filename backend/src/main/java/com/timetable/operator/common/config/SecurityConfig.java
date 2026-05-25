@@ -9,9 +9,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
@@ -26,6 +28,7 @@ public class SecurityConfig {
 
     private final AppProperties appProperties;
     private final ObjectProvider<OAuthLoginSuccessHandler> oAuthLoginSuccessHandlerProvider;
+    private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepositoryProvider;
     @Value("${spring.h2.console.enabled:false}")
     private boolean h2ConsoleEnabled;
 
@@ -40,8 +43,16 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
-                    authorize.requestMatchers(HttpMethod.GET, "/api/auth/session", "/api/auth/google/start", "/actuator/health").permitAll();
-                    authorize.requestMatchers(HttpMethod.GET, "/api/auth/mock/login", "/api/auth/mock/callback").permitAll();
+                    authorize.requestMatchers(
+                            HttpMethod.GET,
+                            "/api/auth/session",
+                            "/api/auth/csrf",
+                            "/api/auth/google/start",
+                            "/actuator/health"
+                    ).permitAll();
+                    if (appProperties.mockLoginEnabled()) {
+                        authorize.requestMatchers(HttpMethod.GET, "/api/auth/mock/login", "/api/auth/mock/callback").permitAll();
+                    }
                     authorize.requestMatchers(HttpMethod.GET, "/oauth2/**", "/login/oauth2/**").permitAll();
                     if (h2ConsoleEnabled) {
                         authorize.requestMatchers("/h2-console/**").permitAll();
@@ -49,10 +60,18 @@ public class SecurityConfig {
                     authorize.anyRequest().authenticated();
                 })
                 .logout(logout -> logout.logoutUrl("/api/auth/logout"))
-                .httpBasic(Customizer.withDefaults());
+                .httpBasic(httpBasic -> httpBasic.disable());
 
         if (appProperties.googleOauthEnabled()) {
-            http.oauth2Login(oauth2 -> oauth2.successHandler(oAuthLoginSuccessHandlerProvider.getObject()));
+            http.oauth2Login(oauth2 -> {
+                oauth2.successHandler(oAuthLoginSuccessHandlerProvider.getObject());
+                OAuth2AuthorizationRequestResolver authorizationRequestResolver =
+                        googleOfflineAuthorizationRequestResolver();
+                if (authorizationRequestResolver != null) {
+                    oauth2.authorizationEndpoint(authorization -> authorization
+                            .authorizationRequestResolver(authorizationRequestResolver));
+                }
+            });
         }
 
         if (h2ConsoleEnabled) {
@@ -85,5 +104,21 @@ public class SecurityConfig {
             requestMatchers.add(PathPatternRequestMatcher.withDefaults().matcher("/h2-console/**"));
         }
         return requestMatchers.toArray(RequestMatcher[]::new);
+    }
+
+    private OAuth2AuthorizationRequestResolver googleOfflineAuthorizationRequestResolver() {
+        ClientRegistrationRepository clientRegistrationRepository = clientRegistrationRepositoryProvider.getIfAvailable();
+        if (clientRegistrationRepository == null) {
+            return null;
+        }
+        DefaultOAuth2AuthorizationRequestResolver resolver =
+                new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
+        resolver.setAuthorizationRequestCustomizer(customizer -> customizer
+                .additionalParameters(parameters -> {
+                    parameters.put("access_type", "offline");
+                    parameters.put("prompt", "consent");
+                    parameters.put("include_granted_scopes", "true");
+                }));
+        return resolver;
     }
 }

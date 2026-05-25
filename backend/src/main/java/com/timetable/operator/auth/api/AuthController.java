@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,11 +28,20 @@ public class AuthController {
         return authService.getSession();
     }
 
+    @GetMapping("/csrf")
+    public CsrfTokenResponse getCsrfToken(CsrfToken csrfToken) {
+        return new CsrfTokenResponse(
+                csrfToken.getHeaderName(),
+                csrfToken.getParameterName(),
+                csrfToken.getToken()
+        );
+    }
+
     @GetMapping("/google/start")
     public GoogleStartResponse startGoogleLogin(HttpServletRequest request) {
         String origin = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
 
-        if (!appProperties.googleOauthEnabled()) {
+        if (!appProperties.googleOauthEnabled() && appProperties.mockLoginEnabled()) {
             return new GoogleStartResponse(
                     true,
                     origin + "/api/auth/mock/login",
@@ -39,7 +49,15 @@ public class AuthController {
             );
         }
 
-        return new GoogleStartResponse(true, origin + "/oauth2/authorization/google", null);
+        if (appProperties.googleOauthEnabled()) {
+            return new GoogleStartResponse(true, origin + "/oauth2/authorization/google", null);
+        }
+
+        return new GoogleStartResponse(
+                false,
+                null,
+                "Google OAuth 자격 증명이 설정되지 않았고 개발용 Mock 로그인도 비활성화되어 있습니다."
+        );
     }
 
     @PostMapping("/logout")
@@ -56,6 +74,13 @@ public class AuthController {
             boolean enabled,
             String url,
             String message
+    ) {
+    }
+
+    public record CsrfTokenResponse(
+            String headerName,
+            String parameterName,
+            String token
     ) {
     }
 }

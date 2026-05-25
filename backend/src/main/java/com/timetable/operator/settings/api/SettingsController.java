@@ -44,12 +44,14 @@ public class SettingsController {
             Integer bufferMinutes,
             Integer overtimeTriggerMinutes,
             Integer openGapTriggerMinutes,
+            Integer preferredFocusMinutes,
+            Integer breakBufferMinutes,
             String interventionFrequency,
             String timezone,
             boolean autoRescheduleEnabled,
             boolean focusAutoEnterEnabled
     ) {
-        static SettingsResponse from(UserPreferences preferences, AppUser user) {
+        public static SettingsResponse from(UserPreferences preferences, AppUser user) {
             return new SettingsResponse(
                     preferences.getId().toString(),
                     preferences.getQuietHoursStart().toString(),
@@ -57,6 +59,8 @@ public class SettingsController {
                     preferences.getBufferMinutes(),
                     preferences.getOvertimeTriggerMinutes(),
                     preferences.getOpenGapTriggerMinutes(),
+                    preferences.getPreferredFocusMinutes(),
+                    preferences.getBreakBufferMinutes(),
                     preferences.getInterventionFrequency(),
                     user.getTimezone(),
                     user.isAutoRescheduleEnabled(),

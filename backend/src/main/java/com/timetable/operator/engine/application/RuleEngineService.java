@@ -98,6 +98,8 @@ public class RuleEngineService {
         prefs.setBufferMinutes(5);
         prefs.setOvertimeTriggerMinutes(10);
         prefs.setOpenGapTriggerMinutes(30);
+        prefs.setPreferredFocusMinutes(45);
+        prefs.setBreakBufferMinutes(10);
         prefs.setInterventionFrequency("NORMAL");
         return userPreferencesRepository.save(prefs);
     }

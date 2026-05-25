@@ -34,6 +34,11 @@ public class EventController {
         return ApiEnvelope.ok(eventService.getEvents(from, to).stream().map(EventResponse::from).toList());
     }
 
+    @GetMapping("/{id}")
+    public ApiEnvelope<EventResponse> getEvent(@PathVariable UUID id) {
+        return ApiEnvelope.ok(EventResponse.from(eventService.getEvent(id)));
+    }
+
     @PostMapping
     public ApiEnvelope<EventResponse> createEvent(@Valid @RequestBody EventService.EventWriteRequest request) {
         return ApiEnvelope.ok(EventResponse.from(eventService.createEvent(request)));

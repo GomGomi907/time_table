@@ -33,6 +33,13 @@ public class AgentController {
         return ApiResponses.ok(rescheduleSuggestionService.getCurrentUserSuggestions());
     }
 
+    @GetMapping("/api/agent/suggestions/{suggestionId}")
+    public ResponseEntity<ApiEnvelope<RescheduleSuggestionService.RescheduleSuggestionResponse>> getSuggestion(
+            @PathVariable UUID suggestionId
+    ) {
+        return ApiResponses.ok(rescheduleSuggestionService.getCurrentUserSuggestion(suggestionId));
+    }
+
     @PostMapping("/api/agent/suggestions/{suggestionId}/apply")
     public ResponseEntity<ApiEnvelope<RescheduleSuggestionService.RescheduleSuggestionResponse>> applySuggestion(
             @PathVariable UUID suggestionId,

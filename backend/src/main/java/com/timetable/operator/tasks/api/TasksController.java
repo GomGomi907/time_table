@@ -37,6 +37,11 @@ public class TasksController {
                 .toList());
     }
 
+    @GetMapping("/{id}")
+    public ApiEnvelope<TaskResponse> getTask(@PathVariable UUID id) {
+        return ApiEnvelope.ok(TaskResponse.from(taskService.getTask(id)));
+    }
+
     @PostMapping
     public ApiEnvelope<TaskResponse> createTask(@Valid @RequestBody TaskService.TaskWriteRequest request) {
         return ApiEnvelope.ok(TaskResponse.from(taskService.createTask(request)));
@@ -84,7 +89,8 @@ public class TasksController {
             String sourceType,
             String syncState,
             String goalId,
-            String eventId
+            String eventId,
+            Instant completedAt
     ) {
         static TaskResponse from(Task task) {
             return new TaskResponse(
@@ -100,7 +106,8 @@ public class TasksController {
                     task.getSourceType().name(),
                     task.getSyncState().name(),
                     task.getGoalId() == null ? null : task.getGoalId().toString(),
-                    task.getEventId() == null ? null : task.getEventId().toString()
+                    task.getEventId() == null ? null : task.getEventId().toString(),
+                    task.getCompletedAt()
             );
         }
     }

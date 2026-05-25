@@ -2,8 +2,10 @@
 
 import {
   AuthSession,
+  CsrfTokenResponse,
   CreateGoalRequest,
   CreateScheduleBlockRequest,
+  DashboardSummaryResponse,
   FocusCurrentView,
   Goal,
   GoogleStartResponse,
@@ -34,9 +36,16 @@ interface ApiEnvelope<T> {
   };
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8080";
+function normalizeApiBaseUrl(value: string | undefined) {
+  const normalized = (value ?? "http://localhost:8080").replace(/\/+$/, "");
+
+  // All client calls in this module pass paths that already start with `/api`.
+  // Accept legacy Docker/env values such as `http://localhost:8080/api` without
+  // turning requests into `/api/api/...`.
+  return normalized.replace(/\/api$/i, "");
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL);
 
 function buildUrl(path: string, query?: Record<string, string | boolean | undefined>) {
   const url = new URL(`${API_BASE_URL}${path}`);
@@ -51,17 +60,7 @@ function buildUrl(path: string, query?: Record<string, string | boolean | undefi
   return url.toString();
 }
 
-function readCookie(name: string) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const cookie = document.cookie
-    .split("; ")
-    .find((entry) => entry.startsWith(`${name}=`));
-
-  return cookie ? decodeURIComponent(cookie.split("=")[1] ?? "") : null;
-}
+let csrfTokenCache: CsrfTokenResponse | null = null;
 
 async function parseResponse(response: Response) {
   if (response.status === 204) {
@@ -78,10 +77,6 @@ async function parseResponse(response: Response) {
 }
 
 function getErrorMessage(payload: unknown, status: number) {
-  if (status === 401) {
-    return "로그인이 필요합니다. 로그인 화면에서 세션을 시작해 주세요.";
-  }
-
   if (payload && typeof payload === "object") {
     const record = payload as Record<string, unknown>;
     const envelopeError =
@@ -98,32 +93,49 @@ function getErrorMessage(payload: unknown, status: number) {
     }
   }
 
+  if (status === 401) {
+    return "로그인이 필요합니다. 로그인 화면에서 세션을 시작해 주세요.";
+  }
+
+  if (status === 403) {
+    return "보안 확인에 실패했습니다. 잠시 후 다시 시도하거나 페이지를 새로고침해 주세요.";
+  }
+
   return `요청에 실패했습니다. (${status})`;
 }
 
-async function ensureCsrfToken() {
-  const existing = readCookie("XSRF-TOKEN");
-  if (existing) {
-    return existing;
+async function ensureCsrfToken(forceRefresh = false) {
+  if (!forceRefresh && csrfTokenCache?.token) {
+    return csrfTokenCache;
   }
 
-  await fetch(buildUrl("/api/auth/session"), {
+  const response = await fetch(buildUrl("/api/auth/csrf"), {
     credentials: "include",
     cache: "no-store",
   });
 
-  return readCookie("XSRF-TOKEN");
+  const payload = await parseResponse(response);
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, response.status));
+  }
+
+  csrfTokenCache = payload as CsrfTokenResponse;
+  return csrfTokenCache;
 }
 
-async function requestRaw<T>(path: string, init?: RequestInit, query?: Record<string, string | boolean | undefined>) {
+async function requestRaw<T>(
+  path: string,
+  init?: RequestInit,
+  query?: Record<string, string | boolean | undefined>,
+  attempt = 0,
+) {
   const method = init?.method?.toUpperCase() ?? "GET";
   const headers = new Headers(init?.headers);
+  const needsCsrfToken = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
 
-  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
-    const csrfToken = await ensureCsrfToken();
-    if (csrfToken) {
-      headers.set("X-XSRF-TOKEN", csrfToken);
-    }
+  if (needsCsrfToken) {
+    const csrfToken = await ensureCsrfToken(attempt > 0);
+    headers.set(csrfToken.headerName, csrfToken.token);
   }
 
   if (init?.body && !headers.has("Content-Type")) {
@@ -139,6 +151,10 @@ async function requestRaw<T>(path: string, init?: RequestInit, query?: Record<st
 
   const payload = await parseResponse(response);
   if (!response.ok) {
+    if (response.status === 403 && needsCsrfToken && attempt === 0) {
+      csrfTokenCache = null;
+      return requestRaw<T>(path, init, query, 1);
+    }
     throw new Error(getErrorMessage(payload, response.status));
   }
 
@@ -170,6 +186,10 @@ export const api = {
     return requestRaw<GoogleStartResponse>("/api/auth/google/start");
   },
 
+  getDashboardSummary() {
+    return requestEnvelope<DashboardSummaryResponse>("/api/dashboard/summary");
+  },
+
   getOnboardingStatus() {
     return requestRaw<OnboardingStatus>("/api/onboarding/status");
   },
@@ -198,6 +218,7 @@ export const api = {
     await requestRaw("/api/auth/logout", {
       method: "POST",
     });
+    csrfTokenCache = null;
   },
 
   getSettings() {
@@ -317,11 +338,11 @@ export const api = {
 
   deleteFocusItem(itemType: string, itemId: string) {
     if (itemType.toLowerCase() === "task") {
-      return this.deleteTask(itemId);
+      return api.deleteTask(itemId);
     }
 
     if (itemType.toLowerCase() === "event") {
-      return this.deleteEvent(itemId);
+      return api.deleteEvent(itemId);
     }
 
     throw new Error("삭제할 수 없는 포커스 항목입니다.");

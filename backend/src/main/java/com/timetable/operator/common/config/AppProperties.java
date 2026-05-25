@@ -18,7 +18,9 @@ public record AppProperties(
             String googleClientId,
             String googleClientSecret,
             String googleCredentialsFile,
-            List<String> googleScopes
+            String googleTokenUrl,
+            List<String> googleScopes,
+            boolean mockLoginEnabled
     ) {
     }
 
@@ -56,9 +58,19 @@ public record AppProperties(
         );
     }
 
+    public boolean mockLoginEnabled() {
+        return auth != null && auth.mockLoginEnabled();
+    }
+
     public List<String> googleOauthScopes() {
         if (auth == null || auth.googleScopes() == null || auth.googleScopes().isEmpty()) {
-            return List.of("openid", "profile", "email", "https://www.googleapis.com/auth/calendar.readonly");
+            return List.of(
+                    "openid",
+                    "profile",
+                    "email",
+                    "https://www.googleapis.com/auth/calendar.events",
+                    "https://www.googleapis.com/auth/tasks"
+            );
         }
         return auth.googleScopes();
     }

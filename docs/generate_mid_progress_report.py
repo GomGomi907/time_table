@@ -516,7 +516,7 @@ def build_status_slide(slide) -> None:
                 "온보딩 완료 영속화",
                 "설정 화면 및 패턴 저장 확장",
                 "대시보드 aggregate API",
-                "sync 실동작과 scaffold 구분",
+                "sync write-back 정책과 재연결 UX",
                 "LLM 품질·설명 강화",
             ],
         ),
@@ -536,7 +536,7 @@ def build_status_slide(slide) -> None:
     add_card(slide, 0.82, 6.78, 11.40, 0.28, fill_hex=PURPLE_SOFT, line_hex=None)
     add_text(
         slide,
-        "메모: 대시보드 집계는 프론트 조합 방식이고, sync와 AI 재배치 흐름은 아직 scaffold / MVP 성격이 강합니다.",
+        "메모: 대시보드 집계와 Google inbound read는 연결됐고, sync write-back과 AI 재배치 품질은 다음 강화 대상입니다.",
         1.00,
         6.82,
         11.00,

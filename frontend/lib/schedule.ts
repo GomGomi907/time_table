@@ -31,21 +31,27 @@ export const DAY_FULL_LABELS: Record<string, string> = {
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {
-  WORK: "Deep Work",
-  GROWTH: "Growth",
-  LIFE: "Life",
-  TRANSIT: "Transit",
-  HOBBY: "Hobby",
-  SLEEP: "Sleep",
-  ADMIN: "Admin",
-  HEALTH: "Health",
+  WORK: "집중 업무",
+  GROWTH: "성장",
+  LIFE: "생활",
+  TRANSIT: "이동",
+  HOBBY: "취미",
+  SLEEP: "수면",
+  ADMIN: "관리",
+  HEALTH: "건강",
 };
 
-export const PIXELS_PER_MINUTE = 1.15;
-export const DAY_TRACK_HEIGHT = 24 * 60 * PIXELS_PER_MINUTE;
-const MIN_RENDERED_BLOCK_MINUTES = 15;
+export const PIXELS_PER_MINUTE = 1.14;
+export const DEFAULT_WEEK_VIEW_START_MINUTES = 6 * 60;
+export const DEFAULT_WEEK_VIEW_END_MINUTES = 24 * 60;
+export const DAY_TRACK_HEIGHT =
+  (DEFAULT_WEEK_VIEW_END_MINUTES - DEFAULT_WEEK_VIEW_START_MINUTES) * PIXELS_PER_MINUTE;
+const MIN_RENDERED_BLOCK_MINUTES = 30;
 const BLOCK_HORIZONTAL_INSET = 6;
 const BLOCK_HORIZONTAL_GAP = 6;
+const LOW_SIGNAL_ROUTINE_PATTERN =
+  /(기상|출근|퇴근|등교|하교|이동|저녁|점심|아침|샤워|정리|취침|수면|준비)/;
+const GENERIC_WORK_PATTERN = /^근무(?:$|\s|\()/;
 
 export interface PositionedScheduleBlock extends ScheduleBlock {
   top: string;
@@ -109,7 +115,11 @@ function getHorizontalBlockStyle(column: number, columns: number) {
   };
 }
 
-export function getLaidOutBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlock[] {
+export function getLaidOutBlocks(
+  blocks: ScheduleBlock[],
+  viewportStart = DEFAULT_WEEK_VIEW_START_MINUTES,
+  viewportEnd = DEFAULT_WEEK_VIEW_END_MINUTES,
+): PositionedScheduleBlock[] {
   if (!blocks.length) {
     return [];
   }
@@ -118,17 +128,31 @@ export function getLaidOutBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlo
     .map((block) => {
       const start = minutesFromClock(block.startTime);
       const actualDuration = durationInMinutes(block.startTime, block.endTime);
+      const shouldShiftAfterMidnight =
+        start < viewportStart && start + 24 * 60 < viewportEnd;
+      const layoutStart = shouldShiftAfterMidnight ? start + 24 * 60 : start;
+      const actualEnd = layoutStart + actualDuration;
+      const visibleStart = Math.max(layoutStart, viewportStart);
+      const visibleEnd = Math.min(actualEnd, viewportEnd);
+      const visibleDuration = visibleEnd - visibleStart;
+
+      if (visibleDuration <= 0) {
+        return null;
+      }
 
       return {
         block,
         start,
-        end: start + actualDuration,
-        displayDuration: Math.max(actualDuration, MIN_RENDERED_BLOCK_MINUTES),
+        layoutStart: visibleStart,
+        end: visibleEnd,
+        actualDuration,
+        displayDuration: Math.max(visibleDuration, MIN_RENDERED_BLOCK_MINUTES),
       };
     })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((left, right) => {
-      if (left.start !== right.start) {
-        return left.start - right.start;
+      if (left.layoutStart !== right.layoutStart) {
+        return left.layoutStart - right.layoutStart;
       }
 
       return right.end - left.end;
@@ -145,9 +169,10 @@ export function getLaidOutBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlo
 
     const columnEnds: number[] = [];
     const clusterItems = cluster.map((item) => {
-      const column = columnEnds.findIndex((end) => end <= item.start);
+      const visualEnd = item.layoutStart + item.displayDuration;
+      const column = columnEnds.findIndex((end) => end <= item.layoutStart);
       const nextColumn = column === -1 ? columnEnds.length : column;
-      columnEnds[nextColumn] = item.end;
+      columnEnds[nextColumn] = visualEnd;
 
       return {
         item,
@@ -163,12 +188,12 @@ export function getLaidOutBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlo
 
       positioned.push({
         ...item.block,
-        top: `${item.start * PIXELS_PER_MINUTE}px`,
+        top: `${(item.layoutStart - viewportStart) * PIXELS_PER_MINUTE}px`,
         height: `${blockHeight}px`,
         left: horizontal.left,
         width: horizontal.width,
-        isCompact: item.displayDuration <= 30 || columns > 1,
-        isTight: item.displayDuration <= 20,
+        isCompact: item.actualDuration <= 40 || item.displayDuration <= 40 || columns > 1,
+        isTight: item.actualDuration <= 25,
       });
     });
 
@@ -179,19 +204,19 @@ export function getLaidOutBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlo
   prepared.forEach((item) => {
     if (!cluster.length) {
       cluster = [item];
-      clusterEnd = item.end;
+      clusterEnd = item.layoutStart + item.displayDuration;
       return;
     }
 
-    if (item.start < clusterEnd) {
+    if (item.layoutStart < clusterEnd) {
       cluster.push(item);
-      clusterEnd = Math.max(clusterEnd, item.end);
+      clusterEnd = Math.max(clusterEnd, item.layoutStart + item.displayDuration);
       return;
     }
 
     flushCluster();
     cluster = [item];
-    clusterEnd = item.end;
+    clusterEnd = item.layoutStart + item.displayDuration;
   });
 
   flushCluster();
@@ -201,6 +226,50 @@ export function getLaidOutBlocks(blocks: ScheduleBlock[]): PositionedScheduleBlo
 
 export function getDailyBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
   return week?.week.find((day) => day.dayOfWeek === dayOfWeek)?.blocks ?? [];
+}
+
+function dedupeScheduleBlocks(blocks: ScheduleBlock[]) {
+  const seen = new Set<string>();
+  return blocks.filter((block) => {
+    const key = [
+      block.startTime,
+      block.endTime,
+      block.activity.trim(),
+      block.category,
+      block.note?.trim() ?? "",
+    ].join("|");
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+export function isPlanningSignalBlock(block: ScheduleBlock) {
+  if (block.category === "SLEEP") {
+    return false;
+  }
+
+  if (
+    (block.category === "LIFE" || block.category === "TRANSIT") &&
+    LOW_SIGNAL_ROUTINE_PATTERN.test(block.activity)
+  ) {
+    return false;
+  }
+
+  if (block.category === "WORK" && GENERIC_WORK_PATTERN.test(block.activity)) {
+    return false;
+  }
+
+  return true;
+}
+
+function getPlanningSignalBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
+  const blocks = dedupeScheduleBlocks(getDailyBlocks(week, dayOfWeek).filter(isPlanningSignalBlock));
+  return blocks.length
+    ? blocks
+    : dedupeScheduleBlocks(getDailyBlocks(week, dayOfWeek).filter((block) => block.category !== "SLEEP"));
 }
 
 function sortBlocksByStart(blocks: ScheduleBlock[]) {
@@ -226,7 +295,7 @@ export function getCurrentMinutes(timeZone?: string) {
 
 export function getDashboardFlow(week: WeekScheduleResponse | null, timeZone?: string) {
   const today = getCurrentDayName(timeZone);
-  const blocks = getDailyBlocks(week, today);
+  const blocks = getPlanningSignalBlocks(week, today);
   if (!blocks.length) {
     return [];
   }
@@ -260,7 +329,7 @@ export function getNextScheduleBlocks(
 
   for (let offset = 0; offset < DAY_ORDER.length && upcomingBlocks.length < limit; offset += 1) {
     const dayOfWeek = DAY_ORDER[(startIndex + offset) % DAY_ORDER.length];
-    const dayBlocks = sortBlocksByStart(getDailyBlocks(week, dayOfWeek));
+    const dayBlocks = sortBlocksByStart(getPlanningSignalBlocks(week, dayOfWeek));
 
     for (const block of dayBlocks) {
       if (offset === 0 && minutesFromClock(block.startTime) <= nowMinutes) {
@@ -283,7 +352,7 @@ export function getNextScheduleBlocks(
 
 export function getFallbackFocusBlock(week: WeekScheduleResponse | null, timeZone?: string) {
   const today = getCurrentDayName(timeZone);
-  const blocks = getDailyBlocks(week, today);
+  const blocks = getPlanningSignalBlocks(week, today);
   const nowMinutes = getCurrentMinutes(timeZone);
 
   return (

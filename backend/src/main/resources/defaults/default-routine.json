@@ -8,7 +8,7 @@
   {"dayOfWeek":"MONDAY","startTime":"21:30","endTime":"22:00","activity":"샤워/정리","category":"LIFE","note":null},
   {"dayOfWeek":"MONDAY","startTime":"22:00","endTime":"23:00","activity":"공부 (영어-토익 Input)","category":"GROWTH","note":"핵심 자기계발"},
   {"dayOfWeek":"MONDAY","startTime":"23:00","endTime":"00:00","activity":"취미 (재미 영상/게임)","category":"HOBBY","note":null},
-  {"dayOfWeek":"MONDAY","startTime":"00:00","endTime":"01:00","activity":"취미/탐색 (AI/Technical)","category":"GROWTH","note":"기술 탐색"},
+  {"dayOfWeek":"MONDAY","startTime":"00:00","endTime":"01:00","activity":"기술 탐색","category":"GROWTH","note":"기술 탐색"},
   {"dayOfWeek":"MONDAY","startTime":"01:00","endTime":"02:00","activity":"취침 준비/수면","category":"SLEEP","note":null},
 
   {"dayOfWeek":"TUESDAY","startTime":"07:30","endTime":"08:30","activity":"기상","category":"LIFE","note":null},
@@ -18,7 +18,7 @@
   {"dayOfWeek":"TUESDAY","startTime":"19:10","endTime":"22:00","activity":"근무 (몰입/버퍼)","category":"WORK","note":"야근 모드"},
   {"dayOfWeek":"TUESDAY","startTime":"22:00","endTime":"23:00","activity":"퇴근/이동 + 샤워","category":"TRANSIT","note":null},
   {"dayOfWeek":"TUESDAY","startTime":"23:00","endTime":"00:00","activity":"취미 (재미)","category":"HOBBY","note":null},
-  {"dayOfWeek":"TUESDAY","startTime":"00:00","endTime":"01:00","activity":"취미/탐색 (AI/Technical)","category":"GROWTH","note":null},
+  {"dayOfWeek":"TUESDAY","startTime":"00:00","endTime":"01:00","activity":"기술 탐색","category":"GROWTH","note":null},
   {"dayOfWeek":"TUESDAY","startTime":"01:00","endTime":"02:00","activity":"취침 준비/수면","category":"SLEEP","note":null},
 
   {"dayOfWeek":"WEDNESDAY","startTime":"07:30","endTime":"08:30","activity":"기상","category":"LIFE","note":null},
@@ -30,7 +30,7 @@
   {"dayOfWeek":"WEDNESDAY","startTime":"21:30","endTime":"22:00","activity":"샤워/정리","category":"LIFE","note":null},
   {"dayOfWeek":"WEDNESDAY","startTime":"22:00","endTime":"23:00","activity":"공부 (영어-오픽 Output)","category":"GROWTH","note":"녹음 필수"},
   {"dayOfWeek":"WEDNESDAY","startTime":"23:00","endTime":"00:00","activity":"취미 (재미)","category":"HOBBY","note":null},
-  {"dayOfWeek":"WEDNESDAY","startTime":"00:00","endTime":"01:00","activity":"취미/탐색 (AI/Technical)","category":"GROWTH","note":null},
+  {"dayOfWeek":"WEDNESDAY","startTime":"00:00","endTime":"01:00","activity":"기술 탐색","category":"GROWTH","note":null},
   {"dayOfWeek":"WEDNESDAY","startTime":"01:00","endTime":"02:00","activity":"취침 준비/수면","category":"SLEEP","note":null},
 
   {"dayOfWeek":"THURSDAY","startTime":"07:30","endTime":"08:30","activity":"기상","category":"LIFE","note":null},
@@ -40,7 +40,7 @@
   {"dayOfWeek":"THURSDAY","startTime":"19:10","endTime":"22:00","activity":"근무 (몰입/버퍼)","category":"WORK","note":"야근 모드"},
   {"dayOfWeek":"THURSDAY","startTime":"22:00","endTime":"23:00","activity":"퇴근/이동 + 샤워","category":"TRANSIT","note":null},
   {"dayOfWeek":"THURSDAY","startTime":"23:00","endTime":"00:00","activity":"취미 (재미)","category":"HOBBY","note":null},
-  {"dayOfWeek":"THURSDAY","startTime":"00:00","endTime":"01:00","activity":"취미/탐색 (AI/Technical)","category":"GROWTH","note":null},
+  {"dayOfWeek":"THURSDAY","startTime":"00:00","endTime":"01:00","activity":"기술 탐색","category":"GROWTH","note":null},
   {"dayOfWeek":"THURSDAY","startTime":"01:00","endTime":"02:00","activity":"취침 준비/수면","category":"SLEEP","note":null},
 
   {"dayOfWeek":"FRIDAY","startTime":"07:30","endTime":"08:30","activity":"기상","category":"LIFE","note":null},
@@ -52,7 +52,7 @@
   {"dayOfWeek":"FRIDAY","startTime":"21:30","endTime":"22:00","activity":"샤워/정리","category":"LIFE","note":null},
   {"dayOfWeek":"FRIDAY","startTime":"22:00","endTime":"23:00","activity":"생활 (이사/정산)","category":"ADMIN","note":"짐정리 등"},
   {"dayOfWeek":"FRIDAY","startTime":"23:00","endTime":"00:00","activity":"취미 (재미)","category":"HOBBY","note":null},
-  {"dayOfWeek":"FRIDAY","startTime":"00:00","endTime":"01:00","activity":"취미/탐색 (AI/Technical)","category":"GROWTH","note":null},
+  {"dayOfWeek":"FRIDAY","startTime":"00:00","endTime":"01:00","activity":"기술 탐색","category":"GROWTH","note":null},
   {"dayOfWeek":"FRIDAY","startTime":"01:00","endTime":"02:00","activity":"취침 준비/수면","category":"SLEEP","note":null},
 
   {"dayOfWeek":"SATURDAY","startTime":"08:30","endTime":"10:40","activity":"기상/준비","category":"LIFE","note":"밍기적 포함"},

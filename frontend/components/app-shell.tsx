@@ -11,14 +11,17 @@ import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { useAppStore } from "@/stores/app-store";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "대시보드" },
-  { href: "/schedule", label: "주간 플래너" },
+  { href: "/dashboard", label: "오늘 브리핑" },
+  { href: "/schedule", label: "주간 일정" },
+  { href: "/focus", label: "실행 모드" },
 ];
 
 interface AppShellProps {
   eyebrow: string;
   title: string;
   description?: string;
+  screenQuestion?: string;
+  primaryActionLabel?: string;
   actions?: ReactNode;
   children: ReactNode;
   immersive?: boolean;
@@ -28,6 +31,8 @@ export function AppShell({
   eyebrow,
   title,
   description,
+  screenQuestion,
+  primaryActionLabel,
   actions,
   children,
   immersive = false,
@@ -50,8 +55,16 @@ export function AppShell({
   const isFocusPage = pathname === "/focus";
 
   const primaryShortcut = isDashboardPage
-    ? { href: "/schedule", label: "주간 플래너" }
-    : { href: "/dashboard", label: "대시보드" };
+    ? { href: "/schedule", label: "주간 일정" }
+    : { href: "/dashboard", label: "오늘 브리핑" };
+  const googleWorkspaceLabel =
+    session?.googleCapabilityStatus === "read_only_token"
+      ? "Google 읽기만 가능 · 적용은 앱에 저장"
+      : session?.calendarWriteEnabled || session?.tasksWriteEnabled
+        ? "Google 읽기·쓰기 가능"
+        : onboardingStatus?.googleConnected || session?.googleConnectionStatus === "CONNECTED"
+          ? "Google 계정 연결됨 · 쓰기 권한 확인 중"
+          : "Google 연결 확인 중";
 
   async function handleLogout() {
     try {
@@ -83,8 +96,8 @@ export function AppShell({
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">불러오는 중</p>
-          <h1>세션과 작업공간을 준비하고 있습니다.</h1>
-          <p>백엔드 세션 확인과 초기 쿠키 설정을 함께 진행 중입니다.</p>
+          <h1>세션과 작업 공간을 준비하고 있습니다.</h1>
+          <p>로그인 상태와 기본 설정을 확인하고 있습니다.</p>
         </div>
       </div>
     );
@@ -96,7 +109,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">연결 상태</p>
           <h1>세션을 확인하지 못했습니다.</h1>
-          <p>{sessionError ?? "백엔드와 연결을 다시 확인해 주세요."}</p>
+          <p>{sessionError ?? "서비스 연결을 다시 확인해 주세요."}</p>
           <button className="solid-btn" onClick={() => void refreshSession()}>
             다시 시도
           </button>
@@ -110,10 +123,8 @@ export function AppShell({
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">접근 안내</p>
-          <h1>로그인 후 작업공간이 열립니다.</h1>
-          <p>
-            백엔드는 로컬 사용자 초안을 준비하지만 보호된 API는 인증 이후에만 사용할 수 있습니다.
-          </p>
+          <h1>로그인 후 작업 공간이 열립니다.</h1>
+          <p>오늘 브리핑과 조정안을 준비하려면 먼저 로그인이 필요합니다.</p>
           <div className="guest-actions">
             <Link className="solid-btn link-btn" href="/login">
               로그인 화면으로 이동
@@ -145,7 +156,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">초기 설정 확인</p>
           <h1>초기 설정 상태를 확인하지 못했습니다.</h1>
-          <p>{onboardingError ?? "온보딩 상태를 다시 불러와 주세요."}</p>
+          <p>{onboardingError ?? "처음 설정 상태를 다시 불러와 주세요."}</p>
           <button className="solid-btn" onClick={() => void refreshOnboarding()}>
             다시 시도
           </button>
@@ -173,7 +184,7 @@ export function AppShell({
           <span className="brand-mark">TT</span>
           <div>
             <p className="brand-name">Time Table</p>
-            <p className="brand-sub">실행 워크스페이스</p>
+            <p className="brand-sub">일정 관리 공간</p>
           </div>
         </div>
 
@@ -193,15 +204,10 @@ export function AppShell({
         </nav>
 
         <div className="sync-panel">
-          <p className="panel-kicker">워크스페이스</p>
-          <strong>{session.displayName}</strong>
-          <span>{session.email}</span>
-          <strong className="sync-inline-label">
-            {onboardingStatus?.googleConnected || session.googleConnectionStatus === "CONNECTED"
-              ? "Google 작업공간 연결됨"
-              : "Google 연결 확인 중"}
-          </strong>
-          <span>마지막 기록 {formatDateTime(session.lastSyncAt, session.timezone)}</span>
+          <p className="panel-kicker">작업 공간</p>
+          <strong>오늘 일정 운영</strong>
+          <strong className="sync-inline-label">{googleWorkspaceLabel}</strong>
+          <span>마지막 동기화 {formatDateTime(session.lastSyncAt, session.timezone)}</span>
         </div>
 
         <button
@@ -214,11 +220,27 @@ export function AppShell({
       </aside>
 
       <main className="content-shell">
-        <header className="top-bar">
+        <header className={`top-bar ${isDashboardPage ? "dashboard-top-bar" : ""}`}>
           <div className="top-bar-copy">
             <p className="eyebrow">{eyebrow}</p>
-            <h1 className="sr-only">{title}</h1>
+            <h1 className="top-title">{title}</h1>
             {description ? <p className="hero-copy compact">{description}</p> : null}
+            {(screenQuestion || primaryActionLabel) ? (
+              <div className="screen-contract-strip" aria-label="현재 화면 역할">
+                {screenQuestion ? (
+                  <span>
+                    <b>확인할 것</b>
+                    {screenQuestion}
+                  </span>
+                ) : null}
+                {primaryActionLabel ? (
+                  <span>
+                    <b>다음 행동</b>
+                    {primaryActionLabel}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="top-actions">
             <Link className="ghost-btn link-btn" href={primaryShortcut.href}>
@@ -230,7 +252,7 @@ export function AppShell({
               href="/focus"
               aria-current={isFocusPage ? "page" : undefined}
             >
-              집중 모드
+              실행 모드
             </Link>
           </div>
         </header>

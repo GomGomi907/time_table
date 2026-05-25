@@ -8,6 +8,8 @@ import com.timetable.operator.events.domain.EventSourceType;
 import com.timetable.operator.events.domain.EventStatus;
 import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
+import com.timetable.operator.sync.application.ProviderWriteOutboxService;
+import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskSourceType;
 import com.timetable.operator.tasks.domain.TaskStatus;
@@ -31,6 +33,7 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final EventRepository eventRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final ProviderWriteOutboxService providerWriteOutboxService;
 
     @Transactional(readOnly = true)
     public List<Task> listTasks(String status, Instant dueBefore, UUID goalId, boolean unassigned) {
@@ -38,11 +41,17 @@ public class TaskService {
         List<Task> tasks = new ArrayList<>(taskRepository.findByUserIdOrderByPriorityAscDueDateAsc(user.getId()));
         return tasks.stream()
                 .filter(task -> task.getSyncState() != PlannerSyncState.DETACHED)
+                .filter(task -> status != null || task.getStatus() != TaskStatus.CANCELLED)
                 .filter(task -> status == null || task.getStatus().name().equalsIgnoreCase(status))
                 .filter(task -> dueBefore == null || (task.getDueDate() != null && !task.getDueDate().isAfter(dueBefore)))
                 .filter(task -> goalId == null || goalId.equals(task.getGoalId()))
                 .filter(task -> !unassigned || task.getEventId() == null)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Task getTask(UUID id) {
+        return getEditableTask(id);
     }
 
     @Transactional
@@ -53,13 +62,16 @@ public class TaskService {
         applyWritableFields(task, request);
         task.setSourceType(TaskSourceType.LOCAL);
         task.setSyncState(PlannerSyncState.LOCAL_ONLY);
-        return taskRepository.save(task);
+        Task saved = taskRepository.save(task);
+        providerWriteOutboxService.enqueueTaskWrite(saved, ProviderWriteOperation.CREATE);
+        return taskRepository.save(saved);
     }
 
     @Transactional
     public Task updateTask(UUID id, TaskWriteRequest request) {
         Task editable = getEditableTask(id);
         applyWritableFields(editable, request);
+        providerWriteOutboxService.enqueueTaskWrite(editable, ProviderWriteOperation.UPDATE);
         return taskRepository.save(editable);
     }
 
@@ -67,6 +79,7 @@ public class TaskService {
     public Task deleteTask(UUID id) {
         Task editable = getEditableTask(id);
         editable.setStatus(TaskStatus.CANCELLED);
+        providerWriteOutboxService.enqueueTaskWrite(editable, ProviderWriteOperation.DELETE);
         return taskRepository.save(editable);
     }
 
@@ -74,7 +87,9 @@ public class TaskService {
     public Task completeTask(UUID id, CompleteTaskRequest request) {
         Task editable = getEditableTask(id);
         editable.setActualMinutes(request.actualMinutes());
+        editable.setCompletedAt(request.completedAt());
         editable.setStatus(TaskStatus.DONE);
+        providerWriteOutboxService.enqueueTaskWrite(editable, ProviderWriteOperation.UPDATE);
         return taskRepository.save(editable);
     }
 
@@ -98,9 +113,12 @@ public class TaskService {
         event.setSourceType(EventSourceType.LOCAL);
         event.setSyncState(PlannerSyncState.LOCAL_ONLY);
         Event savedEvent = eventRepository.save(event);
+        providerWriteOutboxService.enqueueEventWrite(savedEvent, ProviderWriteOperation.CREATE);
+        savedEvent = eventRepository.save(savedEvent);
 
         editable.setEventId(savedEvent.getId());
         editable.setStatus(TaskStatus.SCHEDULED);
+        providerWriteOutboxService.enqueueTaskWrite(editable, ProviderWriteOperation.UPDATE);
         return taskRepository.save(editable);
     }
 
@@ -108,36 +126,7 @@ public class TaskService {
         AppUser user = currentUserProvider.getCurrentUser();
         Task task = taskRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 태스크를 찾을 수 없습니다."));
-        return ensureForkedWritable(task);
-    }
-
-    private Task ensureForkedWritable(Task task) {
-        if (task.getSyncState() != PlannerSyncState.IMPORTED) {
-            return task;
-        }
-
-        Task forked = new Task();
-        forked.setUserId(task.getUserId());
-        forked.setGoalId(task.getGoalId());
-        forked.setEventId(task.getEventId());
-        forked.setTitle(task.getTitle());
-        forked.setDescription(task.getDescription());
-        forked.setDueDate(task.getDueDate());
-        forked.setEstimatedMinutes(task.getEstimatedMinutes());
-        forked.setActualMinutes(task.getActualMinutes());
-        forked.setPriority(task.getPriority());
-        forked.setStatus(task.getStatus());
-        forked.setCategory(task.getCategory());
-        forked.setSourceType(TaskSourceType.LOCAL);
-        forked.setSyncState(PlannerSyncState.FORKED);
-        forked.setForkedFromTaskId(task.getId());
-        forked.setExternalSourceId(task.getExternalSourceId());
-        forked.setExternalEtag(task.getExternalEtag());
-        forked.setLastSyncedAt(task.getLastSyncedAt());
-
-        task.setSyncState(PlannerSyncState.DETACHED);
-        taskRepository.save(task);
-        return taskRepository.save(forked);
+        return task;
     }
 
     private void applyWritableFields(Task task, TaskWriteRequest request) {

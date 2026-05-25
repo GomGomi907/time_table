@@ -29,6 +29,15 @@ public class OnboardingProfile extends AuditableEntity {
 
     private String weekendStyle;
 
+    @Column(nullable = false)
+    private Integer focusSessionMinutes = 45;
+
+    @Column(nullable = false)
+    private Integer focusBreakMinutes = 10;
+
+    @Column(nullable = false)
+    private String focusInterventionStyle = "balanced";
+
     private Instant bootstrapCompletedAt;
 
     private Instant onboardingCompletedAt;

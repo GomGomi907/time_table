@@ -1,9 +1,11 @@
 package com.timetable.operator.schedule.application;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timetable.operator.common.config.AppProperties;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalTime;
@@ -22,7 +24,7 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class VllmScheduleClient {
+public class GeminiScheduleClient {
     private static final Set<String> DAY_VALUES = Set.of(
             "MONDAY",
             "TUESDAY",
@@ -172,72 +174,79 @@ public class VllmScheduleClient {
 
     public List<ImportedScheduleBlock> normalize(String rawText) {
         if (!appProperties.ai().enabled()) {
-            throw new IllegalStateException("vLLM schedule normalization is disabled.");
+            throw new IllegalStateException("Gemini schedule normalization is disabled.");
         }
         if (rawText == null || rawText.isBlank()) {
             return List.of();
         }
 
         try {
-            ChatCompletionResponse response = webClient.post()
-                    .uri(resolveChatCompletionsUri())
+            GeminiGenerateContentResponse response = webClient.post()
+                    .uri(resolveGenerateContentUri())
                     .headers(headers -> {
                         headers.setContentType(MediaType.APPLICATION_JSON);
-                        String apiKey = appProperties.ai().apiKey();
-                        if (apiKey != null && !apiKey.isBlank()) {
-                            headers.setBearerAuth(apiKey.trim());
-                        }
+                        headers.set("x-goog-api-key", requireApiKey());
                     })
                     .bodyValue(buildRequest(rawText.trim()))
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, clientResponse -> clientResponse.bodyToMono(String.class)
                             .defaultIfEmpty("empty error body")
                             .flatMap(body -> {
-                                log.warn("vLLM schedule normalization failed with body: {}", body);
+                                log.warn("Gemini schedule normalization failed with body: {}", body);
                                 return Mono.error(new IllegalStateException("AI 시간표 정규화에 실패했습니다. 잠시 후 다시 시도해 주세요."));
                             }))
-                    .bodyToMono(ChatCompletionResponse.class)
+                    .bodyToMono(GeminiGenerateContentResponse.class)
                     .block(Duration.ofSeconds(appProperties.ai().timeoutSeconds()));
 
-            if (response == null || response.choices() == null || response.choices().isEmpty()) {
+            String content = extractGeneratedText(response);
+            if (content == null || content.isBlank()) {
                 throw new IllegalStateException("AI 응답을 해석하지 못했습니다. 잠시 후 다시 시도해 주세요.");
             }
 
-            AssistantMessage message = response.choices().getFirst().message();
-            if (message == null || message.content() == null || message.content().isBlank()) {
-                throw new IllegalStateException("AI 응답을 해석하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-            }
-
-            ScheduleImportPayload payload = canonicalizePayload(message.content());
+            ScheduleImportPayload payload = canonicalizePayload(content);
             return payload.blocks();
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (Exception exception) {
-            log.error("Failed to call vLLM schedule normalizer.", exception);
+            log.error("Failed to call Gemini schedule normalizer.", exception);
             throw new IllegalStateException("AI 시간표 정규화 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
     }
 
-    private String resolveChatCompletionsUri() {
+    private String resolveGenerateContentUri() {
         String baseUrl = appProperties.ai().baseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("vLLM base URL is not configured.");
+            throw new IllegalStateException("Gemini API base URL is not configured.");
         }
-        return baseUrl.replaceAll("/+$", "") + "/chat/completions";
+        String model = appProperties.ai().model();
+        if (model == null || model.isBlank()) {
+            throw new IllegalStateException("Gemini model is not configured.");
+        }
+        String modelId = model.trim().replaceFirst("^models/", "");
+        return baseUrl.replaceAll("/+$", "")
+                + "/models/"
+                + URLEncoder.encode(modelId, StandardCharsets.UTF_8)
+                + ":generateContent";
     }
 
-    private ChatCompletionRequest buildRequest(String rawText) {
-        return new ChatCompletionRequest(
-                appProperties.ai().model(),
-                List.of(
-                        new RequestMessage("system", SYSTEM_PROMPT),
-                        new RequestMessage("user", rawText)
-                ),
-                appProperties.ai().maxTokens(),
-                appProperties.ai().temperature(),
-                new ResponseFormat(
-                        "json_schema",
-                        new JsonSchema("weekly-schedule-normalization", parseSchema())
+    private String requireApiKey() {
+        String apiKey = appProperties.ai().apiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException("Gemini API key is not configured.");
+        }
+        return apiKey.trim();
+    }
+
+    private GeminiGenerateContentRequest buildRequest(String rawText) {
+        return new GeminiGenerateContentRequest(
+                new GeminiContent(List.of(new GeminiPart(SYSTEM_PROMPT))),
+                List.of(new GeminiContent("user", List.of(new GeminiPart(rawText)))),
+                new GeminiGenerationConfig(
+                        appProperties.ai().maxTokens(),
+                        appProperties.ai().temperature(),
+                        new GeminiResponseFormat(
+                                new GeminiTextResponseFormat(MediaType.APPLICATION_JSON_VALUE, parseSchema())
+                        )
                 )
         );
     }
@@ -255,7 +264,7 @@ public class VllmScheduleClient {
         try {
             JsonNode payload = objectMapper.readTree(rawContent);
             if (!payload.isObject()) {
-                throw new IllegalStateException("vLLM output must be a JSON object.");
+                throw new IllegalStateException("Gemini output must be a JSON object.");
             }
 
             List<ImportedScheduleBlock> blocks = new ArrayList<>();
@@ -305,9 +314,24 @@ public class VllmScheduleClient {
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (Exception exception) {
-            log.error("Failed to parse vLLM schedule normalization response.", exception);
+            log.error("Failed to parse Gemini schedule normalization response.", exception);
             throw new IllegalStateException("AI 응답을 해석하지 못했습니다. 잠시 후 다시 시도해 주세요.");
         }
+    }
+
+    private String extractGeneratedText(GeminiGenerateContentResponse response) {
+        if (response == null || response.candidates() == null || response.candidates().isEmpty()) {
+            return null;
+        }
+        GeminiContent content = response.candidates().getFirst().content();
+        if (content == null || content.parts() == null || content.parts().isEmpty()) {
+            return null;
+        }
+        return content.parts().stream()
+                .map(GeminiPart::text)
+                .filter(text -> text != null && !text.isBlank())
+                .findFirst()
+                .orElse(null);
     }
 
     private String normalizeDay(JsonNode value) {
@@ -379,45 +403,53 @@ public class VllmScheduleClient {
     ) {
     }
 
-    private record ChatCompletionRequest(
-            String model,
-            List<RequestMessage> messages,
-            @JsonProperty("max_tokens") int maxTokens,
+    private record GeminiGenerateContentRequest(
+            GeminiContent systemInstruction,
+            List<GeminiContent> contents,
+            GeminiGenerationConfig generationConfig
+    ) {
+    }
+
+    private record GeminiGenerationConfig(
+            int maxOutputTokens,
             double temperature,
-            @JsonProperty("response_format") ResponseFormat responseFormat
+            GeminiResponseFormat responseFormat
     ) {
     }
 
-    private record RequestMessage(
-            String role,
-            String content
+    private record GeminiResponseFormat(
+            GeminiTextResponseFormat text
     ) {
     }
 
-    private record ResponseFormat(
-            String type,
-            @JsonProperty("json_schema") JsonSchema jsonSchema
-    ) {
-    }
-
-    private record JsonSchema(
-            String name,
+    private record GeminiTextResponseFormat(
+            String mimeType,
             JsonNode schema
     ) {
     }
 
-    private record ChatCompletionResponse(
-            List<Choice> choices
+    private record GeminiGenerateContentResponse(
+            List<GeminiCandidate> candidates
     ) {
     }
 
-    private record Choice(
-            AssistantMessage message
+    private record GeminiCandidate(
+            GeminiContent content
     ) {
     }
 
-    private record AssistantMessage(
-            String content
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private record GeminiContent(
+            String role,
+            List<GeminiPart> parts
+    ) {
+        private GeminiContent(List<GeminiPart> parts) {
+            this(null, parts);
+        }
+    }
+
+    private record GeminiPart(
+            String text
     ) {
     }
 }

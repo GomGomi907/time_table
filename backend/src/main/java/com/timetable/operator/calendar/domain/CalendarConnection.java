@@ -43,4 +43,26 @@ public class CalendarConnection extends AuditableEntity {
 
     @Column(columnDefinition = "text")
     private String lastSyncError;
+
+    @Column(columnDefinition = "text")
+    private String grantedScopes;
+
+    @Column(nullable = false)
+    private boolean calendarReadEnabled;
+
+    @Column(nullable = false)
+    private boolean calendarWriteEnabled;
+
+    @Column(nullable = false)
+    private boolean tasksReadEnabled;
+
+    @Column(nullable = false)
+    private boolean tasksWriteEnabled;
+
+    private Instant capabilityCheckedAt;
+
+    private String capabilityStatus;
+
+    @Column(columnDefinition = "text")
+    private String capabilityError;
 }

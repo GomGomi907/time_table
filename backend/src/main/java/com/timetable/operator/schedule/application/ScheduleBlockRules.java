@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class ScheduleBlockRules {
 
     public static final LocalTime OVERNIGHT_DISPLAY_CUTOFF = LocalTime.of(5, 0);
+    public static final int MIN_BLOCK_DURATION_MINUTES = 15;
     private static final int DAY_MINUTES = 24 * 60;
     private static final int WEEK_MINUTES = 7 * DAY_MINUTES;
     private static final List<DayOfWeek> DAY_ORDER = List.of(
@@ -68,6 +69,9 @@ public class ScheduleBlockRules {
         }
         if (block.getStartTime().equals(block.getEndTime())) {
             throw new IllegalArgumentException("일정 블록 시작 시각과 종료 시각은 같을 수 없습니다.");
+        }
+        if (durationMinutes(block.getStartTime(), block.getEndTime()) < MIN_BLOCK_DURATION_MINUTES) {
+            throw new IllegalArgumentException("일정 블록은 최소 %d분 이상이어야 합니다.".formatted(MIN_BLOCK_DURATION_MINUTES));
         }
     }
 

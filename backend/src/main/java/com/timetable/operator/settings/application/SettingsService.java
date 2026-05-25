@@ -44,6 +44,12 @@ public class SettingsService {
         if (request.openGapTriggerMinutes() != null) {
             preferences.setOpenGapTriggerMinutes(request.openGapTriggerMinutes());
         }
+        if (request.preferredFocusMinutes() != null) {
+            preferences.setPreferredFocusMinutes(request.preferredFocusMinutes());
+        }
+        if (request.breakBufferMinutes() != null) {
+            preferences.setBreakBufferMinutes(request.breakBufferMinutes());
+        }
         if (request.interventionFrequency() != null && !request.interventionFrequency().isBlank()) {
             preferences.setInterventionFrequency(request.interventionFrequency());
         }
@@ -67,6 +73,8 @@ public class SettingsService {
         preferences.setBufferMinutes(appProperties.schedule().defaultBufferMinutes());
         preferences.setOvertimeTriggerMinutes(appProperties.schedule().defaultOvertimeTriggerMinutes());
         preferences.setOpenGapTriggerMinutes(appProperties.schedule().defaultOpenGapTriggerMinutes());
+        preferences.setPreferredFocusMinutes(45);
+        preferences.setBreakBufferMinutes(10);
         preferences.setInterventionFrequency("balanced");
         return userPreferencesRepository.save(preferences);
     }
@@ -77,6 +85,8 @@ public class SettingsService {
             Integer bufferMinutes,
             Integer overtimeTriggerMinutes,
             Integer openGapTriggerMinutes,
+            Integer preferredFocusMinutes,
+            Integer breakBufferMinutes,
             String interventionFrequency,
             String timezone,
             Boolean autoRescheduleEnabled,

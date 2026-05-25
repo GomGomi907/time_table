@@ -9,6 +9,9 @@ import com.timetable.operator.calendar.infrastructure.CalendarSyncRunRepository;
 import com.timetable.operator.common.config.AppProperties;
 import com.timetable.operator.common.security.CurrentUserProvider;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -46,6 +49,9 @@ public class AuthService {
                 user.isAutoRescheduleEnabled(),
                 user.isFocusAutoEnterEnabled(),
                 connection.map(CalendarConnection::getStatus).orElse(CalendarConnectionStatus.NOT_CONNECTED).name(),
+                connection.map(CalendarConnection::isCalendarWriteEnabled).orElse(false),
+                connection.map(CalendarConnection::isTasksWriteEnabled).orElse(false),
+                connection.map(this::capabilityStatus).orElse("not_connected"),
                 latestSync.map(CalendarSyncRun::getFinishedAt).orElse(null),
                 appProperties.frontendBaseUrl() + "/auth/callback"
         );
@@ -65,6 +71,7 @@ public class AuthService {
         if (authorizedClient != null) {
             connection.setAccessToken(authorizedClient.getAccessToken().getTokenValue());
             connection.setTokenExpiresAt(authorizedClient.getAccessToken().getExpiresAt());
+            applyGrantedScopes(connection, authorizedClient.getAccessToken().getScopes());
             if (authorizedClient.getRefreshToken() != null) {
                 connection.setRefreshToken(authorizedClient.getRefreshToken().getTokenValue());
             }
@@ -88,6 +95,66 @@ public class AuthService {
         calendarConnectionRepository.save(connection);
     }
 
+    private void applyGrantedScopes(CalendarConnection connection, Set<String> scopes) {
+        Set<String> normalizedScopes = scopes == null ? Set.of() : scopes;
+        String grantedScopes = normalizedScopes.stream()
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.joining(","));
+
+        boolean calendarRead = hasAnyScope(
+                normalizedScopes,
+                "https://www.googleapis.com/auth/calendar",
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/calendar.events.owned",
+                "https://www.googleapis.com/auth/calendar.app.created",
+                "https://www.googleapis.com/auth/calendar.readonly"
+        );
+        boolean calendarWrite = hasAnyScope(
+                normalizedScopes,
+                "https://www.googleapis.com/auth/calendar",
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/calendar.events.owned",
+                "https://www.googleapis.com/auth/calendar.app.created"
+        );
+        boolean tasksRead = hasAnyScope(
+                normalizedScopes,
+                "https://www.googleapis.com/auth/tasks",
+                "https://www.googleapis.com/auth/tasks.readonly"
+        );
+        boolean tasksWrite = hasAnyScope(normalizedScopes, "https://www.googleapis.com/auth/tasks");
+
+        connection.setGrantedScopes(grantedScopes);
+        connection.setCalendarReadEnabled(calendarRead);
+        connection.setCalendarWriteEnabled(calendarWrite);
+        connection.setTasksReadEnabled(tasksRead);
+        connection.setTasksWriteEnabled(tasksWrite);
+        connection.setCapabilityCheckedAt(Instant.now());
+        connection.setCapabilityStatus(calendarWrite && tasksWrite ? "write_enabled" : "read_only_token");
+        connection.setCapabilityError(calendarWrite && tasksWrite ? null : "Reconnect with Calendar/Tasks write scopes.");
+    }
+
+    private boolean hasAnyScope(Set<String> scopes, String... candidates) {
+        for (String candidate : candidates) {
+            if (scopes.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String capabilityStatus(CalendarConnection connection) {
+        if (connection.getCapabilityStatus() != null && !connection.getCapabilityStatus().isBlank()) {
+            return connection.getCapabilityStatus();
+        }
+        if (connection.isCalendarWriteEnabled() || connection.isTasksWriteEnabled()) {
+            return "write_enabled";
+        }
+        if (connection.getStatus() == CalendarConnectionStatus.CONNECTED) {
+            return "read_only_token";
+        }
+        return connection.getStatus().name().toLowerCase();
+    }
+
     public record SessionResponse(
             boolean authenticated,
             String userId,
@@ -97,6 +164,9 @@ public class AuthService {
             boolean autoRescheduleEnabled,
             boolean focusAutoEnterEnabled,
             String googleConnectionStatus,
+            boolean calendarWriteEnabled,
+            boolean tasksWriteEnabled,
+            String googleCapabilityStatus,
             Instant lastSyncAt,
             String callbackUrl
     ) {

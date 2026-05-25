@@ -5,6 +5,7 @@ import com.timetable.operator.common.api.ApiResponses;
 import com.timetable.operator.sync.application.SyncOrchestrationService;
 import com.timetable.operator.sync.domain.SyncTargetSystem;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -41,6 +42,16 @@ public class SyncController {
     public ResponseEntity<ApiEnvelope<SyncOrchestrationService.SyncStatusResponse>> getStatus() {
         SyncOrchestrationService.SyncStatusSnapshot snapshot = syncOrchestrationService.getCurrentUserStatus();
         return ApiResponses.ok(snapshot.data(), snapshot.meta());
+    }
+
+    @GetMapping("/logs")
+    public ResponseEntity<ApiEnvelope<List<SyncOrchestrationService.SyncLogResponse>>> getLogs() {
+        return ApiResponses.ok(syncOrchestrationService.getCurrentUserLogs());
+    }
+
+    @GetMapping("/conflicts")
+    public ResponseEntity<ApiEnvelope<List<SyncOrchestrationService.SyncConflictResponse>>> getConflicts() {
+        return ApiResponses.ok(syncOrchestrationService.getCurrentUserPendingConflicts());
     }
 
     @PostMapping("/conflicts/{conflictId}/resolve")

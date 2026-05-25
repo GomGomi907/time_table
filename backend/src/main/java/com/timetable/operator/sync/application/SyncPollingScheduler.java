@@ -38,7 +38,7 @@ public class SyncPollingScheduler {
         try {
             syncOrchestrationService.triggerPollingTasksSync(userId);
         } catch (Exception exception) {
-            log.warn("Google Tasks polling scaffold failed for user {}", userId, exception);
+            log.warn("Google Tasks polling inbound sync failed for user {}", userId, exception);
         }
     }
 }

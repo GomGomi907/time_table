@@ -8,6 +8,8 @@ import com.timetable.operator.events.domain.EventSourceType;
 import com.timetable.operator.events.domain.EventStatus;
 import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
+import com.timetable.operator.sync.application.ProviderWriteOutboxService;
+import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -25,13 +27,24 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final ProviderWriteOutboxService providerWriteOutboxService;
 
     @Transactional(readOnly = true)
     public List<Event> getEvents(Instant from, Instant to) {
         AppUser user = currentUserProvider.getCurrentUser();
-        return eventRepository.findByUserIdAndStartAtBetweenOrderByStartAtAsc(user.getId(), from, to).stream()
+        return eventRepository.findByUserIdAndStatusNotAndStartAtBeforeAndEndAtAfterOrderByStartAtAsc(
+                        user.getId(),
+                        EventStatus.CANCELLED,
+                        to,
+                        from
+                ).stream()
                 .filter(event -> event.getSyncState() != PlannerSyncState.DETACHED)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Event getEvent(UUID id) {
+        return getEditableEvent(id);
     }
 
     @Transactional
@@ -44,7 +57,9 @@ public class EventService {
         applyWritableFields(event, request);
         event.setSourceType(EventSourceType.LOCAL);
         event.setSyncState(PlannerSyncState.LOCAL_ONLY);
-        return eventRepository.save(event);
+        Event saved = eventRepository.save(event);
+        providerWriteOutboxService.enqueueEventWrite(saved, ProviderWriteOperation.CREATE);
+        return eventRepository.save(saved);
     }
 
     @Transactional
@@ -52,6 +67,7 @@ public class EventService {
         validateRange(request.startAt(), request.endAt());
         Event editable = getEditableEvent(id);
         applyWritableFields(editable, request);
+        providerWriteOutboxService.enqueueEventWrite(editable, ProviderWriteOperation.UPDATE);
         return eventRepository.save(editable);
     }
 
@@ -59,6 +75,7 @@ public class EventService {
     public Event deleteEvent(UUID id) {
         Event editable = getEditableEvent(id);
         editable.setStatus(EventStatus.CANCELLED);
+        providerWriteOutboxService.enqueueEventWrite(editable, ProviderWriteOperation.DELETE);
         return eventRepository.save(editable);
     }
 
@@ -67,6 +84,7 @@ public class EventService {
         Event editable = getEditableEvent(id);
         editable.setActualStartAt(request.startedAt());
         editable.setStatus(EventStatus.ACTIVE);
+        providerWriteOutboxService.enqueueEventWrite(editable, ProviderWriteOperation.UPDATE);
         return eventRepository.save(editable);
     }
 
@@ -74,10 +92,11 @@ public class EventService {
     public Event completeEvent(UUID id, CompleteEventRequest request) {
         Event editable = getEditableEvent(id);
         if (editable.getActualStartAt() == null) {
-            editable.setActualStartAt(request.completedAt());
+            editable.setActualStartAt(editable.getStartAt());
         }
         editable.setActualEndAt(request.completedAt());
         editable.setStatus(EventStatus.COMPLETED);
+        providerWriteOutboxService.enqueueEventWrite(editable, ProviderWriteOperation.UPDATE);
         return eventRepository.save(editable);
     }
 
@@ -92,6 +111,7 @@ public class EventService {
             editable.setEndAt(request.preferredWindowEnd());
         }
         validateRange(editable.getStartAt(), editable.getEndAt());
+        providerWriteOutboxService.enqueueEventWrite(editable, ProviderWriteOperation.UPDATE);
         return eventRepository.save(editable);
     }
 
@@ -99,6 +119,7 @@ public class EventService {
     public Event extendEvent(UUID id, ExtendEventRequest request) {
         Event editable = getEditableEvent(id);
         editable.setEndAt(editable.getEndAt().plusSeconds(request.extendMinutes() * 60L));
+        providerWriteOutboxService.enqueueEventWrite(editable, ProviderWriteOperation.UPDATE);
         return eventRepository.save(editable);
     }
 
@@ -106,36 +127,7 @@ public class EventService {
         AppUser user = currentUserProvider.getCurrentUser();
         Event event = eventRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 이벤트를 찾을 수 없습니다."));
-        return ensureForkedWritable(event);
-    }
-
-    private Event ensureForkedWritable(Event event) {
-        if (event.getSyncState() != PlannerSyncState.IMPORTED) {
-            return event;
-        }
-
-        Event forked = new Event();
-        forked.setUserId(event.getUserId());
-        forked.setGoalId(event.getGoalId());
-        forked.setTitle(event.getTitle());
-        forked.setDescription(event.getDescription());
-        forked.setStartAt(event.getStartAt());
-        forked.setEndAt(event.getEndAt());
-        forked.setActualStartAt(event.getActualStartAt());
-        forked.setActualEndAt(event.getActualEndAt());
-        forked.setPriority(event.getPriority());
-        forked.setStatus(event.getStatus());
-        forked.setCategory(event.getCategory());
-        forked.setSourceType(EventSourceType.LOCAL);
-        forked.setSyncState(PlannerSyncState.FORKED);
-        forked.setForkedFromEventId(event.getId());
-        forked.setExternalSourceId(event.getExternalSourceId());
-        forked.setExternalEtag(event.getExternalEtag());
-        forked.setLastSyncedAt(event.getLastSyncedAt());
-
-        event.setSyncState(PlannerSyncState.DETACHED);
-        eventRepository.save(event);
-        return eventRepository.save(forked);
+        return event;
     }
 
     private void applyWritableFields(Event event, EventWriteRequest request) {

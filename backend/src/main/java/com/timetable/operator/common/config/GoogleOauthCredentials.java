@@ -1,6 +1,6 @@
 package com.timetable.operator.common.config;
 
-record GoogleOauthCredentials(
+public record GoogleOauthCredentials(
         String clientId,
         String clientSecret
 ) {

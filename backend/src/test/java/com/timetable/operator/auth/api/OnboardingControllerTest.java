@@ -18,6 +18,7 @@ import com.timetable.operator.events.domain.EventStatus;
 import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
+import com.timetable.operator.settings.infrastructure.UserPreferencesRepository;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskSourceType;
 import com.timetable.operator.tasks.domain.TaskStatus;
@@ -63,6 +64,9 @@ class OnboardingControllerTest {
     @Autowired
     private TaskRepository taskRepository;
 
+    @Autowired
+    private UserPreferencesRepository userPreferencesRepository;
+
     private AppUser user;
 
     @BeforeEach
@@ -72,6 +76,7 @@ class OnboardingControllerTest {
         scheduleBlockRepository.deleteAll();
         taskRepository.deleteAll();
         eventRepository.deleteAll();
+        userPreferencesRepository.deleteAll();
 
         user = appUserRepository.findByEmail("local@time-table.dev")
                 .orElseGet(() -> {
@@ -111,7 +116,7 @@ class OnboardingControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nextStep").value("bootstrap"))
                 .andExpect(jsonPath("$.completed").value(false))
-                .andExpect(jsonPath("$.questions.length()").value(5))
+                .andExpect(jsonPath("$.questions.length()").value(8))
                 .andExpect(jsonPath("$.importSummary.calendarEventCount").value(1))
                 .andExpect(jsonPath("$.importSummary.taskCount").value(1));
     }
@@ -135,12 +140,18 @@ class OnboardingControllerTest {
                                     "workStartTime": "09:00",
                                     "dinnerTime": "19:00",
                                     "sleepTime": "23:30",
-                                    "weekendStyle": "balanced"
+                                    "weekendStyle": "balanced",
+                                    "focusSessionMinutes": "60",
+                                    "focusBreakMinutes": "15",
+                                    "focusInterventionStyle": "minimal"
                                   }
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status.profileReady").value(true))
+                .andExpect(jsonPath("$.status.profile.focusSessionMinutes").value("60"))
+                .andExpect(jsonPath("$.status.profile.focusBreakMinutes").value("15"))
+                .andExpect(jsonPath("$.status.profile.focusInterventionStyle").value("minimal"))
                 .andExpect(jsonPath("$.status.aiExperienceReady").value(true))
                 .andExpect(jsonPath("$.status.experience.previewItems.length()").value(4))
                 .andReturn();
@@ -163,5 +174,12 @@ class OnboardingControllerTest {
                 .andExpect(jsonPath("$.appliedSuggestion.status").value("applied"));
 
         assertThat(scheduleBlockRepository.countByUserId(user.getId())).isGreaterThan(0);
+        assertThat(userPreferencesRepository.findByUserId(user.getId()))
+                .get()
+                .satisfies(preferences -> {
+                    assertThat(preferences.getPreferredFocusMinutes()).isEqualTo(60);
+                    assertThat(preferences.getBreakBufferMinutes()).isEqualTo(15);
+                    assertThat(preferences.getInterventionFrequency()).isEqualTo("minimal");
+                });
     }
 }

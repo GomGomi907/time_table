@@ -1,6 +1,8 @@
 package com.timetable.operator.focus.application;
 
 import com.timetable.operator.auth.domain.AppUser;
+import com.timetable.operator.agent.application.RescheduleSuggestionService;
+import com.timetable.operator.common.config.AppProperties;
 import com.timetable.operator.common.domain.PlannerSyncState;
 import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.events.domain.Event;
@@ -12,17 +14,29 @@ import com.timetable.operator.focus.domain.FocusTriggerSource;
 import com.timetable.operator.focus.infrastructure.FocusSessionLogRepository;
 import com.timetable.operator.goals.domain.Goal;
 import com.timetable.operator.goals.infrastructure.GoalRepository;
+import com.timetable.operator.schedule.domain.ScheduleBlock;
+import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
+import com.timetable.operator.settings.domain.UserPreferences;
+import com.timetable.operator.settings.infrastructure.UserPreferencesRepository;
+import com.timetable.operator.sync.application.ProviderWriteOutboxService;
+import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskStatus;
 import com.timetable.operator.tasks.infrastructure.TaskRepository;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,6 +53,11 @@ public class FocusService {
     private final TaskRepository taskRepository;
     private final GoalRepository goalRepository;
     private final FocusSessionLogRepository focusSessionLogRepository;
+    private final ScheduleBlockRepository scheduleBlockRepository;
+    private final UserPreferencesRepository userPreferencesRepository;
+    private final AppProperties appProperties;
+    private final RescheduleSuggestionService rescheduleSuggestionService;
+    private final ProviderWriteOutboxService providerWriteOutboxService;
 
     @Transactional(readOnly = true)
     public FocusCurrentView getCurrentFocus() {
@@ -47,6 +66,8 @@ public class FocusService {
         ZoneId zoneId = ZoneId.of(user.getTimezone());
         Instant dayStart = LocalDate.now(zoneId).atStartOfDay(zoneId).toInstant();
         Instant dayEnd = dayStart.plus(Duration.ofDays(1));
+        ScheduleContext scheduleContext = buildScheduleContext(user, zoneId);
+        FocusPreferenceContext preferenceContext = buildPreferenceContext(user);
 
         List<Event> todayEvents = eventRepository.findByUserIdAndStatusNotAndStartAtBeforeAndEndAtAfterOrderByStartAtAsc(
                 user.getId(),
@@ -72,14 +93,16 @@ public class FocusService {
                 user.getId(),
                 RECOMMENDABLE_TASK_STATUSES
         ).stream().filter(task -> task.getEventId() == null && task.getSyncState() != PlannerSyncState.DETACHED)
-                .limit(3)
                 .toList();
+        recommended = uniqueRecommendedTasks(recommended, 3);
 
         if (currentEvents.size() > 1) {
             return new FocusCurrentView(
                     "RESCHEDULE_PENDING",
                     null,
                     nextEvent == null ? null : toNextItem(nextEvent),
+                    scheduleContext,
+                    preferenceContext,
                     recommended.stream().map(this::toRecommendedTask).toList(),
                     null,
                     null
@@ -95,6 +118,8 @@ public class FocusService {
                     state,
                     toCurrentItem(event),
                     nextEvent == null ? null : toNextItem(nextEvent),
+                    scheduleContext,
+                    preferenceContext,
                     recommended.stream().map(this::toRecommendedTask).toList(),
                     null,
                     remainingMinutes
@@ -108,6 +133,8 @@ public class FocusService {
                     "ACTIVE_TASK",
                     toCurrentTaskItem(task, taskWindow),
                     nextEvent == null ? null : toNextItem(nextEvent),
+                    scheduleContext,
+                    preferenceContext,
                     recommended.stream()
                             .filter(recommendedTask -> !recommendedTask.getId().equals(task.getId()))
                             .map(this::toRecommendedTask)
@@ -122,6 +149,8 @@ public class FocusService {
                     "UPCOMING_EVENT_READY",
                     null,
                     toNextItem(nextEvent),
+                    scheduleContext,
+                    preferenceContext,
                     recommended.stream().map(this::toRecommendedTask).toList(),
                     null,
                     Math.max(0, Duration.between(now, nextEvent.getStartAt()).toMinutes())
@@ -133,6 +162,8 @@ public class FocusService {
                     "NO_ACTIVE_ITEM",
                     null,
                     nextEvent == null ? null : toNextItem(nextEvent),
+                    scheduleContext,
+                    preferenceContext,
                     recommended.stream().map(this::toRecommendedTask).toList(),
                     null,
                     nextEvent == null ? null : Math.max(0, Duration.between(now, nextEvent.getStartAt()).toMinutes())
@@ -143,6 +174,8 @@ public class FocusService {
                 "NO_ACTIVE_ITEM",
                 null,
                 nextEvent == null ? null : toNextItem(nextEvent),
+                scheduleContext,
+                preferenceContext,
                 List.of(),
                 null,
                 null
@@ -153,7 +186,7 @@ public class FocusService {
     public FocusCurrentView startRecommendedTask(UUID taskId) {
         AppUser user = currentUserProvider.getCurrentUser();
         Task task = taskRepository.findByIdAndUserId(taskId, user.getId())
-                .orElseThrow(() -> new IllegalArgumentException("추천 태스크를 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("추천 할 일을 찾을 수 없습니다."));
         task.setStatus(TaskStatus.IN_PROGRESS);
         taskRepository.save(task);
 
@@ -174,6 +207,7 @@ public class FocusService {
                     .orElseThrow(() -> new IllegalArgumentException("집중 대상 이벤트를 찾을 수 없습니다."));
             event.setActualEndAt(request.completedAt());
             event.setStatus(EventStatus.COMPLETED);
+            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
             eventRepository.save(event);
 
             FocusSessionLog log = new FocusSessionLog();
@@ -184,14 +218,16 @@ public class FocusService {
             log.setCompletionType(parseCompletion(request.completionType()));
             log.setTriggerSource(FocusTriggerSource.MANUAL);
             focusSessionLogRepository.save(log);
-        }
-        if ("task".equalsIgnoreCase(request.itemType())) {
+        } else if ("task".equalsIgnoreCase(request.itemType())) {
             Task task = taskRepository.findByIdAndUserId(UUID.fromString(request.itemId()), user.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("집중 대상 태스크를 찾을 수 없습니다."));
+                    .orElseThrow(() -> new IllegalArgumentException("집중 대상 할 일을 찾을 수 없습니다."));
             task.setStatus(TaskStatus.DONE);
             task.setCompletedAt(request.completedAt());
+            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
             taskRepository.save(task);
             closeLatestTaskLog(user.getId(), task.getId(), request.completedAt(), parseCompletion(request.completionType()), null);
+        } else {
+            throw new IllegalArgumentException("지원하지 않는 집중 대상 타입입니다: " + request.itemType());
         }
         return getCurrentFocus();
     }
@@ -203,7 +239,12 @@ public class FocusService {
             Event event = eventRepository.findByIdAndUserId(UUID.fromString(request.itemId()), user.getId())
                     .orElseThrow(() -> new IllegalArgumentException("집중 대상 이벤트를 찾을 수 없습니다."));
             event.setStatus(EventStatus.POSTPONED);
+            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
             eventRepository.save(event);
+            requestAiRescheduleIfNeeded(
+                    request,
+                    "미룬 일정 \"%s\"의 빈 시간과 다음 충돌을 다시 정리해 주세요.".formatted(event.getTitle())
+            );
 
             FocusSessionLog log = new FocusSessionLog();
             log.setUserId(user.getId());
@@ -214,8 +255,45 @@ public class FocusService {
             log.setTriggerSource(FocusTriggerSource.MANUAL);
             log.setMemo(request.reason());
             focusSessionLogRepository.save(log);
+        } else if ("task".equalsIgnoreCase(request.itemType())) {
+            Task task = taskRepository.findByIdAndUserId(UUID.fromString(request.itemId()), user.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("집중 대상 할 일을 찾을 수 없습니다."));
+            task.setStatus(TaskStatus.DEFERRED);
+            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
+            taskRepository.save(task);
+            requestAiRescheduleIfNeeded(
+                    request,
+                    "미룬 할 일 \"%s\"를 오늘 남은 시간에 다시 배치해 주세요.".formatted(task.getTitle())
+            );
+            closeLatestTaskLog(
+                    user.getId(),
+                    task.getId(),
+                    Instant.now(),
+                    FocusCompletionType.POSTPONED,
+                    request.reason()
+            );
+        } else {
+            throw new IllegalArgumentException("지원하지 않는 집중 대상 타입입니다: " + request.itemType());
         }
         return getCurrentFocus();
+    }
+
+    private void requestAiRescheduleIfNeeded(PostponeFocusRequest request, String fallbackReason) {
+        if (!request.requestAiReschedule()) {
+            return;
+        }
+
+        String reason = (request.reason() == null || request.reason().isBlank())
+                ? fallbackReason
+                : "%s\n%s".formatted(request.reason().trim(), fallbackReason);
+        rescheduleSuggestionService.createManualSuggestion(
+                new RescheduleSuggestionService.ManualRescheduleRequest(
+                        "postpone",
+                        null,
+                        null,
+                        reason
+                )
+        );
     }
 
     @Transactional
@@ -229,6 +307,7 @@ public class FocusService {
                 .orElseThrow(() -> new IllegalArgumentException("집중 대상 이벤트를 찾을 수 없습니다."));
         event.setEndAt(event.getEndAt().plus(Duration.ofMinutes(request.expectedExtraMinutes())));
         event.setStatus(EventStatus.ACTIVE);
+        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
         eventRepository.save(event);
         return getCurrentFocus();
     }
@@ -283,6 +362,145 @@ public class FocusService {
                 task.getPriority(),
                 task.getEstimatedMinutes(),
                 task.getDueDate()
+        );
+    }
+
+    private List<Task> uniqueRecommendedTasks(List<Task> tasks, int limit) {
+        Map<String, Task> uniqueByUserVisibleTitle = new LinkedHashMap<>();
+        for (Task task : tasks) {
+            uniqueByUserVisibleTitle.putIfAbsent(recommendedTaskKey(task), task);
+            if (uniqueByUserVisibleTitle.size() >= limit) {
+                break;
+            }
+        }
+        return new ArrayList<>(uniqueByUserVisibleTitle.values());
+    }
+
+    private String recommendedTaskKey(Task task) {
+        return task.getTitle() == null
+                ? ""
+                : task.getTitle().strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private FocusPreferenceContext buildPreferenceContext(AppUser user) {
+        UserPreferences preferences = userPreferencesRepository.findByUserId(user.getId()).orElse(null);
+        int preferredFocusMinutes = preferences == null
+                ? 45
+                : preferences.getPreferredFocusMinutes();
+        int breakBufferMinutes = preferences == null
+                ? appProperties.schedule().defaultBufferMinutes()
+                : preferences.getBreakBufferMinutes();
+        String interventionStyle = preferences == null
+                ? "balanced"
+                : normalizeInterventionStyle(preferences.getInterventionFrequency());
+
+        return new FocusPreferenceContext(
+                preferredFocusMinutes,
+                breakBufferMinutes,
+                interventionStyle,
+                interventionLabel(interventionStyle),
+                "추천 할 일은 %d분 집중 단위와 %d분 회복 버퍼를 기준으로 안내합니다."
+                        .formatted(preferredFocusMinutes, breakBufferMinutes)
+        );
+    }
+
+    private String normalizeInterventionStyle(String interventionFrequency) {
+        if (interventionFrequency == null || interventionFrequency.isBlank()) {
+            return "balanced";
+        }
+        return interventionFrequency.trim().toLowerCase();
+    }
+
+    private String interventionLabel(String interventionStyle) {
+        return switch (interventionStyle) {
+            case "minimal" -> "최소 개입";
+            case "proactive" -> "적극 제안";
+            default -> "균형 있게";
+        };
+    }
+
+    private ScheduleContext buildScheduleContext(AppUser user, ZoneId zoneId) {
+        List<ScheduleBlock> blocks = scheduleBlockRepository.findByUserId(user.getId());
+        if (blocks.isEmpty()) {
+            return new ScheduleContext("NO_BLOCK", null, null);
+        }
+
+        LocalTime nowTime = LocalTime.now(zoneId);
+        DayOfWeek today = LocalDate.now(zoneId).getDayOfWeek();
+        DayOfWeek yesterday = today.minus(1);
+
+        ScheduleBlock currentBlock = blocks.stream()
+                .filter(block -> isActiveScheduleBlock(block, today, yesterday, nowTime))
+                .min(Comparator
+                        .comparingInt((ScheduleBlock block) -> displayOrder(block.getStartTime()))
+                        .thenComparing(ScheduleBlock::getEndTime))
+                .orElse(null);
+        ScheduleBlock nextBlock = findNextScheduleBlock(blocks, today, nowTime);
+
+        String state = currentBlock != null ? "ACTIVE_BLOCK" : nextBlock != null ? "UPCOMING_BLOCK" : "NO_BLOCK";
+        return new ScheduleContext(
+                state,
+                currentBlock == null ? null : toScheduleBlockItem(currentBlock),
+                nextBlock == null ? null : toScheduleBlockItem(nextBlock)
+        );
+    }
+
+    private ScheduleBlock findNextScheduleBlock(List<ScheduleBlock> blocks, DayOfWeek today, LocalTime nowTime) {
+        return blocks.stream()
+                .map(block -> new UpcomingScheduleBlock(block, minutesUntilBlockStart(block, today, nowTime)))
+                .filter(candidate -> candidate.minutesUntilStart() > 0)
+                .min(Comparator.comparingInt(UpcomingScheduleBlock::minutesUntilStart))
+                .map(UpcomingScheduleBlock::block)
+                .orElse(null);
+    }
+
+    private boolean isActiveScheduleBlock(
+            ScheduleBlock block,
+            DayOfWeek today,
+            DayOfWeek yesterday,
+            LocalTime nowTime
+    ) {
+        if (!crossesMidnight(block)) {
+            return block.getDayOfWeek() == today
+                    && !nowTime.isBefore(block.getStartTime())
+                    && nowTime.isBefore(block.getEndTime());
+        }
+
+        return (block.getDayOfWeek() == today && !nowTime.isBefore(block.getStartTime()))
+                || (block.getDayOfWeek() == yesterday && nowTime.isBefore(block.getEndTime()));
+    }
+
+    private int minutesUntilBlockStart(ScheduleBlock block, DayOfWeek today, LocalTime nowTime) {
+        int dayOffset = Math.floorMod(block.getDayOfWeek().getValue() - today.getValue(), 7);
+        int nowMinutes = nowTime.toSecondOfDay() / 60;
+        int startMinutes = block.getStartTime().toSecondOfDay() / 60;
+        int minutes = dayOffset * 24 * 60 + startMinutes - nowMinutes;
+        if (minutes <= 0) {
+            minutes += 7 * 24 * 60;
+        }
+        return minutes;
+    }
+
+    private boolean crossesMidnight(ScheduleBlock block) {
+        return !block.getEndTime().isAfter(block.getStartTime());
+    }
+
+    private int displayOrder(LocalTime time) {
+        int seconds = time.toSecondOfDay();
+        return time.isBefore(LocalTime.of(5, 0)) ? seconds + (24 * 60 * 60) : seconds;
+    }
+
+    private ScheduleBlockItem toScheduleBlockItem(ScheduleBlock block) {
+        return new ScheduleBlockItem(
+                block.getId().toString(),
+                block.getDayOfWeek().name(),
+                block.getStartTime().toString(),
+                block.getEndTime().toString(),
+                block.getActivity(),
+                block.getCategory().name(),
+                block.getNote(),
+                block.getSourceType().name(),
+                block.getSourceRef()
         );
     }
 
@@ -346,6 +564,8 @@ public class FocusService {
             String focusState,
             CurrentItem currentItem,
             NextItem nextItem,
+            ScheduleContext scheduleContext,
+            FocusPreferenceContext preferenceContext,
             List<RecommendedTask> recommendedTasks,
             Object activeSuggestion,
             Long remainingMinutes
@@ -387,10 +607,45 @@ public class FocusService {
     ) {
     }
 
+    public record ScheduleContext(
+            String state,
+            ScheduleBlockItem currentBlock,
+            ScheduleBlockItem nextBlock
+    ) {
+    }
+
+    public record FocusPreferenceContext(
+            int preferredFocusMinutes,
+            int breakBufferMinutes,
+            String interventionStyle,
+            String interventionLabel,
+            String guidance
+    ) {
+    }
+
+    public record ScheduleBlockItem(
+            String id,
+            String dayOfWeek,
+            String startTime,
+            String endTime,
+            String activity,
+            String category,
+            String note,
+            String sourceType,
+            String sourceRef
+    ) {
+    }
+
     private record ActiveTaskWindow(
             Instant startAt,
             Instant endAt,
             long remainingMinutes
+    ) {
+    }
+
+    private record UpcomingScheduleBlock(
+            ScheduleBlock block,
+            int minutesUntilStart
     ) {
     }
 }

@@ -1,5 +1,5 @@
 import { SectionHeader } from "@/components/section-header";
-import { formatClockValue, formatRelativeMinutes } from "@/lib/format";
+import { formatClockValue, formatRelativeMinutes, formatServiceCopy } from "@/lib/format";
 import { DAY_FULL_LABELS, UpcomingScheduleBlock } from "@/lib/schedule";
 import {
   FocusCurrentItem,
@@ -20,6 +20,39 @@ interface FocusRailCardProps {
   onRejectSuggestion?: (() => void) | null;
 }
 
+function uniqueRecommendedTasks(tasks: RecommendedTask[], limit: number) {
+  const seen = new Set<string>();
+  const result: RecommendedTask[] = [];
+
+  for (const task of tasks) {
+    const title = formatServiceCopy(task.title).trim();
+    if (seen.has(title)) {
+      continue;
+    }
+
+    seen.add(title);
+    result.push(task);
+    if (result.length >= limit) {
+      break;
+    }
+  }
+
+  return result;
+}
+
+function visibleScheduleNote(note: string | null | undefined) {
+  const value = note?.trim();
+  if (!value) {
+    return null;
+  }
+
+  if (/(e2e|playwright|qa seed|service improvement|mock)/i.test(value)) {
+    return null;
+  }
+
+  return formatServiceCopy(value);
+}
+
 export function FocusRailCard({
   currentItem,
   recommendedTasks,
@@ -31,20 +64,20 @@ export function FocusRailCard({
   onApplySuggestion = null,
   onRejectSuggestion = null,
 }: FocusRailCardProps) {
-  const visibleTasks = recommendedTasks.slice(0, 3);
+  const visibleTasks = uniqueRecommendedTasks(recommendedTasks, 3);
   const canHandleSuggestion = Boolean(onApplySuggestion && onRejectSuggestion);
 
   return (
     <article className="surface-card focus-rail-card focus-now-card">
       <div className="focus-rail-section">
-        <SectionHeader eyebrow="지금" title="실행 메모" />
+        <SectionHeader eyebrow="AI 비서 메모" title="지금 할 일" />
 
         <ul className="compact-list">
           {currentItem ? (
             <>
               <li>
                 <span>현재 항목</span>
-                <b>{currentItem.title}</b>
+                <b>{formatServiceCopy(currentItem.title)}</b>
               </li>
               <li>
                 <span>목표 연결</span>
@@ -58,15 +91,15 @@ export function FocusRailCard({
           ) : visibleTasks.length ? (
             visibleTasks.map((task) => (
               <li key={task.id}>
-                <span>{task.title}</span>
+                <span>{formatServiceCopy(task.title)}</span>
                 <b>{formatRelativeMinutes(task.estimatedMinutes)}</b>
               </li>
             ))
           ) : fallbackBlock ? (
             <>
               <li>
-                <span>시간표 기준 다음 블록</span>
-                <b>{fallbackBlock.activity}</b>
+                <span>다음 일정</span>
+                <b>{formatServiceCopy(fallbackBlock.activity)}</b>
               </li>
               <li>
                 <span>예정 시간</span>
@@ -79,7 +112,7 @@ export function FocusRailCard({
             </>
           ) : (
             <li>
-              <span>활성 포커스 없음</span>
+              <span>진행 중인 집중 항목 없음</span>
               <b>비어 있음</b>
             </li>
           )}
@@ -89,24 +122,27 @@ export function FocusRailCard({
       <div className="focus-rail-divider" />
 
       <div className="focus-rail-section">
-        <SectionHeader eyebrow="다음" title="다음 일정" />
+        <SectionHeader eyebrow="다음 일정" title="곧 시작할 일정" />
 
         {nextBlocks.length ? (
           <div className="next-schedule-list">
-            {nextBlocks.map((block) => (
-              <div className="next-card" key={`${block.dayOfWeek}-${block.id}`}>
-                <div className="next-card-head">
-                  <span className="week-chip">
-                    {DAY_FULL_LABELS[block.dayOfWeek] ?? block.dayOfWeek}
+            {nextBlocks.map((block) => {
+              const note = visibleScheduleNote(block.note);
+              return (
+                <div className="next-card" key={`${block.dayOfWeek}-${block.id}`}>
+                  <div className="next-card-head">
+                    <span className="week-chip">
+                      {DAY_FULL_LABELS[block.dayOfWeek] ?? block.dayOfWeek}
                   </span>
                   <span className="event-time">
                     {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
                   </span>
+                  </div>
+                  <strong>{formatServiceCopy(block.activity)}</strong>
+                  {note ? <p className="next-card-note">{note}</p> : null}
                 </div>
-                <strong>{block.activity}</strong>
-                {block.note ? <p className="next-card-note">{block.note}</p> : null}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="warning-copy rail-empty-copy">다음 일정이 없습니다.</p>
@@ -114,9 +150,14 @@ export function FocusRailCard({
 
         {pendingSuggestion ? (
           <div className="suggestion-box">
-            <strong>{pendingSuggestion.summary}</strong>
-            <p className="warning-copy">{pendingSuggestion.explanation}</p>
-            <p className="micro-copy">대기 중 충돌 {pendingConflictCount}건</p>
+            <p className="panel-kicker">조정안 확인</p>
+            <strong>{formatServiceCopy(pendingSuggestion.summary)}</strong>
+            <p className="warning-copy">
+              {formatServiceCopy(pendingSuggestion.statusDetail || pendingSuggestion.explanation)}
+            </p>
+            <p className="micro-copy">
+              지켜야 할 목표와 겹치는 시간을 확인한 뒤 적용합니다. 대기 중 조정안 {pendingConflictCount}건
+            </p>
             {canHandleSuggestion ? (
               <div className="suggestion-actions">
                 <button
@@ -124,14 +165,14 @@ export function FocusRailCard({
                   disabled={isPending}
                   onClick={onRejectSuggestion ?? undefined}
                 >
-                  나중에
+                  보류
                 </button>
                 <button
                   className="solid-btn"
-                  disabled={isPending}
+                  disabled={isPending || !pendingSuggestion.executable}
                   onClick={onApplySuggestion ?? undefined}
                 >
-                  이 안으로 조정
+                  조정안 적용
                 </button>
               </div>
             ) : null}

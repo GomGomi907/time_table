@@ -38,9 +38,9 @@ export function AuthCallbackView() {
     return (
       <div className="status-screen">
         <div className="status-panel">
-          <p className="eyebrow">로그인 콜백</p>
-          <h1>AI 일정 조율 온보딩을 준비하고 있습니다.</h1>
-          <p>세션 복구 후 바로 일정 가져오기 흐름으로 보낼지 확인하는 중입니다.</p>
+          <p className="eyebrow">계정 연결</p>
+          <h1>일정 비서를 시작할 준비를 하고 있습니다.</h1>
+          <p>연결된 계정을 확인한 뒤, 필요한 생활 리듬만 짧게 설정합니다.</p>
         </div>
       </div>
     );
@@ -49,16 +49,16 @@ export function AuthCallbackView() {
   return (
     <div className="status-screen">
       <div className="status-panel">
-        <p className="eyebrow">로그인 콜백</p>
+        <p className="eyebrow">계정 연결</p>
         <h1>
           {status === "success"
-            ? "로그인 결과를 반영하고 있습니다."
-            : "로그인 상태를 확인 중입니다."}
+            ? "Time Table 작업 공간을 준비하고 있습니다."
+            : "계정 연결 상태를 확인하고 있습니다."}
         </h1>
         <p>
           {isMock
-            ? "Mock 로그인으로 세션을 만들었습니다. 잠시 후 AI 온보딩 또는 대시보드로 이동합니다."
-            : "OAuth 콜백 결과를 반영하는 중입니다. 세션 확인 후 AI 온보딩 또는 대시보드로 이동합니다."}
+            ? "개발용 계정으로 작업 공간을 준비하고 있습니다. 잠시 후 다음 화면으로 이동합니다."
+            : "연결된 계정을 확인한 뒤, 필요한 생활 리듬만 짧게 설정합니다."}
         </p>
         <Link className="ghost-btn link-btn" href="/login">
           로그인 화면으로 돌아가기

@@ -92,4 +92,41 @@ class ScheduleControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.not(containsString("수정된 집중 블록"))));
     }
+
+    @Test
+    void invalidEnumAndTooShortBlockReturnBadRequestJson() throws Exception {
+        mockMvc.perform(post("/api/schedule/blocks")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dayOfWeek": "NOT_A_DAY",
+                                  "startTime": "09:00",
+                                  "endTime": "10:00",
+                                  "activity": "잘못된 요일",
+                                  "category": "WORK"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.status").value(400));
+
+        mockMvc.perform(post("/api/schedule/blocks")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dayOfWeek": "MONDAY",
+                                  "startTime": "09:00",
+                                  "endTime": "09:01",
+                                  "activity": "너무 짧은 블록",
+                                  "category": "WORK"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(content().string(containsString("최소 15분")));
+    }
 }
