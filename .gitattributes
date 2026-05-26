@@ -1,5 +1,6 @@
 * text=auto
 
+.gitattributes text eol=lf
 *.java text eol=lf
 *.kt text eol=lf
 *.properties text eol=lf
@@ -15,6 +16,10 @@
 *.css text eol=lf
 *.scss text eol=lf
 *.html text eol=lf
+Dockerfile text eol=lf
+**/Dockerfile text eol=lf
+.dockerignore text eol=lf
+**/.dockerignore text eol=lf
 *.sh text eol=lf
 
 *.bat text eol=crlf

@@ -39,6 +39,10 @@ interface ApiEnvelope<T> {
 function normalizeApiBaseUrl(value: string | undefined) {
   const normalized = (value ?? "http://localhost:8080").replace(/\/+$/, "");
 
+  if (!normalized) {
+    return "";
+  }
+
   // All client calls in this module pass paths that already start with `/api`.
   // Accept legacy Docker/env values such as `http://localhost:8080/api` without
   // turning requests into `/api/api/...`.
@@ -48,6 +52,22 @@ function normalizeApiBaseUrl(value: string | undefined) {
 const API_BASE_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_BASE_URL);
 
 function buildUrl(path: string, query?: Record<string, string | boolean | undefined>) {
+  if (!API_BASE_URL) {
+    if (!query) {
+      return path;
+    }
+
+    const searchParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined) {
+        continue;
+      }
+      searchParams.set(key, String(value));
+    }
+    const queryString = searchParams.toString();
+    return queryString ? `${path}?${queryString}` : path;
+  }
+
   const url = new URL(`${API_BASE_URL}${path}`);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
