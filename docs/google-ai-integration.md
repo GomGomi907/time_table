@@ -19,6 +19,23 @@ Google Cloud Console의 OAuth 웹 애플리케이션 Redirect URI:
 http://localhost:8080/login/oauth2/code/google
 ```
 
+배포된 Cloud Run 서비스에서는 로컬 redirect URI만으로는 로그인할 수 없다. 같은 OAuth 웹
+클라이언트의 **Authorized redirect URIs**에 서비스 URL 기반 콜백도 반드시 추가한다.
+
+```text
+https://timetable-608682434352.asia-northeast2.run.app/login/oauth2/code/google
+```
+
+그리고 Cloud Run 환경 변수의 `APP_FRONTEND_URL`도 같은 origin으로 맞춘다.
+
+```text
+APP_FRONTEND_URL=https://timetable-608682434352.asia-northeast2.run.app
+```
+
+현재 로컬 `client_secret_*.json`에 `http://localhost:8080/login/oauth2/code/google`만
+들어있다면 Google Console 등록값도 로컬 전용일 가능성이 높다. 이 경우 배포본 OAuth는
+`redirect_uri_mismatch` 또는 계정 연결 실패로 끝난다.
+
 요청 scope:
 
 ```text
