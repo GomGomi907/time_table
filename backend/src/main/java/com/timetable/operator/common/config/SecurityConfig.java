@@ -1,5 +1,6 @@
 package com.timetable.operator.common.config;
 
+import com.timetable.operator.auth.infrastructure.OAuthLoginFailureHandler;
 import com.timetable.operator.auth.infrastructure.OAuthLoginSuccessHandler;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final AppProperties appProperties;
+    private final ObjectProvider<OAuthLoginFailureHandler> oAuthLoginFailureHandlerProvider;
     private final ObjectProvider<OAuthLoginSuccessHandler> oAuthLoginSuccessHandlerProvider;
     private final ObjectProvider<ClientRegistrationRepository> clientRegistrationRepositoryProvider;
     @Value("${spring.h2.console.enabled:false}")
@@ -64,6 +66,7 @@ public class SecurityConfig {
 
         if (appProperties.googleOauthEnabled()) {
             http.oauth2Login(oauth2 -> {
+                oauth2.failureHandler(oAuthLoginFailureHandlerProvider.getObject());
                 oauth2.successHandler(oAuthLoginSuccessHandlerProvider.getObject());
                 OAuth2AuthorizationRequestResolver authorizationRequestResolver =
                         googleOfflineAuthorizationRequestResolver();

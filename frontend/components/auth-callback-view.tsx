@@ -14,6 +14,7 @@ export function AuthCallbackView() {
   const { onboardingPhase, needsOnboarding, onboardingCompleted } = useOnboardingBootstrap();
   const status = searchParams.get("status");
   const isMock = searchParams.get("mock") === "true";
+  const isError = status === "error";
 
   useEffect(() => {
     void refreshSession();
@@ -51,12 +52,16 @@ export function AuthCallbackView() {
       <div className="status-panel">
         <p className="eyebrow">계정 연결</p>
         <h1>
-          {status === "success"
+          {isError
+            ? "Google 계정 연결을 완료하지 못했습니다."
+            : status === "success"
             ? "Time Table 작업 공간을 준비하고 있습니다."
             : "계정 연결 상태를 확인하고 있습니다."}
         </h1>
         <p>
-          {isMock
+          {isError
+            ? "OAuth 설정, 승인된 리디렉션 URI, Client ID/Secret 값을 확인한 뒤 다시 시도해보세요."
+            : isMock
             ? "개발용 계정으로 작업 공간을 준비하고 있습니다. 잠시 후 다음 화면으로 이동합니다."
             : "연결된 계정을 확인한 뒤, 필요한 생활 리듬만 짧게 설정합니다."}
         </p>
