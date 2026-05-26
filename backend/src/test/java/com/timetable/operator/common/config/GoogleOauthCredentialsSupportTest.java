@@ -29,6 +29,39 @@ class GoogleOauthCredentialsSupportTest {
     }
 
     @Test
+    void resolvesEnvironmentCredentialsFromDotenvStyleAssignmentsAndBom() {
+        GoogleOauthCredentials credentials = GoogleOauthCredentialsSupport.resolve(
+                "\uFEFFGOOGLE_CLIENT_ID=\"client-id.apps.googleusercontent.com\"",
+                "GOOGLE_CLIENT_SECRET='client-secret'",
+                "",
+                objectMapper
+        );
+
+        assertThat(credentials.clientId()).isEqualTo("client-id.apps.googleusercontent.com");
+        assertThat(credentials.clientSecret()).isEqualTo("client-secret");
+    }
+
+    @Test
+    void resolvesEmbeddedClientSecretJsonFromEnvironmentSecretValue() {
+        GoogleOauthCredentials credentials = GoogleOauthCredentialsSupport.resolve(
+                "client-id.apps.googleusercontent.com",
+                """
+                        {
+                          "web": {
+                            "client_id": "client-id.apps.googleusercontent.com",
+                            "client_secret": "client-secret"
+                          }
+                        }
+                        """,
+                "",
+                objectMapper
+        );
+
+        assertThat(credentials.clientId()).isEqualTo("client-id.apps.googleusercontent.com");
+        assertThat(credentials.clientSecret()).isEqualTo("client-secret");
+    }
+
+    @Test
     void resolvesCredentialFileValuesAfterTrimmingWhitespaceAndWrappingQuotes() throws Exception {
         Path credentialsFile = tempDir.resolve("client_secret.json");
         Files.writeString(credentialsFile, """

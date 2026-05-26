@@ -39,8 +39,9 @@ APP_FRONTEND_URL=https://timetable-608682434352.asia-northeast2.run.app
 `invalid_token_response`와 `401 Unauthorized`가 같이 보이면 redirect 단계는 통과했지만 token
 교환에서 OAuth 클라이언트 인증이 실패한 것이다. 이때는 Cloud Run의 `GOOGLE_CLIENT_ID`와
 `GOOGLE_CLIENT_SECRET`이 같은 OAuth 웹 클라이언트의 값인지 확인한다. Secret Manager를 쓸 때
-secret 이름, JSON 전체, Gemini API 키, 따옴표가 포함된 문자열을 `GOOGLE_CLIENT_SECRET` 값으로
-넣으면 안 된다.
+secret 이름이나 Gemini API 키를 `GOOGLE_CLIENT_SECRET` 값으로 넣으면 안 된다. 값 앞뒤 공백,
+따옴표, `GOOGLE_CLIENT_SECRET=...` 형태는 백엔드가 정규화한다. 실수로 Google Console에서 내려받은
+`client_secret.json` 전체를 Secret 값으로 넣은 경우에도 백엔드가 `web.client_secret`을 추출한다.
 
 백엔드는 Google token endpoint에 `client_secret_post` 방식으로 `client_id`와 `client_secret`을
 전송한다. 배포 후에도 `invalid_token_response 401`이 계속되면 코드의 redirect URI 단계가 아니라
