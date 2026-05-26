@@ -19,7 +19,7 @@ public final class GoogleOauthCredentialsSupport {
             String clientSecret,
             String credentialsFile
     ) {
-        if (StringUtils.hasText(clientId) && StringUtils.hasText(clientSecret)) {
+        if (StringUtils.hasText(normalizeCredential(clientId)) && StringUtils.hasText(normalizeCredential(clientSecret))) {
             return true;
         }
 
@@ -40,8 +40,10 @@ public final class GoogleOauthCredentialsSupport {
             String credentialsFile,
             ObjectMapper objectMapper
     ) {
-        if (StringUtils.hasText(clientId) && StringUtils.hasText(clientSecret)) {
-            return new GoogleOauthCredentials(clientId, clientSecret);
+        String normalizedClientId = normalizeCredential(clientId);
+        String normalizedClientSecret = normalizeCredential(clientSecret);
+        if (StringUtils.hasText(normalizedClientId) && StringUtils.hasText(normalizedClientSecret)) {
+            return new GoogleOauthCredentials(normalizedClientId, normalizedClientSecret);
         }
 
         if (!StringUtils.hasText(credentialsFile)) {
@@ -68,8 +70,8 @@ public final class GoogleOauthCredentialsSupport {
                 oauthNode = root.path("installed");
             }
 
-            String resolvedClientId = oauthNode.path("client_id").asText(null);
-            String resolvedClientSecret = oauthNode.path("client_secret").asText(null);
+            String resolvedClientId = normalizeCredential(oauthNode.path("client_id").asText(null));
+            String resolvedClientSecret = normalizeCredential(oauthNode.path("client_secret").asText(null));
 
             if (!StringUtils.hasText(resolvedClientId) || !StringUtils.hasText(resolvedClientSecret)) {
                 throw new IllegalStateException("Google OAuth 자격 증명 파일에 client_id 또는 client_secret이 없습니다.");
@@ -79,5 +81,20 @@ public final class GoogleOauthCredentialsSupport {
         } catch (IOException exception) {
             throw new IllegalStateException("Google OAuth 자격 증명 파일을 읽지 못했습니다: " + credentialsPath, exception);
         }
+    }
+
+    private static String normalizeCredential(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() >= 2) {
+            char first = normalized.charAt(0);
+            char last = normalized.charAt(normalized.length() - 1);
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                normalized = normalized.substring(1, normalized.length() - 1).trim();
+            }
+        }
+        return normalized;
     }
 }

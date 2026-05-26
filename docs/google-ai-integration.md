@@ -36,6 +36,12 @@ APP_FRONTEND_URL=https://timetable-608682434352.asia-northeast2.run.app
 들어있다면 Google Console 등록값도 로컬 전용일 가능성이 높다. 이 경우 배포본 OAuth는
 `redirect_uri_mismatch` 또는 계정 연결 실패로 끝난다.
 
+`invalid_token_response`와 `401 Unauthorized`가 같이 보이면 redirect 단계는 통과했지만 token
+교환에서 OAuth 클라이언트 인증이 실패한 것이다. 이때는 Cloud Run의 `GOOGLE_CLIENT_ID`와
+`GOOGLE_CLIENT_SECRET`이 같은 OAuth 웹 클라이언트의 값인지 확인한다. Secret Manager를 쓸 때
+secret 이름, JSON 전체, Gemini API 키, 따옴표가 포함된 문자열을 `GOOGLE_CLIENT_SECRET` 값으로
+넣으면 안 된다.
+
 요청 scope:
 
 ```text

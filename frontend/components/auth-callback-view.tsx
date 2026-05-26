@@ -18,6 +18,8 @@ export function AuthCallbackView() {
   const errorReason = searchParams.get("reason");
   const errorMessage = searchParams.get("message");
   const callbackUrl = searchParams.get("callbackUrl");
+  const isTokenExchangeError =
+    errorMessage?.includes("invalid_token_response") || errorMessage?.includes("401 Unauthorized");
 
   useEffect(() => {
     void refreshSession();
@@ -80,6 +82,13 @@ export function AuthCallbackView() {
                 Google Console 승인된 리디렉션 URI에 다음 주소가 정확히 등록되어 있어야 합니다:
                 <br />
                 <code>{callbackUrl}</code>
+              </p>
+            ) : null}
+            {isTokenExchangeError ? (
+              <p>
+                지금 오류는 인증 코드를 받은 뒤 토큰 교환에서 실패한 상태입니다. Cloud Run의
+                <code> GOOGLE_CLIENT_ID </code>와 <code> GOOGLE_CLIENT_SECRET </code>이 같은 OAuth 웹
+                클라이언트의 값인지, Secret 값에 따옴표·공백·다른 API 키가 들어가지 않았는지 확인해보세요.
               </p>
             ) : null}
           </div>
