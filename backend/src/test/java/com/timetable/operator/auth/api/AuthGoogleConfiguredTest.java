@@ -1,6 +1,7 @@
 package com.timetable.operator.auth.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -32,5 +33,12 @@ class AuthGoogleConfiguredTest {
                 .andExpect(jsonPath("$.enabled").value(true))
                 .andExpect(jsonPath("$.url").value("/oauth2/authorization/google"))
                 .andExpect(jsonPath("$.message").doesNotExist());
+    }
+
+    @Test
+    void protectedApiReturnsUnauthorizedInsteadOfInternalOauthRedirect() throws Exception {
+        mockMvc.perform(get("/api/dashboard/summary"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().doesNotExist("Location"));
     }
 }
