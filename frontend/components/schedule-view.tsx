@@ -7,11 +7,6 @@ import { SectionHeader } from "@/components/section-header";
 import { api } from "@/lib/api";
 import { formatAiActionLabel, formatAiPreviewDetail, formatClockValue, formatServiceCopy } from "@/lib/format";
 import {
-  dismissOnboardingDayHandoffHint,
-  OnboardingDayHandoff,
-  readOnboardingDayHandoff,
-} from "@/lib/onboarding-day-handoff";
-import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
   DAY_ORDER,
@@ -137,7 +132,7 @@ function formatSuggestionPermission(suggestion: RescheduleSuggestion) {
     return "검토용 제안입니다. 적용해도 바뀔 일정 항목이 없습니다.";
   }
 
-  return `적용 전에는 앱 일정과 Google 캘린더와 할 일을 바꾸지 않습니다. 승인하면 ${countPreviewGroups(suggestion.previewItems)}개 조정 묶음을 앱에 먼저 저장하고 Google 반영은 권한 상태에 맞춰 처리합니다.`;
+  return `사용자가 적용하면 ${countPreviewGroups(suggestion.previewItems)}개 조정 묶음을 앱에 먼저 저장하고 Google 반영은 권한 상태에 맞춰 처리합니다.`;
 }
 
 function formatSuggestionEvidence(reason: string | null, actionType: string) {
@@ -587,7 +582,6 @@ export function ScheduleView() {
     week: null,
     suggestions: [],
   });
-  const [onboardingHandoff, setOnboardingHandoff] = useState<OnboardingDayHandoff | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -629,14 +623,6 @@ export function ScheduleView() {
     void loadSchedulePage();
   }, [session?.authenticated]);
 
-  useEffect(() => {
-    if (!session?.userId) {
-      setOnboardingHandoff(null);
-      return;
-    }
-
-    setOnboardingHandoff(readOnboardingDayHandoff(session.userId));
-  }, [session?.userId]);
 
   useEffect(() => {
     if (!isCreateModalOpen) {
@@ -836,10 +822,6 @@ export function ScheduleView() {
     }
   }
 
-  function handleDismissOnboardingHint() {
-    dismissOnboardingDayHandoffHint(session?.userId, "schedule");
-    setOnboardingHandoff(readOnboardingDayHandoff(session?.userId));
-  }
 
   const pendingSuggestions = data.suggestions.filter((suggestion) => suggestion.status === "pending");
 
@@ -871,176 +853,145 @@ export function ScheduleView() {
       ) : null}
 
       {data.week ? (
-      <section className="planner-layout schedule-layout">
-        <article className="planner-board schedule-main-board">
-          <SectionHeader
-            eyebrow="일정 조정"
-            title="이번 주 일정표"
-            trailing={
-              <div className="board-legend">
-                <span>
-                  <i className="dot coral" />
-                  집중
-                </span>
-                <span>
-                  <i className="dot sand" />
-                  루틴
-                </span>
-                <span>
-                  <i className="dot slate" />
-                  기타
-                </span>
-              </div>
-            }
-          />
+        <section className="planner-layout schedule-layout">
+          <article className="planner-board schedule-main-board">
+            <SectionHeader
+              eyebrow="일정 조정"
+              title="이번 주 일정표"
+              trailing={
+                <div className="board-legend">
+                  <span>
+                    <i className="dot coral" />
+                    집중
+                  </span>
+                  <span>
+                    <i className="dot sand" />
+                    루틴
+                  </span>
+                  <span>
+                    <i className="dot slate" />
+                    기타
+                  </span>
+                </div>
+              }
+            />
 
-          {onboardingHandoff && !onboardingHandoff.scheduleDismissed ? (
-            <section className="onboarding-day-coachmark">
-              <div className="onboarding-day-coachmark-copy">
-                <p className="panel-kicker">첫날 안내</p>
-                <strong>
-                  {onboardingHandoff.appliedSuggestion
-                    ? "처음 설정에서 만든 첫 조정안을 여기서 바로 이어서 다듬을 수 있습니다."
-                    : "처음 설정에서 저장한 생활 리듬이 일정 조정의 기본 기준이 됩니다."}
-                </strong>
-                <p>
-                  {onboardingHandoff.suggestionSummary ??
-                    "필요하면 아래 입력창에 일정 이동이나 집중 시간 추가 요청을 문장으로 적어 보세요."}
-                </p>
-                <div className="onboarding-day-answer-list">
-                  {onboardingHandoff.answers.slice(0, 3).map((answer) => (
-                    <div key={answer.id} className="onboarding-day-chip">
-                      <strong>{answer.title}</strong>
-                      <span>{answer.value}</span>
+            <section className="ai-compose-card">
+              <SectionHeader
+                eyebrow="일정 관리"
+                title="일정 추가·조정 요청"
+                description="직접 추가하거나, 바꿀 일정과 지켜야 할 시간을 바로 요청하세요."
+              />
+
+              <form className="ai-compose-form" onSubmit={(event) => void handleRequestSuggestion(event)}>
+                <textarea
+                  className="ai-compose-textarea"
+                  value={requestReason}
+                  onChange={(event) => setRequestReason(event.target.value)}
+                  placeholder="예: 화요일 저녁 운동을 30분 뒤로 미루고, 금요일 오전엔 집중 업무 2시간을 확보해 줘"
+                  rows={2}
+                />
+                <div className="ai-compose-actions">
+                  <button
+                    className="ghost-btn"
+                    disabled={isMutating}
+                    type="button"
+                    onClick={openCreateModal}
+                  >
+                    일정 직접 추가
+                  </button>
+                  <button className="solid-btn" disabled={isMutating} type="submit">
+                    요청 보내기
+                  </button>
+                </div>
+              </form>
+
+              {pendingSuggestions.length ? (
+                <div className="ai-suggestion-strip">
+                  {pendingSuggestions.slice(0, 2).map((suggestion) => (
+                    <div className="ai-suggestion-card suggestion-diff-card" key={suggestion.id}>
+                      <div className="suggestion-diff-head">
+                        <span className="accent-pill subtle">{suggestion.statusLabel}</span>
+                        <strong>{formatServiceCopy(suggestion.summary)}</strong>
+                        <p>{formatServiceCopy(suggestion.reason ?? suggestion.explanation)}</p>
+                      </div>
+                      <div className="suggestion-summary-strip" aria-label="조정안 핵심 요약">
+                        <span>
+                          <b>{countPreviewGroups(suggestion.previewItems)}개</b>
+                          변경 묶음
+                        </span>
+                        <span>
+                          <b>적용 대기</b>
+                          사용자 확인 필요
+                        </span>
+                        <span>
+                          <b>Google 반영</b>
+                          권한 상태 확인 후
+                        </span>
+                      </div>
+                      {suggestion.previewItems.length ? (
+                        <div className="suggestion-diff-list" aria-label="조정안 변경 미리보기">
+                          {buildPreviewDigest(suggestion.previewItems, 1).map((item, index) => (
+                            <div
+                              className="suggestion-diff-row"
+                              key={`${suggestion.id}-${index}-${item.actionType}-${item.targetId ?? item.title}`}
+                            >
+                              <span className="diff-before">
+                                <b>대상</b>
+                                {formatServiceCopy(item.title)}
+                              </span>
+                              <span className="diff-after">
+                                <b>{formatAiActionLabel(item.actionType)}</b>
+                                {formatAiPreviewDetail(item.detail) ??
+                                  formatServiceCopy(item.reason) ??
+                                  "세부 변경을 확인해보세요."}
+                              </span>
+                              <span className="diff-impact">
+                                <b>근거</b>
+                                {formatServiceCopy(formatSuggestionEvidence(item.reason, item.actionType))}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <p className="micro-copy suggestion-permission-copy">
+                        밤 루틴과 겹치는 조정은 적용 시 대체·이동 대상까지 함께 확인합니다.
+                      </p>
+                      <p className="micro-copy suggestion-permission-copy">
+                        {formatSuggestionPermission(suggestion)}
+                      </p>
+                      <div className="suggestion-actions">
+                        <button
+                          className="ghost-btn"
+                          type="button"
+                          disabled={isMutating}
+                          onClick={() => void handleSuggestionDecision("reject", suggestion.id)}
+                        >
+                          보류
+                        </button>
+                        <button
+                          className="solid-btn"
+                          type="button"
+                          disabled={isMutating || !suggestion.executable}
+                          onClick={() => void handleSuggestionDecision("apply", suggestion.id)}
+                        >
+                          적용
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-
-              <button
-                className="ghost-btn secondary-action-btn"
-                onClick={handleDismissOnboardingHint}
-                type="button"
-              >
-                닫기
-              </button>
+              ) : null}
             </section>
-          ) : null}
 
-          <WeeklyGrid
-            week={data.week}
-            pendingSuggestionCount={pendingSuggestions.length}
-            onBlockSelect={openEditModal}
-            timeZone={session?.timezone}
-          />
-
-          <section className="ai-compose-card">
-            <SectionHeader
-              eyebrow="조정 요청"
-              title="일정 조정 요청"
-              description="바꾸고 싶은 일정과 지켜야 할 시간을 적어 주세요. 조정안은 승인하면 반영합니다."
+            <WeeklyGrid
+              week={data.week}
+              pendingSuggestionCount={pendingSuggestions.length}
+              onBlockSelect={openEditModal}
+              timeZone={session?.timezone}
             />
-
-            <form className="ai-compose-form" onSubmit={(event) => void handleRequestSuggestion(event)}>
-              <textarea
-                className="ai-compose-textarea"
-                value={requestReason}
-                onChange={(event) => setRequestReason(event.target.value)}
-                placeholder="예: 화요일 저녁 운동을 30분 뒤로 미루고, 금요일 오전엔 집중 업무 2시간을 확보해 줘"
-                rows={2}
-              />
-              <div className="ai-compose-actions">
-                <button
-                  className="ghost-btn"
-                  disabled={isMutating}
-                  type="button"
-                  onClick={openCreateModal}
-                >
-                  일정 직접 추가
-                </button>
-                <button className="solid-btn" disabled={isMutating} type="submit">
-                  요청 보내기
-                </button>
-              </div>
-            </form>
-
-            {pendingSuggestions.length ? (
-              <div className="ai-suggestion-strip">
-                {pendingSuggestions.slice(0, 2).map((suggestion) => (
-                  <div className="ai-suggestion-card suggestion-diff-card" key={suggestion.id}>
-                    <div className="suggestion-diff-head">
-                      <span className="accent-pill subtle">{suggestion.statusLabel}</span>
-                      <strong>{formatServiceCopy(suggestion.summary)}</strong>
-                      <p>{formatServiceCopy(suggestion.reason ?? suggestion.explanation)}</p>
-                    </div>
-                    <div className="suggestion-summary-strip" aria-label="조정안 핵심 요약">
-                      <span>
-                        <b>{countPreviewGroups(suggestion.previewItems)}개</b>
-                        변경 묶음
-                      </span>
-                      <span>
-                        <b>승인 전 안전</b>
-                        대기 중
-                      </span>
-                      <span>
-                        <b>Google 반영</b>
-                        권한 상태 확인 후
-                      </span>
-                    </div>
-                    {suggestion.previewItems.length ? (
-                      <div className="suggestion-diff-list" aria-label="조정안 변경 미리보기">
-                        {buildPreviewDigest(suggestion.previewItems, 1).map((item, index) => (
-                          <div
-                            className="suggestion-diff-row"
-                            key={`${suggestion.id}-${index}-${item.actionType}-${item.targetId ?? item.title}`}
-                          >
-                            <span className="diff-before">
-                              <b>대상</b>
-                              {formatServiceCopy(item.title)}
-                            </span>
-                            <span className="diff-after">
-                              <b>{formatAiActionLabel(item.actionType)}</b>
-                              {formatAiPreviewDetail(item.detail) ?? formatServiceCopy(item.reason) ?? "세부 변경을 확인해보세요."}
-                            </span>
-                            <span className="diff-impact">
-                              <b>근거</b>
-                              {formatServiceCopy(formatSuggestionEvidence(item.reason, item.actionType))}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    <p className="micro-copy suggestion-permission-copy">
-                      밤 루틴과 겹치는 조정은 적용 시 대체·이동 대상까지 함께 확인합니다.
-                    </p>
-                    <p className="micro-copy suggestion-permission-copy">
-                      {formatSuggestionPermission(suggestion)}
-                    </p>
-                    <div className="suggestion-actions">
-                      <button
-                        className="ghost-btn"
-                        type="button"
-                        disabled={isMutating}
-                        onClick={() => void handleSuggestionDecision("reject", suggestion.id)}
-                      >
-                        보류
-                      </button>
-                      <button
-                        className="solid-btn"
-                        type="button"
-                        disabled={isMutating || !suggestion.executable}
-                        onClick={() => void handleSuggestionDecision("apply", suggestion.id)}
-                      >
-                        적용
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        </article>
-      </section>
+          </article>
+        </section>
       ) : null}
 
       {isCreateModalOpen ? (

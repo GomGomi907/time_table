@@ -15,6 +15,7 @@ import com.timetable.operator.focus.infrastructure.FocusSessionLogRepository;
 import com.timetable.operator.goals.domain.Goal;
 import com.timetable.operator.goals.infrastructure.GoalRepository;
 import com.timetable.operator.schedule.domain.ScheduleBlock;
+import com.timetable.operator.schedule.application.ScheduleBlockRules;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import com.timetable.operator.settings.domain.UserPreferences;
 import com.timetable.operator.settings.infrastructure.UserPreferencesRepository;
@@ -54,6 +55,7 @@ public class FocusService {
     private final GoalRepository goalRepository;
     private final FocusSessionLogRepository focusSessionLogRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
+    private final ScheduleBlockRules scheduleBlockRules;
     private final UserPreferencesRepository userPreferencesRepository;
     private final AppProperties appProperties;
     private final RescheduleSuggestionService rescheduleSuggestionService;
@@ -278,6 +280,61 @@ public class FocusService {
         return getCurrentFocus();
     }
 
+    @Transactional
+    public FocusCurrentView completeScheduleBlock(UUID blockId) {
+        AppUser user = currentUserProvider.getCurrentUser();
+        ScheduleBlock block = scheduleBlockRepository.findByIdAndUserId(blockId, user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("완료할 일정 블록을 찾을 수 없습니다."));
+        ZoneId zoneId = ZoneId.of(user.getTimezone());
+        LocalTime nowTime = LocalTime.now(zoneId).withSecond(0).withNano(0);
+        DayOfWeek today = LocalDate.now(zoneId).getDayOfWeek();
+
+        if (!isActiveScheduleBlock(block, today, today.minus(1), nowTime)) {
+            throw new IllegalArgumentException("현재 진행 중인 일정 블록만 완료할 수 있습니다.");
+        }
+
+        block.setEndTime(resolveScheduleBlockCompletionEnd(block, nowTime));
+        block.setSourceRef("focus-complete");
+        scheduleBlockRules.validateForUser(user.getId(), block);
+        scheduleBlockRepository.save(block);
+        return getCurrentFocus();
+    }
+
+    @Transactional
+    public FocusCurrentView postponeScheduleBlock(UUID blockId, PostponeScheduleBlockRequest request) {
+        AppUser user = currentUserProvider.getCurrentUser();
+        ScheduleBlock block = scheduleBlockRepository.findByIdAndUserId(blockId, user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("미룰 일정 블록을 찾을 수 없습니다."));
+        ScheduleBlockRules.ShiftedScheduleBlock shiftedBlock = scheduleBlockRules.shift(
+                block.getDayOfWeek(),
+                block.getStartTime(),
+                block.getEndTime(),
+                30
+        );
+        block.setDayOfWeek(shiftedBlock.dayOfWeek());
+        block.setStartTime(shiftedBlock.startTime());
+        block.setEndTime(shiftedBlock.endTime());
+        block.setSourceRef("focus-postpone");
+        scheduleBlockRules.validateForUser(user.getId(), block);
+        scheduleBlockRepository.save(block);
+
+        if (request.requestAiReschedule()) {
+            String reason = (request.reason() == null || request.reason().isBlank())
+                    ? "실행 모드에서 일정 블록 \"%s\"을 30분 미뤘습니다. 남은 일정을 다시 확인해 주세요.".formatted(block.getActivity())
+                    : request.reason().trim();
+            rescheduleSuggestionService.createManualSuggestion(
+                    new RescheduleSuggestionService.ManualRescheduleRequest(
+                            "postpone",
+                            null,
+                            null,
+                            reason
+                    )
+            );
+        }
+
+        return getCurrentFocus();
+    }
+
     private void requestAiRescheduleIfNeeded(PostponeFocusRequest request, String fallbackReason) {
         if (!request.requestAiReschedule()) {
             return;
@@ -321,6 +378,21 @@ public class FocusService {
             case "skipped" -> FocusCompletionType.SKIPPED;
             default -> FocusCompletionType.ON_TIME;
         };
+    }
+
+    private LocalTime resolveScheduleBlockCompletionEnd(ScheduleBlock block, LocalTime nowTime) {
+        int elapsedMinutes = displayMinute(nowTime) - displayMinute(block.getStartTime());
+        if (elapsedMinutes < ScheduleBlockRules.MIN_BLOCK_DURATION_MINUTES) {
+            return block.getStartTime().plusMinutes(ScheduleBlockRules.MIN_BLOCK_DURATION_MINUTES);
+        }
+        return nowTime;
+    }
+
+    private int displayMinute(LocalTime time) {
+        int minuteOfDay = time.getHour() * 60 + time.getMinute();
+        return time.isBefore(ScheduleBlockRules.OVERNIGHT_DISPLAY_CUTOFF)
+                ? minuteOfDay + (24 * 60)
+                : minuteOfDay;
     }
 
     private CurrentItem toCurrentItem(Event event) {
@@ -547,6 +619,12 @@ public class FocusService {
     public record PostponeFocusRequest(
             @NotBlank String itemType,
             @NotBlank String itemId,
+            String reason,
+            boolean requestAiReschedule
+    ) {
+    }
+
+    public record PostponeScheduleBlockRequest(
             String reason,
             boolean requestAiReschedule
     ) {

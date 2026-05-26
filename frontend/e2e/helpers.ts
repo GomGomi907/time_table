@@ -166,6 +166,16 @@ export async function clearScheduleBlocksForDay(page: Page, dayOfWeek = getCurre
   }
 }
 
+export async function clearAllScheduleBlocks(page: Page) {
+  const week = await backendFetch<WeekScheduleResponse>(page, "/api/schedule/week");
+
+  for (const day of week.week) {
+    for (const existing of day.blocks) {
+      await backendFetch(page, `/api/schedule/blocks/${existing.id}`, { method: "DELETE" });
+    }
+  }
+}
+
 async function removeOverlappingScheduleBlocks(page: Page, block: ScheduleBlockInput) {
   const week = await backendFetch<WeekScheduleResponse>(page, "/api/schedule/week");
   const targetInterval = toWeekInterval(block.dayOfWeek, block.startTime, block.endTime);
@@ -183,12 +193,8 @@ async function removeOverlappingScheduleBlocks(page: Page, block: ScheduleBlockI
 export function buildActiveScheduleBlock(activity: string): ScheduleBlockInput {
   const now = getKoreaNowParts();
   const totalMinutes = now.hour * 60 + now.minute;
-  let startMinutes = Math.max(0, totalMinutes - 10);
-  const endMinutes = Math.min(23 * 60 + 59, totalMinutes + 35);
-
-  if (endMinutes - startMinutes < 15) {
-    startMinutes = Math.max(0, endMinutes - 20);
-  }
+  const startMinutes = Math.max(0, totalMinutes - 10);
+  const endMinutes = (totalMinutes + 35) % (24 * 60);
 
   return {
     dayOfWeek: BACKEND_DAY_BY_WEEKDAY[now.weekday] ?? "MONDAY",
@@ -213,12 +219,12 @@ async function clickOptionalButton(page: Page, name: string | RegExp) {
 
 export async function backendFetch<T>(page: Page, path: string, init: BrowserFetchInit = {}) {
   return page.evaluate(
-    async ({ apiBaseUrl, path: requestPath, init: requestInit }) => {
+    async ({ path: requestPath, init: requestInit }) => {
       const method = requestInit.method?.toUpperCase() ?? "GET";
       const headers: Record<string, string> = { ...(requestInit.headers ?? {}) };
 
       if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-        const csrfResponse = await fetch(`${apiBaseUrl}/api/auth/csrf`, {
+        const csrfResponse = await fetch(`${window.location.origin}/api/auth/csrf`, {
           credentials: "include",
           cache: "no-store",
         });
@@ -240,7 +246,8 @@ export async function backendFetch<T>(page: Page, path: string, init: BrowserFet
         headers["Content-Type"] = "application/json";
       }
 
-      const response = await fetch(`${apiBaseUrl}${requestPath}`, {
+      const requestUrl = `${window.location.origin}${requestPath}`;
+      const response = await fetch(requestUrl, {
         method,
         headers,
         body,
@@ -259,7 +266,7 @@ export async function backendFetch<T>(page: Page, path: string, init: BrowserFet
       const contentType = response.headers.get("content-type") ?? "";
       return (contentType.includes("application/json") ? response.json() : response.text()) as T;
     },
-    { apiBaseUrl: API_BASE_URL, path, init },
+    { path, init },
   );
 }
 

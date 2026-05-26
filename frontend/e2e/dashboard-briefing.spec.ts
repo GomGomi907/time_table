@@ -67,21 +67,6 @@ async function expectVerticalOrder(page: Page, selectors: string[]) {
   }
 }
 
-function expectVisualPrecedence(
-  earlier: { x: number; y: number } | null,
-  later: { x: number; y: number } | null,
-) {
-  expect(earlier, "earlier element should have a bounding box").not.toBeNull();
-  expect(later, "later element should have a bounding box").not.toBeNull();
-
-  const yDelta = (earlier?.y ?? 0) - (later?.y ?? 0);
-  if (Math.abs(yDelta) < 1) {
-    expect(earlier?.x ?? Number.POSITIVE_INFINITY).toBeLessThan(later?.x ?? Number.NEGATIVE_INFINITY);
-    return;
-  }
-
-  expect(earlier?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(later?.y ?? Number.NEGATIVE_INFINITY);
-}
 
 test("dashboard answers today's schedule before operational details", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
@@ -117,11 +102,7 @@ test("dashboard answers today's schedule before operational details", async ({ p
   const scheduleCardText = await page.locator(".today-schedule-card").innerText();
   expect(scheduleCardText).toMatch(/아침 계획 정리|제품 리뷰 회의|개발 집중 블록|오늘 할 일 정리|성장 과제|저녁 운동/);
   await expect(page.locator(".today-schedule-card").getByText(/나머지 \d+개 일정은 접어 두었습니다/)).toBeVisible();
-  await expect(page.getByText(/승인 전에는|승인할 조정안은 없습니다/).first()).toBeVisible();
-
-  const scheduleTop = await page.locator(".today-flow-card").boundingBox();
-  const approvalTop = await page.locator(".ai-approval-card").boundingBox();
-  expectVisualPrecedence(scheduleTop, approvalTop);
+  await expect(page.getByText(/승인 전에는|승인할 조정안은 없습니다|승인 전 안전/).first()).toHaveCount(0);
 });
 
 test("stacked briefing keeps today's schedule before quiet AI status when no approval is pending", async ({
@@ -148,8 +129,8 @@ test("stacked briefing keeps today's schedule before quiet AI status when no app
     timeout: 30_000,
   });
   await expect(page.getByRole("heading", { name: "오늘 일정 핵심", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "지금 승인할 조정안은 없습니다." })).toBeVisible();
-  await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card", ".ai-approval-card"]);
+  await expect(page.locator(".ai-approval-card")).toHaveCount(0);
+  await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card"]);
 });
 
 test("stacked briefing keeps today's schedule before pending approval with visible actions", async ({
@@ -179,6 +160,6 @@ test("stacked briefing keeps today's schedule before pending approval with visib
   await expect(page.getByRole("heading", { name: "적용 전 조정안을 확인해보세요." })).toBeVisible();
   await expect(page.getByRole("button", { name: "보류" })).toBeVisible();
   await expect(page.getByRole("button", { name: "승인 적용" })).toBeVisible();
-  await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toBeVisible();
+  await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
   await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card", ".ai-approval-card"]);
 });

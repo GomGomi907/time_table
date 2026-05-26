@@ -328,6 +328,22 @@ export const api = {
     });
   },
 
+  completeScheduleBlock(blockId: string) {
+    return requestEnvelope<FocusCurrentView>(`/api/focus/current/schedule-blocks/${blockId}/complete`, {
+      method: "POST",
+    });
+  },
+
+  postponeScheduleBlock(blockId: string, reason: string) {
+    return requestEnvelope<FocusCurrentView>(`/api/focus/current/schedule-blocks/${blockId}/postpone`, {
+      method: "POST",
+      body: JSON.stringify({
+        reason,
+        requestAiReschedule: true,
+      }),
+    });
+  },
+
   extendFocusItem(itemType: string, itemId: string, expectedExtraMinutes: number) {
     if (itemType.toLowerCase() !== "event") {
       throw new Error("현재 항목은 시간 연장을 지원하지 않습니다.");

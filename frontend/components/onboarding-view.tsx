@@ -6,48 +6,33 @@ import { useEffect, useMemo, useState } from "react";
 import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { api } from "@/lib/api";
-import { formatDateTime, formatServiceCopy } from "@/lib/format";
-import { writeOnboardingDayHandoff } from "@/lib/onboarding-day-handoff";
+import { formatServiceCopy } from "@/lib/format";
 import { CATEGORY_LABELS } from "@/lib/schedule";
 import { OnboardingQuestion, OnboardingStatus } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
 
 type AsyncPhase = "idle" | "loading" | "ready" | "error";
 
-const EMPTY_IMPORT_SUMMARY = {
-  calendarEventCount: 0,
-  taskCount: 0,
-  scheduleBlockCount: 0,
-  goalCount: 0,
-  lastCalendarSyncAt: null,
-  lastTaskSyncAt: null,
-  workspaceSummary: "아직 가져온 데이터가 많지 않아 생활 리듬 기준을 먼저 바탕으로 잡겠습니다.",
-  sourceLabel: "가져온 데이터가 적어도 생활 리듬 기준만 있으면 첫 조정안을 충분히 만들 수 있습니다.",
-} as const;
 
 const QUESTION_GROUPS = [
   {
     id: "morning",
     title: "평일 시작 기준",
-    description: "오전 블록을 잡을 때 먼저 지켜야 할 리듬입니다.",
     questionIds: ["wakeTime", "workStartTime"],
   },
   {
     id: "evening",
     title: "저녁과 마감 기준",
-    description: "회복 시간과 수면 구간을 무리하게 침범하지 않도록 쓰입니다.",
     questionIds: ["dinnerTime", "sleepTime"],
   },
   {
     id: "weekend",
     title: "주말 한 칸의 성향",
-    description: "주말 블록을 회복형으로 둘지, 몰입형으로 둘지 결정합니다.",
     questionIds: ["weekendStyle"],
   },
   {
     id: "focus",
     title: "집중 실행 기준",
-    description: "추천 할 일, 전환 여유, 조정안 제안 빈도에 쓰이는 실행 기준입니다.",
     questionIds: ["focusSessionMinutes", "focusBreakMinutes", "focusInterventionStyle"],
   },
 ] as const;
@@ -106,7 +91,6 @@ export function OnboardingView() {
   const [isEditingAnswers, setIsEditingAnswers] = useState(false);
 
   const questions = useMemo(() => onboardingStatus?.questions ?? [], [onboardingStatus?.questions]);
-  const importSummary = onboardingStatus?.importSummary ?? EMPTY_IMPORT_SUMMARY;
   const displayName = onboardingStatus?.displayName || session?.displayName || "새 사용자";
   const onboardingTimeZone = onboardingStatus?.timezone || session?.timezone;
   const suggestion = onboardingStatus?.experience?.suggestion ?? null;
@@ -264,17 +248,6 @@ export function OnboardingView() {
       });
       applyOnboardingStatus(response.status);
 
-      if (session?.userId) {
-        const handoffSuggestion = response.appliedSuggestion ?? suggestion;
-        writeOnboardingDayHandoff(session.userId, {
-          appliedSuggestion: Boolean(applySuggestion && response.appliedSuggestion),
-          suggestionSummary: handoffSuggestion?.summary ?? null,
-          suggestionExplanation:
-            handoffSuggestion?.explanation ?? onboardingStatus?.experience?.summary ?? null,
-          answers: answerSummary,
-        });
-      }
-
       await Promise.all([refreshSession(), refreshOnboarding()]);
       showNotice({
         tone: "success",
@@ -347,20 +320,6 @@ export function OnboardingView() {
               <span />
               <span />
             </div>
-            <div className="onboarding-loading-points">
-              <div className="onboarding-loading-point">
-                <strong>지금 하는 일</strong>
-                <span>캘린더와 할 일을 묶어 이번 주 일정을 먼저 파악하고 있습니다.</span>
-              </div>
-              <div className="onboarding-loading-point">
-                <strong>곧 확인할 기준</strong>
-                <span>평일 시작, 저녁 마감, 주말 한 칸처럼 캘린더 밖의 리듬만 묻습니다.</span>
-              </div>
-              <div className="onboarding-loading-point">
-                <strong>마지막 단계</strong>
-                <span>답변이 들어오면 첫 일정 조정안을 만들어 보여드립니다.</span>
-              </div>
-            </div>
             {bootstrapMessage ? <p className="micro-copy">{bootstrapMessage}</p> : null}
             {bootstrapPhase === "error" ? (
               <div className="guest-actions">
@@ -373,29 +332,6 @@ export function OnboardingView() {
               </div>
             ) : null}
           </section>
-
-          <aside className="onboarding-loading-stats">
-            <article className="surface-card onboarding-stat-card">
-              <strong>가져온 일정</strong>
-              <span>{importSummary.calendarEventCount}건</span>
-            </article>
-            <article className="surface-card onboarding-stat-card">
-              <strong>가져온 할 일</strong>
-              <span>{importSummary.taskCount}건</span>
-            </article>
-            <article className="surface-card onboarding-stat-card">
-              <strong>기본 루틴 블록</strong>
-              <span>{importSummary.scheduleBlockCount}건</span>
-            </article>
-            <article className="surface-card onboarding-stat-card">
-              <strong>최근 캘린더 확인</strong>
-              <span>{formatDateTime(importSummary.lastCalendarSyncAt, onboardingTimeZone)}</span>
-            </article>
-            <article className="surface-card onboarding-stat-card onboarding-stat-card-wide">
-              <strong>현재 확인한 내용</strong>
-              <span>{importSummary.workspaceSummary}</span>
-            </article>
-          </aside>
         </div>
       </div>
     );
@@ -412,38 +348,6 @@ export function OnboardingView() {
               이미 읽은 일정과 할 일은 그대로 두고, 캘린더에 잘 적지 않는 생활 리듬만 짧게 정리합니다.
               이 기준이 이후 조정안을 만들 때 먼저 지킬 출발점이 됩니다.
             </p>
-
-            <div className="onboarding-step-list">
-              <div className="onboarding-step-item completed">
-                <strong>1. 이번 주 데이터 읽기</strong>
-                <span>{bootstrapMessage ?? "캘린더와 할 일을 먼저 확인했습니다."}</span>
-              </div>
-              <div className="onboarding-step-item active">
-                <strong>2. 생활 리듬 설정</strong>
-                <span>평일 시작, 저녁 마감, 주말 성향만 짧게 맞춥니다.</span>
-              </div>
-              <div className="onboarding-step-item">
-                <strong>3. 첫 일정 조정안 확인</strong>
-                <span>답변을 반영한 실제 루틴 후보를 바로 보여드립니다.</span>
-              </div>
-            </div>
-
-            <div className="onboarding-overview-list">
-              <div className="onboarding-overview-item">
-                <strong>이미 확인한 것</strong>
-                <span>{importSummary.workspaceSummary}</span>
-              </div>
-              <div className="onboarding-overview-item">
-                <strong>이번에 정할 기준</strong>
-                <span>평일 아침, 저녁 회복 구간, 주말 한 칸의 기본 성향</span>
-              </div>
-              <div className="onboarding-overview-item">
-                <strong>현재 데이터 범위</strong>
-                <span>
-                  일정 {importSummary.calendarEventCount}건 · 할 일 {importSummary.taskCount}건
-                </span>
-              </div>
-            </div>
           </section>
 
           <section className="onboarding-main">
@@ -461,32 +365,17 @@ export function OnboardingView() {
                 </span>
               </div>
 
-              <section className="onboarding-guidance-card">
-                <strong>이 답변으로 달라지는 점</strong>
-                <div className="onboarding-guidance-list">
-                  <span>업무 시작 전 준비 시간과 이동 시간을 먼저 보호합니다.</span>
-                  <span>저녁 식사와 수면 구간을 우선 지켜 무리한 야간 배치를 피합니다.</span>
-                  <span>주말 한 칸도 회복형인지 몰입형인지에 맞춰 제안 강도를 조절합니다.</span>
-                </div>
-              </section>
-
-              <p className="onboarding-mobile-default-note">
-                모바일에서는 하루 시작과 끝만 먼저 정합니다. 업무 시작, 저녁, 주말, 집중 기준은 기본값으로 시작하고 나중에 바꿀 수 있습니다.
-              </p>
-
               <div className="onboarding-question-groups">
                 {groupedQuestions.map((group) => (
                   <section key={group.id} className="onboarding-group-card">
                     <div className="onboarding-group-head">
                       <strong>{group.title}</strong>
-                      <span>{group.description}</span>
                     </div>
 
                     {group.questions.map((question) => (
                       <section key={question.id} className="onboarding-question-block">
                         <div className="onboarding-question-head">
                           <strong>{question.title}</strong>
-                          <span>{question.description}</span>
                         </div>
                         <div className="onboarding-option-grid">
                           {question.options.map((option) => {
@@ -504,7 +393,6 @@ export function OnboardingView() {
                                 }
                               >
                                 <strong>{option.label}</strong>
-                                <span>{option.helper}</span>
                               </button>
                             );
                           })}
@@ -516,10 +404,6 @@ export function OnboardingView() {
               </div>
 
               <div className="onboarding-step-actions">
-                <div className="onboarding-inline-note">
-                  <strong>현재 읽은 인상</strong>
-                  <span>{importSummary.sourceLabel}</span>
-                </div>
                 <button
                   className="solid-btn"
                   disabled={!canSubmitAnswers || submitPhase === "loading"}
@@ -548,22 +432,6 @@ export function OnboardingView() {
             설정만 저장한 것이 아니라, 지금 답변과 가져온 데이터를 바탕으로 바로 실행 가능한
             첫 조정안을 만들었습니다.
           </p>
-
-          <div className="onboarding-step-list">
-            <div className="onboarding-step-item completed">
-              <strong>1. 이번 주 데이터 읽기</strong>
-              <span>{bootstrapMessage ?? "캘린더와 할 일을 확인했습니다."}</span>
-            </div>
-            <div className="onboarding-step-item completed">
-              <strong>2. 생활 리듬 설정</strong>
-              <span>평일 시작, 저녁 마감, 주말 성향 기준을 저장했습니다.</span>
-            </div>
-            <div className="onboarding-step-item active">
-              <strong>3. 첫 일정 조정안 확인</strong>
-              <span>원하면 지금 바로 적용하고 오늘 브리핑으로 이어질 수 있습니다.</span>
-            </div>
-          </div>
-
           <div className="onboarding-answer-summary">
             {answerSummary.map((item) => (
               <div key={item.id} className="onboarding-answer-chip">
@@ -571,21 +439,6 @@ export function OnboardingView() {
                 <span>{item.value}</span>
               </div>
             ))}
-          </div>
-
-          <div className="onboarding-overview-list">
-            <div className="onboarding-overview-item">
-              <strong>현재 확인한 내용</strong>
-              <span>{importSummary.workspaceSummary}</span>
-            </div>
-            <div className="onboarding-overview-item">
-              <strong>최근 캘린더 확인</strong>
-              <span>{formatDateTime(importSummary.lastCalendarSyncAt, onboardingTimeZone)}</span>
-            </div>
-            <div className="onboarding-overview-item">
-              <strong>최근 할 일 확인</strong>
-              <span>{formatDateTime(importSummary.lastTaskSyncAt, onboardingTimeZone)}</span>
-            </div>
           </div>
         </section>
 
@@ -614,15 +467,6 @@ export function OnboardingView() {
                   {onboardingStatus.experience?.summary ??
                     "현재 일정과 겹치지 않도록 이번 주에 바로 체감될 수 있는 변화만 먼저 골랐습니다."}
                 </p>
-              </div>
-
-              <div className="onboarding-highlight-card">
-                <p className="panel-kicker">먼저 지킬 기준</p>
-                <div className="onboarding-guidance-list">
-                  <span>업무 시작 전에는 아침 준비와 이동 시간을 먼저 남겨 둡니다.</span>
-                  <span>저녁 식사와 수면 구간을 우선 보호해 무리한 야간 배치를 피합니다.</span>
-                  <span>주말 블록도 선택한 성향에 맞춰 회복형 또는 몰입형으로 잡습니다.</span>
-                </div>
               </div>
             </div>
 

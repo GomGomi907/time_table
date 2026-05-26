@@ -49,6 +49,22 @@ public class FocusController {
         return ApiEnvelope.ok(focusService.postponeCurrent(request));
     }
 
+    @PostMapping("/current/schedule-blocks/{blockId}/complete")
+    public ApiEnvelope<FocusService.FocusCurrentView> completeScheduleBlock(@PathVariable UUID blockId) {
+        return ApiEnvelope.ok(focusService.completeScheduleBlock(blockId));
+    }
+
+    @PostMapping("/current/schedule-blocks/{blockId}/postpone")
+    public ApiEnvelope<FocusService.FocusCurrentView> postponeScheduleBlock(
+            @PathVariable UUID blockId,
+            @RequestBody(required = false) FocusService.PostponeScheduleBlockRequest request
+    ) {
+        return ApiEnvelope.ok(focusService.postponeScheduleBlock(
+                blockId,
+                request == null ? new FocusService.PostponeScheduleBlockRequest(null, true) : request
+        ));
+    }
+
     @PostMapping("/current/confirm-overrun")
     public ApiEnvelope<FocusService.FocusCurrentView> confirmOverrun(
             @Valid @RequestBody FocusService.ConfirmOverrunRequest request

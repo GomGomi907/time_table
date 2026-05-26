@@ -13,11 +13,6 @@ import {
   formatServiceCopy,
 } from "@/lib/format";
 import {
-  dismissOnboardingDayHandoffHint,
-  OnboardingDayHandoff,
-  readOnboardingDayHandoff,
-} from "@/lib/onboarding-day-handoff";
-import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
   getCurrentDayName,
@@ -61,31 +56,6 @@ const EMPTY_STATE: DashboardData = {
     topGoal: null,
   },
 };
-
-type DayPeriodKey = "morning" | "afternoon" | "evening";
-
-const DAY_PERIODS: Array<{ key: DayPeriodKey; label: string; range: string }> = [
-  { key: "morning", label: "오전", range: "12시 전" },
-  { key: "afternoon", label: "오후", range: "12–18시" },
-  { key: "evening", label: "저녁", range: "18시 이후" },
-];
-
-function buildTrustLog(sync: SyncStatusEnvelope | null, pendingSuggestion: RescheduleSuggestion | null) {
-  const meta = sync?.meta ?? {};
-  const items = [
-    pendingSuggestion
-      ? "조정안은 사용자가 적용하기 전까지 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다."
-      : "확인 대기 중인 조정안은 없습니다.",
-    meta.externalWriteEnabled
-      ? "승인하면 앱 일정에 저장한 뒤 Google 캘린더와 할 일에도 반영합니다."
-      : "현재는 Google 읽기 모드입니다. 승인하면 앱 일정에 먼저 저장하고 Google 반영은 쓰기 재연결 후 처리합니다.",
-    (meta.pendingProviderWriteCount ?? 0) > 0
-      ? `승인된 변경 ${(meta.pendingProviderWriteCount ?? 0)}건이 Google 반영을 기다립니다.`
-      : "Google 반영 대기열은 비어 있거나 안정 상태입니다.",
-  ];
-
-  return items;
-}
 
 function buildSuggestionEvidence(item: RescheduleSuggestion["previewItems"][number]) {
   const reason = item.reason?.trim();
@@ -166,18 +136,6 @@ function dedupeTodayBlocks(blocks: ScheduleBlock[]) {
   });
 }
 
-function blockOverlapsPeriod(block: ScheduleBlock, period: DayPeriodKey) {
-  const { start, end } = scheduleInterval(block);
-  const periodRange: Record<DayPeriodKey, [number, number]> = {
-    morning: [0, 12 * 60],
-    afternoon: [12 * 60, 18 * 60],
-    evening: [18 * 60, 24 * 60],
-  };
-  const [periodStart, periodEnd] = periodRange[period];
-
-  return start < periodEnd && end > periodStart;
-}
-
 function scheduleInterval(block: ScheduleBlock) {
   const start = minutesFromClock(block.startTime);
   const endClock = minutesFromClock(block.endTime);
@@ -224,31 +182,6 @@ function pickBriefingScheduleRows(blocks: ScheduleBlock[], _currentMinutes: numb
   }
 
   return blocks.slice(0, limit);
-}
-
-function buildDayPeriodSummary(blocks: ScheduleBlock[]) {
-  const grouped: Record<DayPeriodKey, ScheduleBlock[]> = {
-    morning: [],
-    afternoon: [],
-    evening: [],
-  };
-
-  blocks.forEach((block) => {
-    DAY_PERIODS.forEach((period) => {
-      if (blockOverlapsPeriod(block, period.key)) {
-        grouped[period.key].push(block);
-      }
-    });
-  });
-
-  return DAY_PERIODS.map((period) => {
-    const periodBlocks = grouped[period.key];
-    return {
-      ...period,
-      count: periodBlocks.length,
-      lead: periodBlocks[0]?.activity ?? null,
-    };
-  });
 }
 
 function buildDayHeadline(blocks: ScheduleBlock[]) {
@@ -326,7 +259,6 @@ export function DashboardView() {
   const { session, refreshSession } = useSessionBootstrap();
   const showNotice = useAppStore((state) => state.showNotice);
   const [data, setData] = useState<DashboardData>(EMPTY_STATE);
-  const [onboardingHandoff, setOnboardingHandoff] = useState<OnboardingDayHandoff | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
@@ -355,15 +287,6 @@ export function DashboardView() {
 
     void loadDashboard();
   }, [session?.authenticated]);
-
-  useEffect(() => {
-    if (!session?.userId) {
-      setOnboardingHandoff(null);
-      return;
-    }
-
-    setOnboardingHandoff(readOnboardingDayHandoff(session.userId));
-  }, [session?.userId]);
 
   async function withDashboardMutation(
     action: () => Promise<unknown>,
@@ -404,13 +327,11 @@ export function DashboardView() {
   const currentItem = data.focus?.currentItem ?? null;
   const recommendedTask = data.focus?.recommendedTasks[0] ?? null;
   const previewItems = buildPreviewDigest(pendingSuggestion?.previewItems ?? [], 2);
-  const trustLog = buildTrustLog(data.sync, pendingSuggestion);
   const fullTodaySchedule = useMemo(() => {
     const blocks = getDailyBlocks(data.week, todayName);
     const nonSleepBlocks = blocks.filter((block) => block.category !== "SLEEP");
     return sortScheduleBlocks(dedupeTodayBlocks(nonSleepBlocks.length ? nonSleepBlocks : blocks));
   }, [data.week, todayName]);
-  const periodSummary = useMemo(() => buildDayPeriodSummary(fullTodaySchedule), [fullTodaySchedule]);
   const dayHeadline = useMemo(() => buildDayHeadline(fullTodaySchedule), [fullTodaySchedule]);
   const primaryAction = buildPrimaryAction({ pendingSuggestion, currentItem, recommendedTask });
   const liveOrNextBlock =
@@ -446,11 +367,6 @@ export function DashboardView() {
           detail: "여유 있음",
         };
   const pendingProviderWriteCount = data.sync?.meta.pendingProviderWriteCount ?? 0;
-
-  function handleDismissOnboardingHint() {
-    dismissOnboardingDayHandoffHint(session?.userId, "dashboard");
-    setOnboardingHandoff(readOnboardingDayHandoff(session?.userId));
-  }
 
   return (
     <AppShell
@@ -505,27 +421,10 @@ export function DashboardView() {
                   <b>{scheduleRiskSignal.label}</b>
                   {scheduleRiskSignal.detail}
                 </span>
-                <span className="today-risk-chip safe">
-                  <b>승인 전 안전</b>
-                  조정안은 적용 전까지 대기
-                </span>
                 <span className="today-risk-chip action">
                   <b>다음 행동</b>
                   {primaryAction.label}
                 </span>
-              </div>
-
-              <div className="day-period-strip" aria-label="오늘 시간대 요약">
-                {periodSummary.map((period) => (
-                  <div
-                    className={period.count > 0 ? "day-period-chip filled" : "day-period-chip"}
-                    key={period.key}
-                  >
-                    <span>{period.label}</span>
-                    <strong>{period.count ? `${period.count}개` : "비어 있음"}</strong>
-                    <p>{period.lead ? formatServiceCopy(period.lead) : period.range}</p>
-                  </div>
-                ))}
               </div>
             </article>
 
@@ -571,154 +470,82 @@ export function DashboardView() {
               ) : null}
             </article>
 
-            <aside className={`surface-card ai-approval-card ${pendingSuggestion ? "pending" : "quiet"}`}>
-              <p className="eyebrow">{pendingSuggestion ? "승인 필요" : "조정 상태"}</p>
-              <h2>{pendingSuggestion ? "적용 전 조정안을 확인해보세요." : "지금 승인할 조정안은 없습니다."}</h2>
-              <p className="section-header-note">
-                {pendingSuggestion
-                  ? formatServiceCopy(pendingSuggestion.summary)
-                  : "필요할 때만 조정안을 만들고, 사용자가 승인하기 전에는 일정을 바꾸지 않습니다."}
-              </p>
+            {pendingSuggestion ? (
+              <aside className="surface-card ai-approval-card pending">
+                <p className="eyebrow">승인 필요</p>
+                <h2>적용 전 조정안을 확인해보세요.</h2>
+                <p className="section-header-note">{formatServiceCopy(pendingSuggestion.summary)}</p>
 
-              {pendingSuggestion ? (
-                <>
-                  <div className="ai-diff-preview compact">
-                    {previewItems.length ? (
-                      previewItems.map((item) => (
-                        <div className="ai-diff-row" key={`${item.actionType}-${item.title}-${item.detail}`}>
-                          <span>{formatAiActionLabel(item.actionType)}</span>
-                          <strong>{formatServiceCopy(item.title)}</strong>
-                          <div className="ai-diff-line">
-                            <b>확인한 내용</b>
-                            <p>{buildSuggestionEvidence(item)}</p>
-                          </div>
-                          <div className="ai-diff-line after">
-                            <b>예상 영향</b>
-                            <p>
-                              {formatAiPreviewDetail(item.detail) ??
-                                "빈 시간과 보호 시간을 기준으로 재배치합니다."}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="ai-diff-row">
-                        <span>검토</span>
-                        <strong>{formatServiceCopy(pendingSuggestion.summary)}</strong>
+                <div className="ai-diff-preview compact">
+                  {previewItems.length ? (
+                    previewItems.map((item) => (
+                      <div className="ai-diff-row" key={`${item.actionType}-${item.title}-${item.detail}`}>
+                        <span>{formatAiActionLabel(item.actionType)}</span>
+                        <strong>{formatServiceCopy(item.title)}</strong>
                         <div className="ai-diff-line">
-                          <b>적용 전</b>
-                          <p>현재 일정은 그대로 유지됩니다.</p>
+                          <b>확인한 내용</b>
+                          <p>{buildSuggestionEvidence(item)}</p>
                         </div>
                         <div className="ai-diff-line after">
-                          <b>적용 후</b>
-                          <p>검토한 조정안만 일정표에 반영됩니다.</p>
+                          <b>예상 영향</b>
+                          <p>{formatAiPreviewDetail(item.detail) ?? "빈 시간과 보호 시간을 기준으로 재배치합니다."}</p>
                         </div>
                       </div>
-                    )}
-                  </div>
-                  <p className="approval-guard-copy">
-                    승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.
-                  </p>
-                  {pendingProviderWriteCount > 0 ? (
-                    <p className="approval-guard-copy sync-pending-copy">
-                      Google 반영 대기 {pendingProviderWriteCount}건이 있습니다. 앱 일정에는 저장되어 있습니다.
-                    </p>
-                  ) : null}
-                  <div className="suggestion-actions approval-actions">
-                    <button
-                      className="ghost-btn"
-                      disabled={isMutating}
-                      onClick={() =>
-                        void withDashboardMutation(
-                          () => api.rejectSuggestion(pendingSuggestion.id),
-                          "조정안을 보류했습니다.",
-                          "조정안 처리에 실패했습니다.",
-                        )
-                      }
-                      type="button"
-                    >
-                      보류
-                    </button>
-                    <button
-                      className="solid-btn"
-                      disabled={isMutating || !pendingSuggestion.executable}
-                      onClick={() =>
-                        void withDashboardMutation(
-                          () => api.applySuggestion(pendingSuggestion.id),
-                          "조정안을 적용했습니다.",
-                          "조정안 처리에 실패했습니다.",
-                        )
-                      }
-                      type="button"
-                    >
-                      승인 적용
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="quiet-assistant-list">
-                  {trustLog.slice(0, 2).map((item) => (
-                    <span key={item}>{item}</span>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="ai-diff-row">
+                      <span>검토</span>
+                      <strong>{formatServiceCopy(pendingSuggestion.summary)}</strong>
+                      <div className="ai-diff-line">
+                        <b>현재</b>
+                        <p>현재 일정은 그대로 유지됩니다.</p>
+                      </div>
+                      <div className="ai-diff-line after">
+                        <b>적용 후</b>
+                        <p>검토한 조정안만 일정표에 반영됩니다.</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              <div className="next-action-card">
-                <span>다음 행동</span>
-                <strong>{primaryAction.label}</strong>
-                <p>{primaryAction.detail}</p>
-                <Link className="ghost-btn link-btn" href={primaryAction.href}>
-                  이동하기
-                </Link>
-              </div>
-            </aside>
+                {pendingProviderWriteCount > 0 ? (
+                  <p className="approval-guard-copy sync-pending-copy">
+                    Google 반영 대기 {pendingProviderWriteCount}건이 있습니다. 앱 일정에는 저장되어 있습니다.
+                  </p>
+                ) : null}
+                <div className="suggestion-actions approval-actions">
+                  <button
+                    className="ghost-btn"
+                    disabled={isMutating}
+                    onClick={() =>
+                      void withDashboardMutation(
+                        () => api.rejectSuggestion(pendingSuggestion.id),
+                        "조정안을 보류했습니다.",
+                        "조정안 처리에 실패했습니다.",
+                      )
+                    }
+                    type="button"
+                  >
+                    보류
+                  </button>
+                  <button
+                    className="solid-btn"
+                    disabled={isMutating || !pendingSuggestion.executable}
+                    onClick={() =>
+                      void withDashboardMutation(
+                        () => api.applySuggestion(pendingSuggestion.id),
+                        "조정안을 적용했습니다.",
+                        "조정안 처리에 실패했습니다.",
+                      )
+                    }
+                    type="button"
+                  >
+                    승인 적용
+                  </button>
+                </div>
+              </aside>
+            ) : null}
           </section>
 
-          {onboardingHandoff && !onboardingHandoff.dashboardDismissed ? (
-            <section className="surface-card onboarding-day-hint">
-              <div className="onboarding-day-hint-head">
-                <div className="onboarding-day-hint-copy">
-                  <p className="eyebrow">첫날 안내</p>
-                  <h2>
-                    {onboardingHandoff.appliedSuggestion
-                      ? "첫 주 일정을 바로 반영했습니다."
-                      : "첫 주 일정 기준을 먼저 잡아 두었습니다."}
-                  </h2>
-                  <p>
-                    {onboardingHandoff.suggestionExplanation ??
-                      "처음 설정에서 정한 생활 리듬을 기준으로 이번 주 일정 조정이 시작됩니다."}
-                  </p>
-                </div>
-
-                <button
-                  className="ghost-btn secondary-action-btn"
-                  onClick={handleDismissOnboardingHint}
-                  type="button"
-                >
-                  닫기
-                </button>
-              </div>
-
-              <div className="onboarding-day-answer-list">
-                {onboardingHandoff.answers.slice(0, 4).map((answer) => (
-                  <div key={answer.id} className="onboarding-day-chip">
-                    <strong>{answer.title}</strong>
-                    <span>{answer.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="onboarding-day-hint-actions">
-                <p className="micro-copy">
-                  {onboardingHandoff.suggestionSummary ??
-                    "주간 일정에서 첫 조정안을 확인하거나, 다시 다듬어 달라고 요청할 수 있습니다."}
-                </p>
-                <Link className="solid-btn link-btn" href="/schedule">
-                  주간 일정 보기
-                </Link>
-              </div>
-            </section>
-          ) : null}
 
         </>
       ) : null}

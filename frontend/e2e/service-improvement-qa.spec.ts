@@ -215,9 +215,9 @@ test("service improvement QA captures product evidence and issue signals", async
   const dashboardHasTightTransitionWarning = text.includes("빡빡한 전환") && text.includes("확인 필요");
   const dashboardHasPremiumRiskCue =
     dashboardHasTightTransitionWarning &&
-    text.includes("승인 전 안전") &&
-    text.includes("조정안은 적용 전까지 대기") &&
-    text.includes("다음 행동");
+    text.includes("다음 행동") &&
+    !text.includes("승인 전 안전") &&
+    !text.includes("조정안은 적용 전까지 대기");
   expect(dashboardHasTightTransitionWarning).toBe(true);
   expect(dashboardHasPremiumRiskCue).toBe(true);
   scenarios.push({
@@ -259,8 +259,8 @@ test("service improvement QA captures product evidence and issue signals", async
     status: dashboardHasPremiumRiskCue ? "pass" : "fail",
     evidence: ".omx/screenshots/service-improvement-qa/mobile-dashboard-briefing-390.png",
     note: dashboardHasPremiumRiskCue
-      ? "과밀 신호, 승인 전 안전, 다음 행동을 첫 화면에서 칩으로 동시에 확인한다."
-      : "첫 화면의 위험/안전/행동 신호가 충분히 묶여 보이지 않는다.",
+      ? "과밀 신호와 다음 행동을 첫 화면에서 간결한 칩으로 확인한다."
+      : "첫 화면의 위험/행동 신호가 충분히 묶여 보이지 않는다.",
   });
 
   await ensurePendingSuggestion(page);
@@ -269,12 +269,12 @@ test("service improvement QA captures product evidence and issue signals", async
   await capture(page, "mobile-dashboard-pending-approval", { width: 390, height: 1000 });
   text = await bodyText(page);
   const hasApprovalActions = text.includes("보류") && text.includes("승인 적용");
-  const hasApprovalGuard = text.includes("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.");
+  const hasApprovalGuard = text.includes("검토한 조정안만 일정표에 반영됩니다.");
   scenarios.push({
     id: "S5",
     status: hasApprovalActions && hasApprovalGuard ? "pass" : "fail",
     evidence: ".omx/screenshots/service-improvement-qa/mobile-dashboard-pending-approval-390.png",
-    note: "조정안의 보류/승인 CTA와 승인 전 안전 문구를 확인했다.",
+    note: "조정안의 보류/승인 CTA와 검토 후 반영 문구를 확인했다.",
   });
 
   await page.goto("/schedule");
@@ -287,7 +287,8 @@ test("service improvement QA captures product evidence and issue signals", async
   const scheduleText = text;
   const scheduleHasSuggestionSummary =
     scheduleText.includes("변경 묶음") &&
-    scheduleText.includes("승인 전 안전") &&
+    scheduleText.includes("적용 대기") &&
+    scheduleText.includes("사용자 확인 필요") &&
     scheduleText.includes("권한 상태 확인 후");
   scenarios.push({
     id: "S8",
@@ -329,7 +330,7 @@ test("service improvement QA captures product evidence and issue signals", async
     note: "추천 할 일 CTA와 다음 행동/다음 일정 맥락을 함께 확인했다.",
   });
 
-  const scheduleHasApprovalGuard = scheduleText.includes("적용 전에는 앱 일정과 Google 캘린더와 할 일을 바꾸지 않습니다.");
+  const scheduleHasApprovalGuard = scheduleText.includes("사용자가 적용하면") && scheduleText.includes("권한 상태에 맞춰 처리합니다.");
   expect(loginPromisesTodayBriefing).toBe(true);
   expect(loginHasBriefingPreview).toBe(true);
   expect(scheduleHasApprovalGuard).toBe(true);
@@ -351,7 +352,7 @@ test("service improvement QA captures product evidence and issue signals", async
       scenario: "conflict",
       user_impact: "일정 겹침/과밀 상태를 자동으로 재현하고 검증하는 QA 안전망이 약해 향후 회귀를 놓칠 수 있다.",
       expected: "겹침/과밀 seed와 명확한 경고 문구가 반복 가능한 테스트로 확인되어야 한다.",
-      actual: "현재 QA는 조정안 안전 문구와 화면 증거는 확보했지만, 겹침 자동 seed는 별도 확장이 필요하다.",
+      actual: "현재 QA는 간소화된 조정안 문구와 화면 증거는 확보했지만, 겹침 자동 seed는 별도 확장이 필요하다.",
       evidence: ".omx/screenshots/service-improvement-qa/desktop-schedule-1440.png",
       recommendation: "Playwright에 겹침/과밀 API seed 또는 fixture를 추가하고 dashboard 경고 문구를 assertion한다.",
       owner_lane: "test",

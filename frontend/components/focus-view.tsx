@@ -253,6 +253,11 @@ export function FocusView() {
   const currentMinutes = getCurrentMinutes(session?.timezone);
   const currentItem = data.focus?.currentItem ?? null;
   const recommendedTask = data.focus?.recommendedTasks[0] ?? null;
+  const actionableScheduleBlock = !currentItem
+    ? data.focus?.scheduleContext?.currentBlock ?? data.focus?.scheduleContext?.nextBlock ?? null
+    : null;
+  const canCompleteScheduleBlock =
+    data.focus?.scheduleContext?.state === "ACTIVE_BLOCK" && Boolean(data.focus.scheduleContext.currentBlock);
   const pendingSuggestion = data.suggestions.find((suggestion) => suggestion.status === "pending") ?? null;
   const pendingConflictCount = data.suggestions.filter((suggestion) => suggestion.status === "pending").length;
   const primaryTitle = focusTitle(data.focus, fallbackBlock?.activity ?? null);
@@ -423,6 +428,44 @@ export function FocusView() {
                     : null
                 }
               />
+              {actionableScheduleBlock ? (
+                <div className="focus-action-stack">
+                  <div className="focus-actions">
+                    {canCompleteScheduleBlock ? (
+                      <button
+                        className="solid-btn"
+                        disabled={isMutating}
+                        onClick={() =>
+                          void withFocusMutation(
+                            () => api.completeScheduleBlock(actionableScheduleBlock.id),
+                            "현재 일정 블록을 완료했습니다.",
+                          )
+                        }
+                        type="button"
+                      >
+                        일정 완료
+                      </button>
+                    ) : null}
+                    <button
+                      className={canCompleteScheduleBlock ? "ghost-btn" : "solid-btn"}
+                      disabled={isMutating}
+                      onClick={() =>
+                        void withFocusMutation(
+                          () =>
+                            api.postponeScheduleBlock(
+                              actionableScheduleBlock.id,
+                              "실행 모드에서 일정 블록을 미뤘습니다.",
+                            ),
+                          "일정 블록을 30분 미루고 조정 요청을 만들었습니다.",
+                        )
+                      }
+                      type="button"
+                    >
+                      미루기
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </section>
 
             <FocusRailCard

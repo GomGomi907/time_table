@@ -274,4 +274,70 @@ class FocusControllerTest {
                 .andExpect(jsonPath("$.data[0].status").value("pending"))
                 .andExpect(jsonPath("$.data[0].triggerType").value("postpone"));
     }
+
+    @Test
+    void completeActiveScheduleBlockShortensCurrentBlock() throws Exception {
+        ZoneId zoneId = ZoneId.of(user.getTimezone());
+        LocalTime now = LocalTime.now(zoneId).withSecond(0).withNano(0);
+
+        ScheduleBlock block = new ScheduleBlock();
+        block.setUserId(user.getId());
+        block.setDayOfWeek(LocalDate.now(zoneId).getDayOfWeek());
+        block.setStartTime(now.minusMinutes(30));
+        block.setEndTime(now.plusMinutes(45));
+        block.setActivity("완료할 현재 루틴");
+        block.setCategory(ScheduleCategory.WORK);
+        block.setSourceType(ScheduleSourceType.MANUAL);
+        block.setSourceRef("test");
+        block = scheduleBlockRepository.save(block);
+
+        mockMvc.perform(post("/api/focus/current/schedule-blocks/{blockId}/complete", block.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.focusState").exists());
+
+        ScheduleBlock completed = scheduleBlockRepository.findById(block.getId()).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(completed.getEndTime()).isEqualTo(now);
+        org.assertj.core.api.Assertions.assertThat(completed.getSourceRef()).isEqualTo("focus-complete");
+    }
+
+    @Test
+    void postponeScheduleBlockShiftsBlockAndCreatesPendingSuggestion() throws Exception {
+        DayOfWeek tomorrow = LocalDate.now(ZoneId.of(user.getTimezone())).plusDays(1).getDayOfWeek();
+
+        ScheduleBlock block = new ScheduleBlock();
+        block.setUserId(user.getId());
+        block.setDayOfWeek(tomorrow);
+        block.setStartTime(LocalTime.of(9, 0));
+        block.setEndTime(LocalTime.of(10, 0));
+        block.setActivity("미룰 루틴");
+        block.setCategory(ScheduleCategory.WORK);
+        block.setSourceType(ScheduleSourceType.MANUAL);
+        block.setSourceRef("test");
+        block = scheduleBlockRepository.save(block);
+
+        mockMvc.perform(post("/api/focus/current/schedule-blocks/{blockId}/postpone", block.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "사용자가 실행 모드에서 미루기를 눌렀습니다.",
+                                  "requestAiReschedule": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.focusState").exists());
+
+        ScheduleBlock postponed = scheduleBlockRepository.findById(block.getId()).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(postponed.getStartTime()).isEqualTo(LocalTime.of(9, 30));
+        org.assertj.core.api.Assertions.assertThat(postponed.getEndTime()).isEqualTo(LocalTime.of(10, 30));
+        org.assertj.core.api.Assertions.assertThat(postponed.getSourceRef()).isEqualTo("focus-postpone");
+
+        mockMvc.perform(get("/api/agent/suggestions").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].status").value("pending"))
+                .andExpect(jsonPath("$.data[0].triggerType").value("postpone"));
+    }
 }
