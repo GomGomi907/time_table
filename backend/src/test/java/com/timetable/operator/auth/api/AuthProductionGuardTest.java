@@ -34,6 +34,6 @@ class AuthProductionGuardTest {
     @Test
     void mockLoginEndpointIsNotPublicWhenMockLoginIsDisabled() throws Exception {
         mockMvc.perform(get("/api/auth/mock/login"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }
