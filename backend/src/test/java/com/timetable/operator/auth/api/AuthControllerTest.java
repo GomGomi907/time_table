@@ -37,6 +37,15 @@ class AuthControllerTest {
     }
 
     @Test
+    void googleStartUsesSameOriginMockLoginPath() throws Exception {
+        mockMvc.perform(get("/api/auth/google/start"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.url").value("/api/auth/mock/login"))
+                .andExpect(jsonPath("$.message").value("Google Client Secret이 설정되지 않아 개발용 Mock 로그인으로 진행합니다."));
+    }
+
+    @Test
     void mockLoginAcceptsCustomIdentityForE2eIsolation() throws Exception {
         mockMvc.perform(get("/api/auth/mock/login")
                         .param("email", "e2e-user@time-table.test")

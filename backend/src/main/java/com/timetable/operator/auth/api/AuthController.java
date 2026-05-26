@@ -38,19 +38,17 @@ public class AuthController {
     }
 
     @GetMapping("/google/start")
-    public GoogleStartResponse startGoogleLogin(HttpServletRequest request) {
-        String origin = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
-
+    public GoogleStartResponse startGoogleLogin() {
         if (!appProperties.googleOauthEnabled() && appProperties.mockLoginEnabled()) {
             return new GoogleStartResponse(
                     true,
-                    origin + "/api/auth/mock/login",
+                    "/api/auth/mock/login",
                     "Google Client Secret이 설정되지 않아 개발용 Mock 로그인으로 진행합니다."
             );
         }
 
         if (appProperties.googleOauthEnabled()) {
-            return new GoogleStartResponse(true, origin + "/oauth2/authorization/google", null);
+            return new GoogleStartResponse(true, "/oauth2/authorization/google", null);
         }
 
         return new GoogleStartResponse(

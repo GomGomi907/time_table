@@ -33,7 +33,7 @@ public class GoogleOAuthConfig {
                 .clientId(credentials.clientId())
                 .clientSecret(credentials.clientSecret())
                 .scope(appProperties.googleOauthScopes())
-                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                .redirectUri(appProperties.frontendBaseUrl() + "/login/oauth2/code/{registrationId}")
                 .build();
         return new InMemoryClientRegistrationRepository(googleRegistration);
     }
