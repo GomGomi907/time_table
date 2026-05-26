@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(properties = {
@@ -26,6 +29,9 @@ class AuthGoogleConfiguredTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private ClientRegistrationRepository clientRegistrationRepository;
+
     @Test
     void googleStartUsesSameOriginAuthorizationPathWhenOauthIsConfigured() throws Exception {
         mockMvc.perform(get("/api/auth/google/start"))
@@ -40,5 +46,16 @@ class AuthGoogleConfiguredTest {
         mockMvc.perform(get("/api/dashboard/summary"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist("Location"));
+    }
+
+    @Test
+    void googleTokenExchangeUsesClientSecretPostAuthentication() {
+        var repository = (InMemoryClientRegistrationRepository) clientRegistrationRepository;
+        var googleRegistration = repository.findByRegistrationId("google");
+
+        org.assertj.core.api.Assertions.assertThat(googleRegistration.getClientAuthenticationMethod())
+                .isEqualTo(ClientAuthenticationMethod.CLIENT_SECRET_POST);
+        org.assertj.core.api.Assertions.assertThat(googleRegistration.getRedirectUri())
+                .isEqualTo("https://timetable.example.test/login/oauth2/code/{registrationId}");
     }
 }

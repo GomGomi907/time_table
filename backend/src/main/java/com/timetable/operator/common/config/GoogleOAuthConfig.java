@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 
 @Configuration
 @RequiredArgsConstructor
@@ -32,6 +33,7 @@ public class GoogleOAuthConfig {
         ClientRegistration googleRegistration = CommonOAuth2Provider.GOOGLE.getBuilder("google")
                 .clientId(credentials.clientId())
                 .clientSecret(credentials.clientSecret())
+                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
                 .scope(appProperties.googleOauthScopes())
                 .redirectUri(appProperties.frontendBaseUrl() + "/login/oauth2/code/{registrationId}")
                 .build();

@@ -42,6 +42,10 @@ APP_FRONTEND_URL=https://timetable-608682434352.asia-northeast2.run.app
 secret 이름, JSON 전체, Gemini API 키, 따옴표가 포함된 문자열을 `GOOGLE_CLIENT_SECRET` 값으로
 넣으면 안 된다.
 
+백엔드는 Google token endpoint에 `client_secret_post` 방식으로 `client_id`와 `client_secret`을
+전송한다. 배포 후에도 `invalid_token_response 401`이 계속되면 코드의 redirect URI 단계가 아니라
+Cloud Run/Secret Manager에 배포된 OAuth client secret 값이 Google Console의 현재 값과 다른 것이다.
+
 요청 scope:
 
 ```text
