@@ -124,7 +124,7 @@ function buildTimerPresentation({
 
   if (recommendedTask) {
     return {
-      label: "추천 집중",
+      label: "지금 시작",
       value: formatRelativeMinutes(recommendedTask.estimatedMinutes),
       context: "바로 시작할 수 있습니다.",
     };
@@ -295,7 +295,7 @@ export function FocusView() {
     if (action === "apply" && !pendingSuggestion.executable) {
       showNotice({
         tone: "error",
-        title: "적용할 변경이 없는 조정안입니다.",
+        title: "적용할 변경이 없습니다.",
       });
       return;
     }
@@ -303,9 +303,9 @@ export function FocusView() {
     void withFocusMutation(
       () =>
         action === "apply"
-          ? api.applySuggestion(pendingSuggestion.id, "실행 모드에서 적용")
-          : api.rejectSuggestion(pendingSuggestion.id, "실행 모드에서 보류"),
-      action === "apply" ? "조정안을 적용했습니다." : "조정안을 보류했습니다.",
+          ? api.applySuggestion(pendingSuggestion.id, "적용")
+          : api.rejectSuggestion(pendingSuggestion.id, "보류"),
+      action === "apply" ? "변경을 적용했습니다." : "변경을 보류했습니다.",
       { syncFocusFromResponse: false },
     );
   }
@@ -334,7 +334,7 @@ export function FocusView() {
               <Link
                 className="ghost-btn link-btn focus-back-btn"
                 href="/dashboard"
-                aria-label="오늘 브리핑으로 돌아가기"
+                aria-label="오늘 화면으로 돌아가기"
               >
                 <svg
                   aria-hidden="true"
@@ -359,24 +359,11 @@ export function FocusView() {
                       currentItem.remainingMinutes,
                     )}입니다.`
                   : recommendedTask
-                    ? "진행 중인 일정은 없지만 바로 시작할 수 있는 추천 할 일이 있습니다."
+                    ? "진행 중인 일정은 없지만 바로 시작할 일이 있습니다."
                     : fallbackBlock
-                      ? "진행 중인 항목이 없어 일정표 기준 다음 일정을 안내합니다. 실제 집중 상태는 시작한 일정이나 할 일이 있을 때 켜집니다."
-                      : "아직 실행할 일정과 추천 할 일이 없습니다."}
+                      ? "진행 중인 항목이 없어 다음 일정을 보여드립니다."
+                      : "아직 실행할 일정과 할 일이 없습니다."}
               </p>
-              <div className="screen-contract-strip focus-contract-strip" aria-label="집중 화면 역할">
-                <span>
-                  <b>확인할 것</b>
-                  지금 하나만 한다면 무엇인가요?
-                </span>
-                <span>
-                  <b>다음 행동</b>
-                  완료, 미루기, 조정 표시
-                </span>
-              </div>
-              {data.focus?.preferenceContext ? (
-                <p className="micro-copy">{formatServiceCopy(data.focus.preferenceContext.guidance)}</p>
-              ) : null}
 
               <div className="timer-ring">
                 <div className="timer-inner">
@@ -404,7 +391,7 @@ export function FocusView() {
                     ? () =>
                         void withFocusMutation(
                           () => api.postponeFocusItem(currentItem.type, currentItem.id, "다음 블록과 충돌 가능성"),
-                          "현재 항목을 미루고 조정이 필요한 항목으로 표시했습니다.",
+                          "현재 항목을 미루고 변경이 필요한 항목으로 표시했습니다.",
                         )
                     : null
                 }
@@ -423,7 +410,7 @@ export function FocusView() {
                     ? () =>
                         void withFocusMutation(
                           () => api.startRecommendedTask(recommendedTask.id),
-                          "추천 할 일을 시작했습니다.",
+                          "할 일을 시작했습니다.",
                         )
                     : null
                 }
@@ -456,7 +443,7 @@ export function FocusView() {
                               actionableScheduleBlock.id,
                               "실행 모드에서 일정 블록을 미뤘습니다.",
                             ),
-                          "일정 블록을 30분 미루고 조정 요청을 만들었습니다.",
+                          "일정 블록을 30분 미루고 변경 요청을 만들었습니다.",
                         )
                       }
                       type="button"

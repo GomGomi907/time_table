@@ -115,12 +115,12 @@ export async function completeOnboardingIfPresent(page: Page) {
   }
 
   await expect(
-    page.getByRole("button", { name: /첫 일정 조정안 만들기|기준만 저장하고 둘러보기/ }).first(),
+    page.getByRole("button", { name: /저장하고 계속|둘러보기|적용하고 시작/ }).first(),
   ).toBeVisible({ timeout: 45_000 });
 
-  const skipReviewButton = page.getByRole("button", { name: /기준만 저장하고 둘러보기/ });
-  if (await skipReviewButton.isVisible({ timeout: 500 }).catch(() => false)) {
-    await skipReviewButton.click();
+  const browseButton = page.getByRole("button", { name: "둘러보기" });
+  if (await browseButton.isVisible({ timeout: 500 }).catch(() => false)) {
+    await browseButton.click();
     await expect(page).toHaveURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });
     return;
   }
@@ -131,12 +131,12 @@ export async function completeOnboardingIfPresent(page: Page) {
   await clickOptionalButton(page, /^23:30/);
   await clickOptionalButton(page, /균형 있게/);
 
-  const createSuggestionButton = page.getByRole("button", { name: /첫 일정 조정안 만들기/ });
-  await expect(createSuggestionButton).toBeEnabled({ timeout: 30_000 });
-  await createSuggestionButton.click();
+  const saveButton = page.getByRole("button", { name: /저장하고 계속/ });
+  await expect(saveButton).toBeEnabled({ timeout: 30_000 });
+  await saveButton.click();
 
-  await expect(skipReviewButton).toBeVisible({ timeout: 30_000 });
-  await skipReviewButton.click();
+  await expect(browseButton).toBeVisible({ timeout: 30_000 });
+  await browseButton.click();
   await expect(page).toHaveURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });
 }
 

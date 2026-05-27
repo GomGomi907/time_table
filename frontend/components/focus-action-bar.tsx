@@ -66,7 +66,7 @@ export function FocusActionBar({
     return (
       <div className="focus-actions">
         <button className="solid-btn" disabled={isPending} onClick={onStartRecommended}>
-          추천 할 일 시작
+          할 일 시작
         </button>
       </div>
     );

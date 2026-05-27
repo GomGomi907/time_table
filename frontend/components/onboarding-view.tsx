@@ -7,7 +7,6 @@ import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { api } from "@/lib/api";
 import { formatServiceCopy } from "@/lib/format";
-import { CATEGORY_LABELS } from "@/lib/schedule";
 import { OnboardingQuestion, OnboardingStatus } from "@/lib/types";
 import { useAppStore } from "@/stores/app-store";
 
@@ -17,12 +16,12 @@ type AsyncPhase = "idle" | "loading" | "ready" | "error";
 const QUESTION_GROUPS = [
   {
     id: "morning",
-    title: "평일 시작 기준",
+    title: "평일 시작",
     questionIds: ["wakeTime", "workStartTime"],
   },
   {
     id: "evening",
-    title: "저녁과 마감 기준",
+    title: "저녁과 마감",
     questionIds: ["dinnerTime", "sleepTime"],
   },
   {
@@ -32,7 +31,7 @@ const QUESTION_GROUPS = [
   },
   {
     id: "focus",
-    title: "집중 실행 기준",
+    title: "집중 실행",
     questionIds: ["focusSessionMinutes", "focusBreakMinutes", "focusInterventionStyle"],
   },
 ] as const;
@@ -93,9 +92,7 @@ export function OnboardingView() {
   const questions = useMemo(() => onboardingStatus?.questions ?? [], [onboardingStatus?.questions]);
   const displayName = onboardingStatus?.displayName || session?.displayName || "새 사용자";
   const onboardingTimeZone = onboardingStatus?.timezone || session?.timezone;
-  const suggestion = onboardingStatus?.experience?.suggestion ?? null;
-  const previewItems = onboardingStatus?.experience?.previewItems ?? [];
-  const suggestionId = suggestion?.id;
+  const suggestionId = onboardingStatus?.experience?.suggestion?.id;
 
   const groupedQuestions = useMemo(
     () =>
@@ -223,8 +220,8 @@ export function OnboardingView() {
       setIsEditingAnswers(false);
       showNotice({
         tone: "success",
-        title: "첫 일정 조정안을 준비했습니다.",
-        detail: "지금 답변을 기준으로 바로 시작할 수 있는 첫 조정안을 확인해 보세요.",
+        title: "설정을 저장했습니다.",
+        detail: "오늘 일정 화면으로 이어집니다.",
       });
     } catch (error) {
       setSubmitPhase("error");
@@ -251,7 +248,7 @@ export function OnboardingView() {
       await Promise.all([refreshSession(), refreshOnboarding()]);
       showNotice({
         tone: "success",
-        title: applySuggestion ? "첫 조정안을 반영했습니다." : "처음 설정을 마쳤습니다.",
+        title: "처음 설정을 마쳤습니다.",
         detail: response.message,
       });
       router.replace("/dashboard");
@@ -275,8 +272,8 @@ export function OnboardingView() {
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">처음 설정</p>
-          <h1>첫 일정 조정을 준비하고 있습니다.</h1>
-          <p>로그인 상태와 설정 단계를 확인한 뒤, 필요한 질문과 첫 조정안 화면으로 이어집니다.</p>
+          <h1>처음 설정을 준비하고 있습니다.</h1>
+          <p>필요한 질문을 준비하고 있습니다.</p>
         </div>
       </div>
     );
@@ -309,12 +306,8 @@ export function OnboardingView() {
       <div className="status-screen onboarding-shell">
         <div className="onboarding-loading-panel">
           <section className="onboarding-loading-copy">
-            <p className="eyebrow">일정 조율 준비</p>
-            <h1>이번 주 일정을 먼저 읽고 있습니다.</h1>
-            <p>
-              연결 상태를 다시 묻기보다, 이번 주 일정과 할 일에서 빈 시간과 리듬을 먼저 읽고
-              있습니다. 잠시 뒤 캘린더에 잘 남지 않는 생활 리듬만 짧게 확인할게요.
-            </p>
+            <p className="eyebrow">처음 설정</p>
+            <h1>필요한 정보를 준비하고 있습니다.</h1>
             <div className="loading-dots" aria-hidden="true">
               <span />
               <span />
@@ -342,23 +335,16 @@ export function OnboardingView() {
       <div className="status-screen onboarding-shell">
         <div className="onboarding-panel onboarding-panel-wide">
           <section className="onboarding-sidebar onboarding-sidebar-compact">
-            <p className="eyebrow">생활 리듬 설정</p>
-            <h1>캘린더에 없는 생활 리듬만 알려 주세요.</h1>
-            <p>
-              이미 읽은 일정과 할 일은 그대로 두고, 캘린더에 잘 적지 않는 생활 리듬만 짧게 정리합니다.
-              이 기준이 이후 조정안을 만들 때 먼저 지킬 출발점이 됩니다.
-            </p>
+            <p className="eyebrow">처음 설정</p>
+            <h1>생활 리듬만 짧게 알려 주세요.</h1>
           </section>
 
           <section className="onboarding-main">
             <article className="surface-card onboarding-card onboarding-question-card">
               <div className="onboarding-stage-head">
                 <div>
-                  <p className="eyebrow">일정 조정 기준 질문</p>
-                  <h2>캘린더 밖의 생활 패턴만 빠르게 맞춥니다.</h2>
-                  <p className="section-header-note">
-                    긴 설정 화면이 아니라, 일정을 조정할 때 먼저 지켜야 할 기준만 정리합니다.
-                  </p>
+                  <p className="eyebrow">생활 리듬</p>
+                  <h2>필요한 항목만 빠르게 맞춥니다.</h2>
                 </div>
                 <span className="accent-pill">
                   {answeredCount} / {questions.length} 답변
@@ -410,7 +396,7 @@ export function OnboardingView() {
                   onClick={() => void handleSubmitAnswers()}
                   type="button"
                 >
-                  {submitPhase === "loading" ? "조정안을 만드는 중..." : "첫 일정 조정안 만들기"}
+                  {submitPhase === "loading" ? "저장 중..." : "저장하고 계속"}
                 </button>
               </div>
 
@@ -424,14 +410,10 @@ export function OnboardingView() {
 
   return (
     <div className="status-screen onboarding-shell">
-      <div className="onboarding-panel onboarding-panel-wide">
+      <div className="onboarding-panel onboarding-panel-wide onboarding-panel-simple">
         <section className="onboarding-sidebar onboarding-sidebar-compact">
-          <p className="eyebrow">첫 일정 조정안</p>
-          <h1>이제 이번 주 일정을 바로 시작할 수 있습니다.</h1>
-          <p>
-            설정만 저장한 것이 아니라, 지금 답변과 가져온 데이터를 바탕으로 바로 실행 가능한
-            첫 조정안을 만들었습니다.
-          </p>
+          <p className="eyebrow">처음 설정</p>
+          <h1>바로 시작할 수 있습니다.</h1>
           <div className="onboarding-answer-summary">
             {answerSummary.map((item) => (
               <div key={item.id} className="onboarding-answer-chip">
@@ -446,56 +428,10 @@ export function OnboardingView() {
           <article className="surface-card onboarding-card onboarding-preview-card">
             <div className="onboarding-stage-head">
               <div>
-                <p className="eyebrow">조정안 확인</p>
-                <h2>이번 주를 이렇게 정리해 볼게요.</h2>
-                <p className="section-header-note">
-                  {suggestion?.explanation ??
-                    onboardingStatus.experience?.summary ??
-                    "지금은 기준만 저장하고 나중에 오늘 브리핑에서 다시 조정안을 받아도 됩니다."}
-                </p>
-              </div>
-              <span className="accent-pill">
-                {previewItems.length > 0 ? `${previewItems.length}개 루틴 후보` : "설명만 있는 제안"}
-              </span>
-            </div>
-
-            <div className="onboarding-preview-hero">
-              <div className="onboarding-highlight-card">
-                <p className="panel-kicker">이번 조정안의 핵심</p>
-                <strong>{suggestion?.summary ?? "기존 일정을 먼저 유지합니다."}</strong>
-                <p>
-                  {onboardingStatus.experience?.summary ??
-                    "현재 일정과 겹치지 않도록 이번 주에 바로 체감될 수 있는 변화만 먼저 골랐습니다."}
-                </p>
+                <p className="eyebrow">완료</p>
+                <h2>오늘 일정으로 이동하세요.</h2>
               </div>
             </div>
-
-            {previewItems.length > 0 ? (
-              <div className="onboarding-preview-list">
-                {previewItems.map((item) => (
-                  <div key={`${item.title}-${item.days}-${item.startTime}`} className="onboarding-preview-item">
-                    <div className="onboarding-preview-copy">
-                      <strong>{formatServiceCopy(item.title)}</strong>
-                      <span>
-                        {item.days} · {item.startTime.slice(0, 5)} - {item.endTime.slice(0, 5)}
-                      </span>
-                    </div>
-                    <div className="onboarding-preview-meta">
-                      <span className="accent-pill subtle">{CATEGORY_LABELS[item.category] ?? item.category}</span>
-                      <p>{formatServiceCopy(item.reason)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <section className="surface-card empty-state subtle">
-                <strong>이번 주는 기존 일정을 먼저 유지하는 편이 자연스럽습니다.</strong>
-                <p>
-                  새로운 루틴을 억지로 넣기보다, 현재 일정 위에서 시작한 뒤 오늘 브리핑에서 상황 변화가
-                  생길 때 다시 조정안을 받는 편이 더 자연스럽습니다.
-                </p>
-              </section>
-            )}
 
             <div className="onboarding-step-actions">
               <button
@@ -514,16 +450,16 @@ export function OnboardingView() {
                   onClick={() => void handleComplete(false)}
                   type="button"
                 >
-                  기준만 저장하고 둘러보기
+                  둘러보기
                 </button>
-                {suggestionId && previewItems.length > 0 ? (
+                {suggestionId ? (
                   <button
                     className="solid-btn"
                     disabled={completionPhase === "loading"}
                     onClick={() => void handleComplete(true)}
                     type="button"
                   >
-                    {completionPhase === "loading" ? "적용 중..." : "이 조정안으로 시작하기"}
+                    {completionPhase === "loading" ? "적용 중..." : "적용하고 시작"}
                   </button>
                 ) : null}
               </div>

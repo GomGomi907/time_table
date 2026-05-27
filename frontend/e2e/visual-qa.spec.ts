@@ -11,6 +11,9 @@ import {
   loginAsUniqueMockUser,
 } from "./helpers";
 
+const BANNED_USER_COPY =
+  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어/;
+
 interface WeekScheduleResponse {
   week: Array<{
     dayOfWeek: string;
@@ -62,7 +65,7 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
   if (new URL(page.url()).pathname.includes("/onboarding")) {
     await expect(
-      page.getByRole("button", { name: /첫 일정 조정안 만들기|기준만 저장하고 둘러보기/ }).first(),
+      page.getByRole("button", { name: /저장하고 계속|둘러보기|적용하고 시작/ }).first(),
     ).toBeVisible({ timeout: 45_000 });
     await page.screenshot({ path: testInfo.outputPath("onboarding.png"), fullPage: true });
   }
@@ -82,13 +85,15 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   }
 
   await page.goto("/dashboard");
-  await expect(page.getByText(/Google 읽기만 가능|Google 연결 필요|Google 읽기·쓰기 가능/).first()).toBeVisible({
+  await expect(page.getByRole("heading", { name: /오늘 일정은|오늘 예정된 일정이 없습니다/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await page.screenshot({ path: testInfo.outputPath("dashboard-sync-state.png"), fullPage: true });
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await page.screenshot({ path: testInfo.outputPath("dashboard-today.png"), fullPage: true });
 
   await page.goto("/schedule");
   await expect(page.getByRole("button", { name: "일정 직접 추가" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
   await expect(page.getByRole("button", { name: new RegExp(escapeRegExp(activeScheduleTitle)) }).first()).toBeVisible({
     timeout: 30_000,
   });
@@ -113,5 +118,6 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
 
   await page.goto("/focus");
   await expect(page.getByText(/지금 실행|지금 할 일/).first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
   await page.screenshot({ path: testInfo.outputPath("focus-mode.png"), fullPage: true });
 });

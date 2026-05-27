@@ -20,6 +20,9 @@ interface SuggestionResponse {
   summary: string;
 }
 
+const BANNED_USER_COPY =
+  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어/;
+
 async function clearPendingSuggestions(page: Page) {
   const suggestions = await backendFetch<ApiEnvelope<SuggestionResponse[]>>(page, "/api/agent/suggestions");
   for (const suggestion of suggestions.data.filter((item) => item.status === "pending")) {
@@ -101,11 +104,12 @@ test("dashboard answers today's schedule before operational details", async ({ p
   await expect(page.getByRole("heading", { name: "오늘 일정 핵심", exact: true })).toBeVisible();
   const scheduleCardText = await page.locator(".today-schedule-card").innerText();
   expect(scheduleCardText).toMatch(/아침 계획 정리|제품 리뷰 회의|개발 집중 블록|오늘 할 일 정리|성장 과제|저녁 운동/);
-  await expect(page.locator(".today-schedule-card").getByText(/나머지 \d+개 일정은 접어 두었습니다/)).toBeVisible();
+  await expect(page.locator(".today-schedule-card").getByText(/나머지 \d+개 일정/)).toBeVisible();
   await expect(page.getByText(/승인 전에는|승인할 조정안은 없습니다|승인 전 안전/).first()).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
 });
 
-test("stacked briefing keeps today's schedule before quiet AI status when no approval is pending", async ({
+test("stacked today view keeps today's schedule first when no approval is pending", async ({
   page,
 }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
@@ -130,10 +134,11 @@ test("stacked briefing keeps today's schedule before quiet AI status when no app
   });
   await expect(page.getByRole("heading", { name: "오늘 일정 핵심", exact: true })).toBeVisible();
   await expect(page.locator(".ai-approval-card")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
   await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card"]);
 });
 
-test("stacked briefing keeps today's schedule before pending approval with visible actions", async ({
+test("stacked today view keeps today's schedule before pending change actions", async ({
   page,
 }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
@@ -157,9 +162,10 @@ test("stacked briefing keeps today's schedule before pending approval with visib
   await expect(page.getByRole("heading", { name: /오늘 일정은/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("heading", { name: "적용 전 조정안을 확인해보세요." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "적용하거나 보류하세요." })).toBeVisible();
   await expect(page.getByRole("button", { name: "보류" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "승인 적용" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "적용" })).toBeVisible();
   await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
   await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card", ".ai-approval-card"]);
 });

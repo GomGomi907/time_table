@@ -5,7 +5,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
 import { api } from "@/lib/api";
-import { formatAiActionLabel, formatAiPreviewDetail, formatClockValue, formatServiceCopy } from "@/lib/format";
+import { formatClockValue, formatServiceCopy } from "@/lib/format";
 import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
@@ -121,66 +121,6 @@ function formatMinuteBoundary(minutes: number) {
 
 function formatRangeBoundary(hour: number) {
   return hour >= 24 ? `다음 ${formatHourLabel(hour)}` : formatHourLabel(hour);
-}
-
-function countPreviewGroups(items: RescheduleSuggestion["previewItems"]) {
-  return new Set(items.map((item) => `${item.actionType}:${item.title}`)).size;
-}
-
-function formatSuggestionPermission(suggestion: RescheduleSuggestion) {
-  if (!suggestion.executable || suggestion.executableCommandCount === 0) {
-    return "검토용 제안입니다. 적용해도 바뀔 일정 항목이 없습니다.";
-  }
-
-  return `사용자가 적용하면 ${countPreviewGroups(suggestion.previewItems)}개 조정 묶음을 앱에 먼저 저장하고 Google 반영은 권한 상태에 맞춰 처리합니다.`;
-}
-
-function formatSuggestionEvidence(reason: string | null, actionType: string) {
-  if (reason?.trim()) {
-    return reason;
-  }
-
-  if (actionType === "SHIFT_BLOCK") {
-    return "충돌 가능 시간과 보호 시간을 함께 보고 이동 후보를 골랐습니다.";
-  }
-  if (actionType === "CREATE_BLOCK") {
-    return "비어 있는 시간에 실행 가능한 새 블록을 확보합니다.";
-  }
-  if (actionType === "UPDATE_BLOCK") {
-    return "기존 블록을 현재 요청에 맞게 조정합니다.";
-  }
-
-  return "요청한 내용과 이번 주 일정을 함께 확인했습니다.";
-}
-
-function buildPreviewDigest(items: RescheduleSuggestion["previewItems"], limit = 4) {
-  const groups = new Map<
-    string,
-    RescheduleSuggestion["previewItems"][number] & { groupedCount: number }
-  >();
-
-  for (const item of items) {
-    const key = `${item.actionType}:${item.title}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.groupedCount += 1;
-      continue;
-    }
-
-    groups.set(key, {
-      ...item,
-      groupedCount: 1,
-    });
-  }
-
-  return Array.from(groups.values()).slice(0, limit).map((item) => ({
-    ...item,
-    title: item.groupedCount > 1 ? `${item.title} · ${item.groupedCount}일 묶음` : item.title,
-    detail:
-      item.groupedCount > 1 && item.detail
-        ? `${item.detail} · 반복 루틴을 한 번에 정리`
-        : item.detail,
-  }));
 }
 
 function normalizeAfterWake(minutes: number, wakeMinutes: number) {
@@ -311,12 +251,10 @@ function getWeekViewRange(
 
 function WeeklyGrid({
   week,
-  pendingSuggestionCount,
   onBlockSelect,
   timeZone,
 }: {
   week: WeekScheduleResponse | null;
-  pendingSuggestionCount: number;
   onBlockSelect: (block: EditableScheduleBlock) => void;
   timeZone?: string;
 }) {
@@ -330,7 +268,10 @@ function WeeklyGrid({
   );
   const busyDays = DAY_ORDER.filter((day) => getVisibleDailyBlocks(week, day).length > 0).length;
   const todayBlocks = getVisibleDailyBlocks(week, currentDay);
-  const currentScheduleBlock = todayBlocks.find((block) => isBlockActive(block, currentMinutes)) ?? null;
+  const activeScheduleBlock = todayBlocks.find((block) => isBlockActive(block, currentMinutes)) ?? null;
+  const nextScheduleBlock = todayBlocks.find((block) => minutesFromClock(block.startTime) > currentMinutes) ?? null;
+  const focusScheduleBlock = activeScheduleBlock ?? nextScheduleBlock ?? todayBlocks[0] ?? null;
+  const focusScheduleLabel = activeScheduleBlock ? "지금 일정" : "다음 일정";
   const viewRange = getWeekViewRange(week, currentMinutes);
   const currentTimelineMinutes = normalizeAfterWake(currentMinutes, viewRange.startMinutes);
   const trackHeight = (viewRange.endMinutes - viewRange.startMinutes) * PIXELS_PER_MINUTE;
@@ -352,8 +293,8 @@ function WeeklyGrid({
               오늘 일정
             </span>
             <span>
-              <strong>{pendingSuggestionCount}</strong>
-              확인할 조정안
+              <strong>{focusScheduleBlock ? formatClockValue(focusScheduleBlock.startTime) : "없음"}</strong>
+              지금/다음
             </span>
             <span>
               <strong>{busyDays}</strong>
@@ -361,8 +302,17 @@ function WeeklyGrid({
             </span>
           </div>
           <p>
-            전체 주간표는 접어 두고, 오늘 일정과 조정 영향부터 확인합니다.
+            오늘 일정과 지금 할 일을 먼저 확인합니다.
           </p>
+          <div className={`mobile-now-card ${focusScheduleBlock ? categoryTone(focusScheduleBlock.category) : "empty"}`}>
+            <span>{focusScheduleLabel}</span>
+            <strong>{focusScheduleBlock ? formatServiceCopy(focusScheduleBlock.activity) : "지금 표시할 일정이 없습니다."}</strong>
+            {focusScheduleBlock ? (
+              <small>
+                {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
+              </small>
+            ) : null}
+          </div>
         </section>
         {mobileDays.map((day) => {
           const isToday = currentDay === day;
@@ -393,13 +343,13 @@ function WeeklyGrid({
                   ))}
                   {blocks.length > previewBlocks.length ? (
                     <p className="mobile-empty-day">
-                      나머지 {blocks.length - previewBlocks.length}개는 필요할 때만 펼쳐 확인합니다.
+                      나머지 {blocks.length - previewBlocks.length}개 일정
                     </p>
                   ) : null}
                 </div>
               ) : (
                 <p className="mobile-empty-day">
-                  빈 시간입니다. 직접 추가하거나 조정안을 요청할 수 있습니다.
+                  빈 시간입니다. 직접 추가하거나 변경을 요청할 수 있습니다.
                 </p>
               )}
             </>
@@ -435,7 +385,7 @@ function WeeklyGrid({
             <p className="panel-kicker">PC 주간 그리드</p>
             <h2>이번 주 시간 배치</h2>
             <p>
-              수면은 접어 두고, 지금 확인할 시간대와 실제 일정 카드를 먼저 보여줍니다.
+              오늘과 지금 할 일을 먼저 보고, 필요한 시간대를 바로 수정합니다.
             </p>
           </div>
           <div className="week-summary-strip" aria-label="주간 일정 요약">
@@ -453,29 +403,29 @@ function WeeklyGrid({
             </span>
           </div>
         </div>
-        {currentScheduleBlock ? (
+        {focusScheduleBlock ? (
           <button
-            className={`current-schedule-card ${categoryTone(currentScheduleBlock.category)}`}
+            className={`current-schedule-card ${categoryTone(focusScheduleBlock.category)}`}
             type="button"
             onClick={() =>
               onBlockSelect({
-                ...currentScheduleBlock,
+                ...focusScheduleBlock,
                 dayOfWeek: currentDay,
               })
             }
           >
-            <span className="current-schedule-kicker">지금 일정</span>
-            <strong>{formatServiceCopy(currentScheduleBlock.activity)}</strong>
+            <span className="current-schedule-kicker">{focusScheduleLabel}</span>
+            <strong>{formatServiceCopy(focusScheduleBlock.activity)}</strong>
             <span className="current-schedule-time">
-              {formatClockValue(currentScheduleBlock.startTime)} - {formatClockValue(currentScheduleBlock.endTime)}
+              {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
             </span>
-            {currentScheduleBlock.note ? <span className="current-schedule-note">{formatServiceCopy(currentScheduleBlock.note)}</span> : null}
+            {focusScheduleBlock.note ? <span className="current-schedule-note">{formatServiceCopy(focusScheduleBlock.note)}</span> : null}
           </button>
         ) : (
-          <div className="current-schedule-card empty" aria-label="현재 진행 중인 일정 없음">
+          <div className="current-schedule-card empty" aria-label="현재 또는 다음 일정 없음">
             <span className="current-schedule-kicker">지금 일정</span>
-            <strong>진행 중인 일정이 없습니다.</strong>
-            <span className="current-schedule-time">아래 일정표에서 다음 일정을 확인해보세요.</span>
+            <strong>표시할 일정이 없습니다.</strong>
+            <span className="current-schedule-time">필요하면 일정을 추가해보세요.</span>
           </div>
         )}
         <div className="week-grid-affordance" aria-hidden="true">
@@ -767,13 +717,13 @@ export function ScheduleView() {
       setRequestReason("");
       showNotice({
         tone: "success",
-        title: "일정 조정 요청을 만들었습니다.",
+        title: "변경 요청을 만들었습니다.",
       });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);
     } catch (requestError) {
       showNotice({
         tone: "error",
-        title: "일정 조정 요청에 실패했습니다.",
+        title: "변경 요청에 실패했습니다.",
         detail:
           requestError instanceof Error ? requestError.message : "잠시 후 다시 시도해 주세요.",
       });
@@ -790,7 +740,7 @@ export function ScheduleView() {
     if (action === "apply" && !suggestion?.executable) {
       showNotice({
         tone: "error",
-        title: "적용할 변경이 없는 조정안입니다.",
+        title: "적용할 변경이 없습니다.",
       });
       return;
     }
@@ -805,13 +755,13 @@ export function ScheduleView() {
 
       showNotice({
         tone: "success",
-        title: action === "apply" ? "조정안을 일정표에 반영했습니다." : "조정안을 보류했습니다.",
+        title: action === "apply" ? "변경을 일정표에 반영했습니다." : "변경을 보류했습니다.",
       });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);
     } catch (decisionError) {
       showNotice({
         tone: "error",
-        title: "조정안 처리에 실패했습니다.",
+        title: "변경 처리에 실패했습니다.",
         detail:
           decisionError instanceof Error
             ? decisionError.message
@@ -829,9 +779,7 @@ export function ScheduleView() {
     <AppShell
       eyebrow="이번 주 확인"
       title="주간 일정"
-      description="이번 주 일정과 겹치는 시간을 확인해보세요. 바꿀 내용은 조정안으로 요청할 수 있습니다."
-      screenQuestion="겹치거나 빡빡한 시간은 어디인가요?"
-      primaryActionLabel={pendingSuggestions.length ? "조정안 확인" : "일정 추가 또는 조정 요청"}
+      description="오늘과 이번 주 일정을 바로 확인하세요."
       actions={
         <button className="ghost-btn" onClick={() => void loadSchedulePage()}>
           새로고침
@@ -841,14 +789,14 @@ export function ScheduleView() {
       {!data.week && status === "loading" ? (
         <section className="surface-card empty-state">
           <strong>주간 일정을 불러오는 중입니다.</strong>
-          <p>일정표와 확인 대기 중인 조정안을 함께 준비하고 있습니다.</p>
+          <p>일정표를 준비하고 있습니다.</p>
         </section>
       ) : null}
 
       {!data.week && status === "error" ? (
         <section className="surface-card empty-state">
           <strong>주간 일정을 불러오지 못했습니다.</strong>
-          <p>{error ?? "서비스 연결을 다시 확인해 주세요."}</p>
+          <p>{error ?? "잠시 후 다시 시도해 주세요."}</p>
         </section>
       ) : null}
 
@@ -856,7 +804,7 @@ export function ScheduleView() {
         <section className="planner-layout schedule-layout">
           <article className="planner-board schedule-main-board">
             <SectionHeader
-              eyebrow="일정 조정"
+              eyebrow="일정 관리"
               title="이번 주 일정표"
               trailing={
                 <div className="board-legend">
@@ -877,12 +825,12 @@ export function ScheduleView() {
             />
 
             <div className="schedule-device-layout">
-              <aside className="schedule-command-panel" aria-label="일정 추가와 조정 요청">
+              <aside className="schedule-command-panel" aria-label="일정 추가와 변경 요청">
                 <section className="ai-compose-card">
                   <SectionHeader
                     eyebrow="일정 관리"
-                    title="일정 추가·조정 요청"
-                    description="직접 추가하거나, 바꿀 일정과 지켜야 할 시간을 바로 요청하세요."
+                    title="AI에게 요청"
+                    description="바꿀 일정과 지켜야 할 시간을 짧게 적으세요."
                   />
 
                   <form className="ai-compose-form" onSubmit={(event) => void handleRequestSuggestion(event)}>
@@ -890,7 +838,7 @@ export function ScheduleView() {
                       className="ai-compose-textarea"
                       value={requestReason}
                       onChange={(event) => setRequestReason(event.target.value)}
-                      placeholder="예: 화요일 저녁 운동을 30분 뒤로 미루고, 금요일 오전엔 집중 업무 2시간을 확보해 줘"
+                      placeholder="예: 내일 오전 회의 준비 시간을 비워줘"
                       rows={2}
                     />
                     <div className="ai-compose-actions">
@@ -913,55 +861,8 @@ export function ScheduleView() {
                       {pendingSuggestions.slice(0, 2).map((suggestion) => (
                         <div className="ai-suggestion-card suggestion-diff-card" key={suggestion.id}>
                           <div className="suggestion-diff-head">
-                            <span className="accent-pill subtle">{suggestion.statusLabel}</span>
-                            <strong>{formatServiceCopy(suggestion.summary)}</strong>
-                            <p>{formatServiceCopy(suggestion.reason ?? suggestion.explanation)}</p>
+                            <strong>요청한 변경이 있습니다.</strong>
                           </div>
-                          <div className="suggestion-summary-strip" aria-label="조정안 핵심 요약">
-                            <span>
-                              <b>{countPreviewGroups(suggestion.previewItems)}개</b>
-                              변경 묶음
-                            </span>
-                            <span>
-                              <b>적용 대기</b>
-                              사용자 확인 필요
-                            </span>
-                            <span>
-                              <b>Google 반영</b>
-                              권한 상태 확인 후
-                            </span>
-                          </div>
-                          {suggestion.previewItems.length ? (
-                            <div className="suggestion-diff-list" aria-label="조정안 변경 미리보기">
-                              {buildPreviewDigest(suggestion.previewItems, 1).map((item, index) => (
-                                <div
-                                  className="suggestion-diff-row"
-                                  key={`${suggestion.id}-${index}-${item.actionType}-${item.targetId ?? item.title}`}
-                                >
-                                  <span className="diff-before">
-                                    <b>대상</b>
-                                    {formatServiceCopy(item.title)}
-                                  </span>
-                                  <span className="diff-after">
-                                    <b>{formatAiActionLabel(item.actionType)}</b>
-                                    {formatAiPreviewDetail(item.detail) ??
-                                      formatServiceCopy(item.reason) ??
-                                      "세부 변경을 확인해보세요."}
-                                  </span>
-                                  <span className="diff-impact">
-                                    <b>근거</b>
-                                    {formatServiceCopy(formatSuggestionEvidence(item.reason, item.actionType))}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          <p className="micro-copy suggestion-permission-copy">
-                            밤 루틴과 겹치는 조정은 적용 시 대체·이동 대상까지 함께 확인합니다.
-                          </p>
-                          <p className="micro-copy suggestion-permission-copy">
-                            {formatSuggestionPermission(suggestion)}
-                          </p>
                           <div className="suggestion-actions">
                             <button
                               className="ghost-btn"
@@ -990,7 +891,6 @@ export function ScheduleView() {
               <section className="schedule-calendar-panel" aria-label="반응형 주간 일정">
                 <WeeklyGrid
                   week={data.week}
-                  pendingSuggestionCount={pendingSuggestions.length}
                   onBlockSelect={openEditModal}
                   timeZone={session?.timezone}
                 />

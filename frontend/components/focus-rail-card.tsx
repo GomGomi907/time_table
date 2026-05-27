@@ -70,7 +70,7 @@ export function FocusRailCard({
   return (
     <article className="surface-card focus-rail-card focus-now-card">
       <div className="focus-rail-section">
-        <SectionHeader eyebrow="AI 비서 메모" title="지금 할 일" />
+        <SectionHeader eyebrow="지금" title="지금 할 일" />
 
         <ul className="compact-list">
           {currentItem ? (
@@ -80,7 +80,7 @@ export function FocusRailCard({
                 <b>{formatServiceCopy(currentItem.title)}</b>
               </li>
               <li>
-                <span>목표 연결</span>
+                <span>연결된 목표</span>
                 <b>{currentItem.goal?.title ?? "없음"}</b>
               </li>
               <li>
@@ -150,14 +150,8 @@ export function FocusRailCard({
 
         {pendingSuggestion ? (
           <div className="suggestion-box">
-            <p className="panel-kicker">조정안 확인</p>
-            <strong>{formatServiceCopy(pendingSuggestion.summary)}</strong>
-            <p className="warning-copy">
-              {formatServiceCopy(pendingSuggestion.statusDetail || pendingSuggestion.explanation)}
-            </p>
-            <p className="micro-copy">
-              지켜야 할 목표와 겹치는 시간을 확인한 뒤 적용합니다. 대기 중 조정안 {pendingConflictCount}건
-            </p>
+            <p className="panel-kicker">변경 요청</p>
+            <strong>요청한 변경이 있습니다.</strong>
             {canHandleSuggestion ? (
               <div className="suggestion-actions">
                 <button
@@ -172,7 +166,7 @@ export function FocusRailCard({
                   disabled={isPending || !pendingSuggestion.executable}
                   onClick={onApplySuggestion ?? undefined}
                 >
-                  조정안 적용
+                  적용
                 </button>
               </div>
             ) : null}

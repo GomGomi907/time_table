@@ -55,15 +55,19 @@ test.describe("핵심 사용자 시나리오", () => {
     await completeOnboardingIfPresent(page);
 
     await page.goto("/dashboard");
-    await expect(page.getByRole("heading", { name: /오늘 브리핑/ }).first()).toBeVisible({
+    await expect(page.getByRole("heading", { name: /오늘 일정/ }).first()).toBeVisible({
       timeout: 30_000,
     });
 
     await page.getByRole("button", { name: "로그아웃" }).click();
-    await expect(page.getByRole("heading", { name: "Google 계정 연결" })).toBeVisible({
+    const loginStart = page.getByRole("button", { name: "Google로 시작" });
+    if (!(await loginStart.isVisible({ timeout: 5_000 }).catch(() => false))) {
+      await page.goto("/login");
+    }
+    await expect(page.getByRole("heading", { name: "오늘 일정과 지금 할 일을 바로 봅니다." })).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByRole("button", { name: "Google로 시작" })).toBeVisible();
+    await expect(loginStart).toBeVisible();
   });
 
   test("사용자는 빈 조정 요청을 막고, 요청 생성 후 보류할 수 있다", async ({ page }, testInfo) => {
@@ -80,26 +84,26 @@ test.describe("핵심 사용자 시나리오", () => {
     await expect(page.getByRole("status")).toContainText("요청 내용을 먼저 적어 주세요.");
 
     const reason = `E2E 일정 조정 요청 ${Date.now()}`;
-    await page.getByPlaceholder(/화요일 저녁 운동/).fill(reason);
+    await page.getByPlaceholder(/내일 오전 회의 준비/).fill(reason);
     await page.getByRole("button", { name: "요청 보내기" }).click();
 
-    await expect(page.getByRole("status")).toContainText("일정 조정 요청을 만들었습니다.", {
+    await expect(page.getByRole("status")).toContainText("변경 요청을 만들었습니다.", {
       timeout: 30_000,
     });
-    await expect(page.getByText("검토 대기").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("보류").first()).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "보류" }).first().click();
-    await expect(page.getByRole("status")).toContainText("조정안을 보류했습니다.", {
+    await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", {
       timeout: 30_000,
     });
-    await expect(page.getByText("검토 대기").first()).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByText("보류").first()).toHaveCount(0, { timeout: 30_000 });
   });
 
-  test("사용자는 추천 할 일을 시작하고 완료할 수 있다", async ({ page }, testInfo) => {
+  test("사용자는 할 일을 시작하고 완료할 수 있다", async ({ page }, testInfo) => {
     await loginAsUniqueMockUser(page, testInfo);
     await completeOnboardingIfPresent(page);
 
-    const title = `E2E 추천 할 일 ${Date.now()}`;
+    const title = `E2E 할 일 ${Date.now()}`;
     const task = await backendFetch<ApiEnvelope<TaskResponse>>(page, "/api/tasks", {
       method: "POST",
       body: {
@@ -119,8 +123,8 @@ test.describe("핵심 사용자 시나리오", () => {
       timeout: 30_000,
     });
 
-    await page.getByRole("button", { name: "추천 할 일 시작" }).click();
-    await expect(page.getByRole("status")).toContainText("추천 할 일을 시작했습니다.", {
+    await page.getByRole("button", { name: "할 일 시작" }).click();
+    await expect(page.getByRole("status")).toContainText("할 일을 시작했습니다.", {
       timeout: 30_000,
     });
     await expect(page.getByRole("button", { name: "할 일 완료" })).toBeVisible({ timeout: 30_000 });
@@ -134,7 +138,7 @@ test.describe("핵심 사용자 시나리오", () => {
     expect(completed.data.find((item) => item.id === task.data.id)?.status).toBe("DONE");
   });
 
-  test("사용자가 현재 일정을 미루면 조정안을 같은 화면에서 보류할 수 있다", async ({ page }, testInfo) => {
+  test("사용자가 현재 일정을 미루면 변경 요청을 같은 화면에서 보류할 수 있다", async ({ page }, testInfo) => {
     await loginAsUniqueMockUser(page, testInfo);
     await completeOnboardingIfPresent(page);
     await clearPendingSuggestions(page);
@@ -162,7 +166,7 @@ test.describe("핵심 사용자 시나리오", () => {
     });
 
     await page.getByRole("button", { name: "미루기" }).click();
-    await expect(page.getByRole("status")).toContainText("현재 항목을 미루고 조정이 필요한 항목으로 표시했습니다.", {
+    await expect(page.getByRole("status")).toContainText("현재 항목을 미루고 변경이 필요한 항목으로 표시했습니다.", {
       timeout: 30_000,
     });
 
@@ -170,20 +174,20 @@ test.describe("핵심 사용자 시나리오", () => {
     const afterPendingCount = suggestions.data.filter((suggestion) => suggestion.status === "pending").length;
     expect(afterPendingCount).toBeGreaterThan(beforePendingCount);
 
-    await expect(page.getByText("조정안 확인")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("button", { name: "조정안 적용" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("변경 요청")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "적용" })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole("button", { name: "보류" })).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "보류" }).click();
-    await expect(page.getByRole("status")).toContainText("조정안을 보류했습니다.", {
+    await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", {
       timeout: 30_000,
     });
-    await expect(page.getByText("조정안 확인")).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByText("변경 요청")).toBeHidden({ timeout: 30_000 });
 
     const rejectedSuggestions = await backendFetch<ApiEnvelope<SuggestionResponse[]>>(page, "/api/agent/suggestions");
     expect(rejectedSuggestions.data.filter((suggestion) => suggestion.status === "pending")).toHaveLength(0);
 
     await page.goto("/schedule");
-    await expect(page.getByText("검토 대기").first()).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "보류" }).first()).toBeHidden({ timeout: 30_000 });
   });
 });

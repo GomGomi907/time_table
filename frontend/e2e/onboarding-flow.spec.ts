@@ -13,7 +13,7 @@ test("new mock user completes onboarding and lands on dashboard", async ({ page 
   await completeOnboardingIfPresent(page);
 
   await expect(page).toHaveURL(/\/dashboard(?:$|\?)/);
-  await expect(page.getByRole("heading", { name: /오늘 브리핑/ }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /오늘 일정/ }).first()).toBeVisible();
 });
 
 test("schedule page shows non-sleep routine blocks saved through the API", async ({ page }, testInfo) => {

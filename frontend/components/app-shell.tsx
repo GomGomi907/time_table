@@ -5,13 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useTransition } from "react";
 
 import { api } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
 import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { useAppStore } from "@/stores/app-store";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "오늘 브리핑" },
+  { href: "/dashboard", label: "오늘" },
   { href: "/schedule", label: "주간 일정" },
   { href: "/focus", label: "실행 모드" },
 ];
@@ -20,8 +19,6 @@ interface AppShellProps {
   eyebrow: string;
   title: string;
   description?: string;
-  screenQuestion?: string;
-  primaryActionLabel?: string;
   actions?: ReactNode;
   children: ReactNode;
   immersive?: boolean;
@@ -31,8 +28,6 @@ export function AppShell({
   eyebrow,
   title,
   description,
-  screenQuestion,
-  primaryActionLabel,
   actions,
   children,
   immersive = false,
@@ -42,7 +37,6 @@ export function AppShell({
   const { session, sessionPhase, sessionError, refreshSession } = useSessionBootstrap();
   const {
     onboardingPhase,
-    onboardingStatus,
     onboardingError,
     onboardingCompleted,
     needsOnboarding,
@@ -56,16 +50,7 @@ export function AppShell({
 
   const primaryShortcut = isDashboardPage
     ? { href: "/schedule", label: "주간 일정" }
-    : { href: "/dashboard", label: "오늘 브리핑" };
-  const googleWorkspaceLabel =
-    session?.googleCapabilityStatus === "read_only_token"
-      ? "Google 읽기만 가능 · 적용은 앱에 저장"
-      : session?.calendarWriteEnabled || session?.tasksWriteEnabled
-        ? "Google 읽기·쓰기 가능"
-        : onboardingStatus?.googleConnected || session?.googleConnectionStatus === "CONNECTED"
-          ? "Google 계정 연결됨 · 쓰기 권한 확인 중"
-          : "Google 연결 확인 중";
-
+    : { href: "/dashboard", label: "오늘" };
   async function handleLogout() {
     try {
       await api.logout();
@@ -107,9 +92,9 @@ export function AppShell({
     return (
       <div className="status-screen">
         <div className="status-panel">
-          <p className="eyebrow">연결 상태</p>
+          <p className="eyebrow">오류</p>
           <h1>세션을 확인하지 못했습니다.</h1>
-          <p>{sessionError ?? "서비스 연결을 다시 확인해 주세요."}</p>
+          <p>{sessionError ?? "잠시 후 다시 시도해 주세요."}</p>
           <button className="solid-btn" onClick={() => void refreshSession()}>
             다시 시도
           </button>
@@ -124,7 +109,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">접근 안내</p>
           <h1>로그인 후 작업 공간이 열립니다.</h1>
-          <p>오늘 브리핑과 조정안을 준비하려면 먼저 로그인이 필요합니다.</p>
+          <p>오늘 일정과 지금 할 일을 보려면 로그인이 필요합니다.</p>
           <div className="guest-actions">
             <Link className="solid-btn link-btn" href="/login">
               로그인 화면으로 이동
@@ -144,7 +129,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">초기 설정 확인</p>
           <h1>첫 사용 설정 상태를 확인하고 있습니다.</h1>
-          <p>로그인 직후 필요한 연결과 기본 옵션이 준비됐는지 확인하는 중입니다.</p>
+          <p>처음 설정을 준비하고 있습니다.</p>
         </div>
       </div>
     );
@@ -203,12 +188,6 @@ export function AppShell({
           })}
         </nav>
 
-        <div className="sync-panel">
-          <p className="panel-kicker">작업 공간</p>
-          <strong>오늘 일정 운영</strong>
-          <strong className="sync-inline-label">{googleWorkspaceLabel}</strong>
-          <span>마지막 동기화 {formatDateTime(session.lastSyncAt, session.timezone)}</span>
-        </div>
 
         <button
           className="ghost-btn wide-btn"
@@ -225,22 +204,6 @@ export function AppShell({
             <p className="eyebrow">{eyebrow}</p>
             <h1 className="top-title">{title}</h1>
             {description ? <p className="hero-copy compact">{description}</p> : null}
-            {(screenQuestion || primaryActionLabel) ? (
-              <div className="screen-contract-strip" aria-label="현재 화면 역할">
-                {screenQuestion ? (
-                  <span>
-                    <b>확인할 것</b>
-                    {screenQuestion}
-                  </span>
-                ) : null}
-                {primaryActionLabel ? (
-                  <span>
-                    <b>다음 행동</b>
-                    {primaryActionLabel}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
           </div>
           <div className="top-actions">
             <Link className="ghost-btn link-btn" href={primaryShortcut.href}>

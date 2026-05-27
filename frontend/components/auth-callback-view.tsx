@@ -44,9 +44,9 @@ export function AuthCallbackView() {
     return (
       <div className="status-screen">
         <div className="status-panel">
-          <p className="eyebrow">계정 연결</p>
-          <h1>일정 비서를 시작할 준비를 하고 있습니다.</h1>
-          <p>연결된 계정을 확인한 뒤, 필요한 생활 리듬만 짧게 설정합니다.</p>
+          <p className="eyebrow">로그인</p>
+          <h1>오늘 일정을 준비하고 있습니다.</h1>
+          <p>필요한 생활 리듬만 짧게 설정합니다.</p>
         </div>
       </div>
     );
@@ -55,20 +55,20 @@ export function AuthCallbackView() {
   return (
     <div className="status-screen">
       <div className="status-panel">
-        <p className="eyebrow">계정 연결</p>
+        <p className="eyebrow">로그인</p>
         <h1>
           {isError
-            ? "Google 계정 연결을 완료하지 못했습니다."
+            ? "로그인을 완료하지 못했습니다."
             : status === "success"
-            ? "Time Table 작업 공간을 준비하고 있습니다."
-            : "계정 연결 상태를 확인하고 있습니다."}
+            ? "오늘 일정을 준비하고 있습니다."
+            : "잠시만 기다려 주세요."}
         </h1>
         <p>
           {isError
-            ? "아래 진단 정보를 기준으로 OAuth 설정을 바로잡은 뒤 다시 시도해보세요."
+            ? "아래 오류를 확인한 뒤 다시 시도해보세요."
             : isMock
-            ? "개발용 계정으로 작업 공간을 준비하고 있습니다. 잠시 후 다음 화면으로 이동합니다."
-            : "연결된 계정을 확인한 뒤, 필요한 생활 리듬만 짧게 설정합니다."}
+            ? "개발용 계정으로 작업 공간을 준비하고 있습니다."
+            : "필요한 생활 리듬만 짧게 설정합니다."}
         </p>
         {isError ? (
           <div className="inline-message error">

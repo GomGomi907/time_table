@@ -40,7 +40,7 @@ test("schedule block can be created, edited, and deleted", async ({ page }, test
   await createDialog.getByLabel("메모").fill("Playwright CRUD seed");
   await createDialog.getByRole("button", { name: "블록 추가" }).click();
 
-  const createdBlock = page.getByRole("button", { name: titlePattern });
+  const createdBlock = page.locator(".schedule-block").filter({ hasText: title }).first();
   await expect(createdBlock).toBeVisible({ timeout: 15_000 });
   await createdBlock.click();
 
@@ -49,7 +49,7 @@ test("schedule block can be created, edited, and deleted", async ({ page }, test
   await editDialog.getByLabel("활동").fill(editedTitle);
   await editDialog.getByRole("button", { name: "변경 저장" }).click();
 
-  const editedBlock = page.getByRole("button", { name: editedTitlePattern });
+  const editedBlock = page.locator(".schedule-block").filter({ hasText: editedTitle }).first();
   await expect(editedBlock).toBeVisible({ timeout: 15_000 });
   await editedBlock.click();
 
