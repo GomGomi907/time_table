@@ -129,4 +129,46 @@ class ScheduleControllerTest {
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
                 .andExpect(content().string(containsString("최소 15분")));
     }
+
+    @Test
+    void oversizedManualBlockTextReturnsBadRequestJson() throws Exception {
+        String oversizedActivity = "긴 활동".repeat(90);
+        String oversizedNote = "긴 메모".repeat(260);
+
+        mockMvc.perform(post("/api/schedule/blocks")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dayOfWeek": "MONDAY",
+                                  "startTime": "09:00",
+                                  "endTime": "10:00",
+                                  "activity": "%s",
+                                  "category": "WORK",
+                                  "note": "정상 메모"
+                                }
+                                """.formatted(oversizedActivity)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.status").value(400));
+
+        mockMvc.perform(post("/api/schedule/blocks")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "dayOfWeek": "MONDAY",
+                                  "startTime": "10:30",
+                                  "endTime": "11:00",
+                                  "activity": "정상 활동",
+                                  "category": "WORK",
+                                  "note": "%s"
+                                }
+                                """.formatted(oversizedNote)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.status").value(400));
+    }
 }

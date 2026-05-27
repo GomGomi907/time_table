@@ -4725,3 +4725,151 @@ body {
     order: 3;
   }
 }
+
+/* Device-specific schedule split: PC keeps a wide calendar workstation, mobile becomes a text-first agenda. */
+.schedule-device-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.schedule-command-panel {
+  min-width: 0;
+  position: sticky;
+  top: 20px;
+  align-self: start;
+}
+
+.schedule-command-panel .ai-compose-card {
+  padding: 18px;
+  border-radius: 26px;
+  box-shadow: 0 16px 36px rgba(17, 24, 39, 0.08);
+}
+
+.schedule-command-panel .ai-compose-actions,
+.schedule-command-panel .suggestion-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.schedule-command-panel .ai-compose-actions .ghost-btn,
+.schedule-command-panel .ai-compose-actions .solid-btn,
+.schedule-command-panel .suggestion-actions .ghost-btn,
+.schedule-command-panel .suggestion-actions .solid-btn {
+  width: 100%;
+}
+
+.schedule-command-panel .ai-suggestion-strip,
+.schedule-command-panel .suggestion-summary-strip,
+.schedule-command-panel .suggestion-diff-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.schedule-command-panel .diff-after {
+  padding-top: 8px;
+  padding-left: 0;
+  border-top: 1px solid rgba(91, 50, 214, 0.16);
+  border-left: 0;
+}
+
+.schedule-calendar-panel {
+  min-width: 0;
+}
+
+.schedule-calendar-panel .mobile-week-agenda {
+  display: none;
+}
+
+.schedule-calendar-panel .week-grid-shell {
+  display: block;
+  --week-grid-columns: 82px repeat(7, minmax(184px, 1fr));
+  --week-grid-min-width: 1370px;
+}
+
+.schedule-calendar-panel .week-grid-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.schedule-calendar-panel .week-planner-head {
+  align-items: center;
+}
+
+.schedule-calendar-panel .week-planner-head .panel-kicker,
+.mobile-schedule-brief .panel-kicker {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(91, 50, 214, 0.09);
+  color: var(--violet);
+  font-weight: 900;
+}
+
+@media (min-width: 1280px) {
+  .schedule-device-layout {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  }
+
+  .schedule-calendar-panel .week-grid-shell {
+    --week-grid-columns: 86px repeat(7, minmax(200px, 1fr));
+    --week-grid-min-width: 1486px;
+  }
+}
+
+@media (max-width: 1040px) {
+  .schedule-device-layout {
+    grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .schedule-calendar-panel .week-grid-shell {
+    --week-grid-columns: 76px repeat(7, minmax(170px, 1fr));
+    --week-grid-min-width: 1266px;
+  }
+}
+
+@media (max-width: 820px) {
+  .schedule-device-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .schedule-calendar-panel {
+    order: 1;
+    width: 100%;
+  }
+
+  .schedule-command-panel {
+    order: 2;
+    position: static;
+    width: 100%;
+  }
+
+  .schedule-calendar-panel .mobile-week-agenda {
+    display: grid;
+    gap: 12px;
+  }
+
+  .schedule-calendar-panel .week-grid-shell,
+  .schedule-calendar-panel .week-grid-affordance {
+    display: none;
+  }
+
+  .schedule-command-panel .ai-compose-card {
+    padding: 16px;
+    border-radius: 22px;
+    box-shadow: none;
+  }
+
+  .mobile-schedule-brief {
+    order: -1;
+    border-color: rgba(91, 50, 214, 0.22);
+  }
+
+  .mobile-day-card.today {
+    border-color: rgba(91, 50, 214, 0.28);
+    box-shadow: 0 16px 34px rgba(91, 50, 214, 0.1);
+  }
+}

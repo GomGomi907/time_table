@@ -10,6 +10,7 @@ import com.timetable.operator.schedule.domain.ScheduleSourceType;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.DayOfWeek;
@@ -173,9 +174,9 @@ public class ScheduleService {
             @NotNull DayOfWeek dayOfWeek,
             @NotNull LocalTime startTime,
             @NotNull LocalTime endTime,
-            @NotBlank String activity,
+            @NotBlank @Size(max = 255) String activity,
             @NotNull ScheduleCategory category,
-            String note
+            @Size(max = 1000) String note
     ) {
     }
 
