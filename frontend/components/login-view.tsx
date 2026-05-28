@@ -56,12 +56,12 @@ export function LoginView() {
         <section className="login-hero">
           <p className="eyebrow">Time Table</p>
           <h1>오늘 일정과 지금 할 일을 바로 봅니다.</h1>
-          <p>시작하면 오늘 일정, 지금 할 일, 주간 일정표만 간단히 보여드립니다.</p>
+          <p>오늘 일정, 지금 할 일, 주간 일정표만 한 화면에서 정리합니다.</p>
         </section>
 
         <section className="login-action-card">
           <p className="panel-kicker">시작</p>
-          <h2>오늘 일정 열기</h2>
+          <h2>시작하기</h2>
 
           {loginMessage ? (
             <div className="inline-message info">

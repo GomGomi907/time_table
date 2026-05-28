@@ -286,7 +286,7 @@ function WeeklyGrid({
     <>
       <div className="mobile-week-agenda" aria-label="모바일 주간 일정 목록">
         <section className="mobile-schedule-brief">
-          <p className="panel-kicker">모바일 오늘 중심 보기</p>
+          <p className="panel-kicker">오늘 보기</p>
           <div className="mobile-brief-grid">
             <span>
               <strong>{todayBlocks.length}</strong>
@@ -302,11 +302,11 @@ function WeeklyGrid({
             </span>
           </div>
           <p>
-            오늘 일정과 지금 할 일을 먼저 확인합니다.
+            오늘 일정과 지금 할 일을 먼저 보여줍니다.
           </p>
           <div className={`mobile-now-card ${focusScheduleBlock ? categoryTone(focusScheduleBlock.category) : "empty"}`}>
             <span>{focusScheduleLabel}</span>
-            <strong>{focusScheduleBlock ? formatServiceCopy(focusScheduleBlock.activity) : "지금 표시할 일정이 없습니다."}</strong>
+            <strong>{focusScheduleBlock ? formatServiceCopy(focusScheduleBlock.activity) : "표시할 일정이 없습니다."}</strong>
             {focusScheduleBlock ? (
               <small>
                 {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
@@ -349,7 +349,7 @@ function WeeklyGrid({
                 </div>
               ) : (
                 <p className="mobile-empty-day">
-                  빈 시간입니다. 직접 추가하거나 변경을 요청할 수 있습니다.
+                  비어 있는 시간입니다.
                 </p>
               )}
             </>
@@ -382,10 +382,10 @@ function WeeklyGrid({
       <div className="week-grid-shell">
         <div className="week-planner-head">
           <div>
-            <p className="panel-kicker">PC 주간 그리드</p>
-            <h2>이번 주 시간 배치</h2>
+            <p className="panel-kicker">주간 시간표</p>
+            <h2>이번 주 시간표</h2>
             <p>
-              오늘과 지금 할 일을 먼저 보고, 필요한 시간대를 바로 수정합니다.
+              오늘과 이번 주 흐름을 한 화면에서 확인하고 바로 수정합니다.
             </p>
           </div>
           <div className="week-summary-strip" aria-label="주간 일정 요약">
@@ -777,9 +777,9 @@ export function ScheduleView() {
 
   return (
     <AppShell
-      eyebrow="이번 주 확인"
+      eyebrow="이번 주"
       title="주간 일정"
-      description="오늘과 이번 주 일정을 바로 확인하세요."
+      description="이번 주 시간을 한 화면에서 확인하고 바로 조정합니다."
       actions={
         <button className="ghost-btn" onClick={() => void loadSchedulePage()}>
           새로고침
@@ -804,7 +804,7 @@ export function ScheduleView() {
         <section className="planner-layout schedule-layout">
           <article className="planner-board schedule-main-board">
             <SectionHeader
-              eyebrow="일정 관리"
+              eyebrow="시간표"
               title="이번 주 일정표"
               trailing={
                 <div className="board-legend">
@@ -828,9 +828,9 @@ export function ScheduleView() {
               <aside className="schedule-command-panel" aria-label="일정 추가와 변경 요청">
                 <section className="ai-compose-card">
                   <SectionHeader
-                    eyebrow="일정 관리"
+                    eyebrow="요청"
                     title="AI에게 요청"
-                    description="바꿀 일정과 지켜야 할 시간을 짧게 적으세요."
+                    description="바꾸고 싶은 내용을 짧게 적으세요."
                   />
 
                   <form className="ai-compose-form" onSubmit={(event) => void handleRequestSuggestion(event)}>
@@ -861,7 +861,7 @@ export function ScheduleView() {
                       {pendingSuggestions.slice(0, 1).map((suggestion) => (
                         <div className="ai-suggestion-card suggestion-diff-card" key={suggestion.id}>
                           <div className="suggestion-diff-head">
-                            <strong>요청한 변경이 있습니다.</strong>
+                            <strong>검토할 변경이 있습니다.</strong>
                           </div>
                           <div className="suggestion-actions">
                             <button

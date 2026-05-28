@@ -169,7 +169,7 @@ export function AppShell({
           <span className="brand-mark">TT</span>
           <div>
             <p className="brand-name">Time Table</p>
-            <p className="brand-sub">일정 관리 공간</p>
+            <p className="brand-sub">일정 운영판</p>
           </div>
         </div>
 

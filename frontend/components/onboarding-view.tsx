@@ -336,7 +336,7 @@ export function OnboardingView() {
         <div className="onboarding-panel onboarding-panel-wide">
           <section className="onboarding-sidebar onboarding-sidebar-compact">
             <p className="eyebrow">처음 설정</p>
-            <h1>생활 리듬만 짧게 알려 주세요.</h1>
+            <h1>시작에 필요한 리듬만 알려 주세요.</h1>
           </section>
 
           <section className="onboarding-main">
@@ -344,7 +344,7 @@ export function OnboardingView() {
               <div className="onboarding-stage-head">
                 <div>
                   <p className="eyebrow">생활 리듬</p>
-                  <h2>필요한 항목만 빠르게 맞춥니다.</h2>
+                  <h2>시작에 필요한 것만 확인합니다.</h2>
                 </div>
                 <span className="accent-pill">
                   {answeredCount} / {questions.length} 답변
@@ -413,7 +413,7 @@ export function OnboardingView() {
       <div className="onboarding-panel onboarding-panel-wide onboarding-panel-simple">
         <section className="onboarding-sidebar onboarding-sidebar-compact">
           <p className="eyebrow">처음 설정</p>
-          <h1>바로 시작할 수 있습니다.</h1>
+          <h1>설정이 끝났습니다.</h1>
           <div className="onboarding-answer-summary">
             {answerSummary.map((item) => (
               <div key={item.id} className="onboarding-answer-chip">
@@ -429,7 +429,7 @@ export function OnboardingView() {
             <div className="onboarding-stage-head">
               <div>
                 <p className="eyebrow">완료</p>
-                <h2>오늘 일정으로 이동하세요.</h2>
+                <h2>오늘 화면으로 시작합니다.</h2>
               </div>
             </div>
 
@@ -440,7 +440,7 @@ export function OnboardingView() {
                 onClick={() => setIsEditingAnswers(true)}
                 type="button"
               >
-                답변 다시 수정
+                다시 수정
               </button>
 
               <div className="board-head-actions">

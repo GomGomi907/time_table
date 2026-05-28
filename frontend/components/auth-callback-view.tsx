@@ -16,10 +16,6 @@ export function AuthCallbackView() {
   const isMock = searchParams.get("mock") === "true";
   const isError = status === "error";
   const errorReason = searchParams.get("reason");
-  const errorMessage = searchParams.get("message");
-  const callbackUrl = searchParams.get("callbackUrl");
-  const isTokenExchangeError =
-    errorMessage?.includes("invalid_token_response") || errorMessage?.includes("401 Unauthorized");
 
   useEffect(() => {
     void refreshSession();
@@ -58,39 +54,22 @@ export function AuthCallbackView() {
         <p className="eyebrow">로그인</p>
         <h1>
           {isError
-            ? "로그인을 완료하지 못했습니다."
+            ? "로그인을 다시 시도해 주세요."
             : status === "success"
             ? "오늘 일정을 준비하고 있습니다."
             : "잠시만 기다려 주세요."}
         </h1>
         <p>
           {isError
-            ? "아래 오류를 확인한 뒤 다시 시도해보세요."
+            ? "인증이 완료되지 않았습니다. 잠시 후 다시 시도하면 됩니다."
             : isMock
             ? "개발용 계정으로 작업 공간을 준비하고 있습니다."
             : "필요한 생활 리듬만 짧게 설정합니다."}
         </p>
         {isError ? (
           <div className="inline-message error">
-            <strong>OAuth 진단</strong>
-            <p>
-              {errorReason ? `오류 코드: ${errorReason}` : "오류 코드를 받지 못했습니다."}
-              {errorMessage ? ` · ${errorMessage}` : ""}
-            </p>
-            {callbackUrl ? (
-              <p>
-                Google Console 승인된 리디렉션 URI에 다음 주소가 정확히 등록되어 있어야 합니다:
-                <br />
-                <code>{callbackUrl}</code>
-              </p>
-            ) : null}
-            {isTokenExchangeError ? (
-              <p>
-                지금 오류는 인증 코드를 받은 뒤 토큰 교환에서 실패한 상태입니다. Cloud Run의
-                <code> GOOGLE_CLIENT_ID </code>와 <code> GOOGLE_CLIENT_SECRET </code>이 같은 OAuth 웹
-                클라이언트의 값인지, Secret 값에 따옴표·공백·다른 API 키가 들어가지 않았는지 확인해보세요.
-              </p>
-            ) : null}
+            <strong>로그인 안내</strong>
+            <p>{errorReason ? "로그인 요청이 만료되었거나 취소되었습니다." : "세션을 만들지 못했습니다."}</p>
           </div>
         ) : null}
         <Link className="ghost-btn link-btn" href="/login">

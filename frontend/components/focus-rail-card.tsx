@@ -76,11 +76,11 @@ export function FocusRailCard({
           {currentItem ? (
             <>
               <li>
-                <span>현재 항목</span>
+                <span>현재 할 일</span>
                 <b>{formatServiceCopy(currentItem.title)}</b>
               </li>
               <li>
-                <span>연결된 목표</span>
+                <span>목표</span>
                 <b>{currentItem.goal?.title ?? "없음"}</b>
               </li>
               <li>
@@ -151,7 +151,7 @@ export function FocusRailCard({
         {pendingSuggestion ? (
           <div className="suggestion-box">
             <p className="panel-kicker">변경 요청</p>
-            <strong>요청한 변경이 있습니다.</strong>
+            <strong>검토할 변경이 있습니다.</strong>
             {canHandleSuggestion ? (
               <div className="suggestion-actions">
                 <button

@@ -4630,3 +4630,165 @@ body {
     margin-top: 96px;
   }
 }
+
+/* Visual Ralph 2026-05-28: product-copy polish and consistent product width rhythm. */
+:root {
+  --content-max-width: 1240px;
+  --product-shell-max-width: 1520px;
+  --product-narrow-max-width: 1120px;
+  --product-card-radius: 28px;
+  --product-card-padding: 24px;
+  --product-gap: 16px;
+}
+
+.app-frame {
+  width: min(var(--product-shell-max-width), calc(100% - 32px));
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 22px;
+}
+
+.content-shell {
+  width: min(var(--content-max-width), 100%);
+  gap: var(--product-gap);
+}
+
+.page-stack {
+  gap: var(--product-gap);
+}
+
+.top-bar,
+.side-nav,
+.surface-card,
+.planner-board,
+.status-panel,
+.login-panel,
+.mobile-schedule-brief,
+.mobile-day-card,
+.ai-compose-card {
+  border-radius: var(--product-card-radius);
+}
+
+.top-bar {
+  min-height: 0;
+  padding: 18px 20px;
+}
+
+.top-bar-copy {
+  max-width: 760px;
+}
+
+.top-actions {
+  gap: 8px;
+}
+
+.login-panel-rich,
+.onboarding-panel-wide,
+.focus-mode-stack {
+  width: min(var(--product-narrow-max-width), 100%);
+}
+
+.login-panel-rich {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.onboarding-panel-wide {
+  grid-template-columns: 332px minmax(0, 1fr);
+}
+
+.surface-card,
+.planner-board {
+  padding: var(--product-card-padding);
+}
+
+.schedule-device-layout,
+.today-briefing-shell,
+.focus-mode-stack {
+  gap: var(--product-gap);
+}
+
+.schedule-command-panel .ai-compose-card {
+  grid-template-columns: minmax(200px, 0.48fr) minmax(0, 1fr);
+  padding: 20px;
+}
+
+.schedule-calendar-panel .week-grid-shell {
+  --week-grid-columns: 70px repeat(7, minmax(108px, 1fr));
+}
+
+.week-planner-head,
+.section-header {
+  gap: 12px;
+}
+
+.onboarding-stage-head .eyebrow {
+  margin: 0 0 8px;
+}
+
+.onboarding-stage-head h2 {
+  margin: 0;
+}
+
+@media (max-width: 1040px) {
+  .login-panel-rich,
+  .onboarding-panel-wide,
+  .focus-mode-stack {
+    width: min(760px, 100%);
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  :root {
+    --product-card-radius: 22px;
+    --product-card-padding: 16px;
+    --product-gap: 12px;
+  }
+
+  .app-frame,
+  .content-shell,
+  .status-screen {
+    width: min(100%, calc(100% - 20px));
+  }
+
+  .top-bar {
+    padding: 16px;
+  }
+
+  .surface-card,
+  .planner-board,
+  .schedule-command-panel .ai-compose-card {
+    padding: var(--product-card-padding);
+  }
+
+  .schedule-command-panel .ai-compose-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobile-schedule-brief,
+  .mobile-day-card,
+  .mobile-day-details,
+  .schedule-command-panel {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+    align-self: stretch;
+  }
+
+  .mobile-schedule-brief,
+  .mobile-day-card {
+    border-radius: var(--product-card-radius);
+  }
+
+  .onboarding-stage-head {
+    gap: 12px;
+  }
+
+  .onboarding-stage-head .eyebrow {
+    margin-bottom: 10px;
+  }
+
+  .onboarding-stage-head h2 {
+    font-size: clamp(1.38rem, 6.1vw, 1.68rem);
+    line-height: 1.16;
+  }
+}

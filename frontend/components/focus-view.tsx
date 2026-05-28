@@ -315,7 +315,7 @@ export function FocusView() {
       immersive
       eyebrow="지금 할 일"
       title="실행 모드"
-      description="지금은 한 가지 항목만 처리하세요. 끝나면 완료하거나 미루면 됩니다."
+      description="지금은 한 가지 일만 봅니다. 끝나면 완료하거나 미루세요."
     >
       <section className="focus-mode-stage">
         {!data.week && !data.focus && status === "loading" ? (
@@ -351,7 +351,7 @@ export function FocusView() {
                   />
                 </svg>
               </Link>
-              <p className="eyebrow">지금 실행</p>
+              <p className="eyebrow">지금 할 일</p>
               <h1>{formatServiceCopy(primaryTitle)}</h1>
               <p className="focus-copy">
                 {currentItem
@@ -359,9 +359,9 @@ export function FocusView() {
                       currentItem.remainingMinutes,
                     )}입니다.`
                   : recommendedTask
-                    ? "진행 중인 일정은 없지만 바로 시작할 일이 있습니다."
+                    ? "바로 시작할 일이 있습니다."
                     : fallbackBlock
-                      ? "진행 중인 항목이 없어 다음 일정을 보여드립니다."
+                      ? "다음 일정을 먼저 보여드립니다."
                       : "아직 실행할 일정과 할 일이 없습니다."}
               </p>
 
