@@ -81,7 +81,7 @@ test.describe("핵심 사용자 시나리오", () => {
     });
 
     await page.getByRole("button", { name: "요청 보내기" }).click();
-    await expect(page.getByRole("status")).toContainText("요청 내용을 먼저 적어 주세요.");
+    await expect(page.getByRole("status")).toContainText("요청 내용이 필요합니다.");
 
     const reason = `E2E 일정 조정 요청 ${Date.now()}`;
     await page.getByPlaceholder(/내일 오전 회의 준비/).fill(reason);

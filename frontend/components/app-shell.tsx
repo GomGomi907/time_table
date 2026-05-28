@@ -58,14 +58,14 @@ export function AppShell({
       showNotice({
         tone: "info",
         title: "세션을 종료했습니다.",
-        detail: "다시 시작하려면 로그인 화면으로 이동해 주세요.",
+        detail: "로그인 화면에서 다시 시작할 수 있습니다.",
       });
       router.push("/login");
     } catch (error) {
       showNotice({
         tone: "error",
         title: "로그아웃에 실패했습니다.",
-        detail: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
       });
     }
   }
@@ -81,8 +81,8 @@ export function AppShell({
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">불러오는 중</p>
-          <h1>세션과 작업 공간을 준비하고 있습니다.</h1>
-          <p>로그인 상태와 기본 설정을 확인하고 있습니다.</p>
+          <h1>세션과 작업 공간을 준비합니다.</h1>
+          <p>로그인 상태와 기본 설정을 확인합니다.</p>
         </div>
       </div>
     );
@@ -94,7 +94,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">오류</p>
           <h1>세션을 확인하지 못했습니다.</h1>
-          <p>{sessionError ?? "잠시 후 다시 시도해 주세요."}</p>
+          <p>{sessionError ?? "잠시 후 다시 시도하면 됩니다."}</p>
           <button className="solid-btn" onClick={() => void refreshSession()}>
             다시 시도
           </button>
@@ -109,7 +109,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">접근 안내</p>
           <h1>로그인 후 작업 공간이 열립니다.</h1>
-          <p>오늘 일정과 지금 할 일을 보려면 로그인이 필요합니다.</p>
+          <p>로그인하면 오늘 일정과 지금 할 일이 열립니다.</p>
           <div className="guest-actions">
             <Link className="solid-btn link-btn" href="/login">
               로그인 화면으로 이동
@@ -128,8 +128,8 @@ export function AppShell({
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">초기 설정 확인</p>
-          <h1>첫 사용 설정 상태를 확인하고 있습니다.</h1>
-          <p>처음 설정을 준비하고 있습니다.</p>
+          <h1>첫 사용 설정 상태를 확인합니다.</h1>
+          <p>처음 설정을 준비합니다.</p>
         </div>
       </div>
     );
@@ -141,7 +141,7 @@ export function AppShell({
         <div className="status-panel">
           <p className="eyebrow">초기 설정 확인</p>
           <h1>초기 설정 상태를 확인하지 못했습니다.</h1>
-          <p>{onboardingError ?? "처음 설정 상태를 다시 불러와 주세요."}</p>
+          <p>{onboardingError ?? "처음 설정 상태를 다시 불러올 수 있습니다."}</p>
           <button className="solid-btn" onClick={() => void refreshOnboarding()}>
             다시 시도
           </button>

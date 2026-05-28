@@ -41,8 +41,8 @@ export function AuthCallbackView() {
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">로그인</p>
-          <h1>오늘 일정을 준비하고 있습니다.</h1>
-          <p>필요한 생활 리듬만 짧게 설정합니다.</p>
+          <h1>오늘 일정을 준비합니다.</h1>
+          <p>필요한 생활 리듬만 짧게 설정할 수 있습니다.</p>
         </div>
       </div>
     );
@@ -54,17 +54,17 @@ export function AuthCallbackView() {
         <p className="eyebrow">로그인</p>
         <h1>
           {isError
-            ? "로그인을 다시 시도해 주세요."
+            ? "로그인 재시도가 필요합니다."
             : status === "success"
-            ? "오늘 일정을 준비하고 있습니다."
-            : "잠시만 기다려 주세요."}
+            ? "오늘 일정을 준비합니다."
+            : "잠시 후 화면이 이어집니다."}
         </h1>
         <p>
           {isError
             ? "인증이 완료되지 않았습니다. 잠시 후 다시 시도하면 됩니다."
             : isMock
-            ? "개발용 계정으로 작업 공간을 준비하고 있습니다."
-            : "필요한 생활 리듬만 짧게 설정합니다."}
+            ? "개발용 계정으로 작업 공간을 준비합니다."
+            : "필요한 생활 리듬만 짧게 설정할 수 있습니다."}
         </p>
         {isError ? (
           <div className="inline-message error">

@@ -385,7 +385,7 @@ function WeeklyGrid({
             <p className="panel-kicker">주간 시간표</p>
             <h2>이번 주 시간표</h2>
             <p>
-              오늘과 이번 주 흐름을 한 화면에서 확인하고 바로 수정합니다.
+              오늘과 이번 주 흐름을 한 화면에 보여주고 바로 수정할 수 있게 합니다.
             </p>
           </div>
           <div className="week-summary-strip" aria-label="주간 일정 요약">
@@ -425,7 +425,7 @@ function WeeklyGrid({
           <div className="current-schedule-card empty" aria-label="현재 또는 다음 일정 없음">
             <span className="current-schedule-kicker">지금 일정</span>
             <strong>표시할 일정이 없습니다.</strong>
-            <span className="current-schedule-time">필요하면 일정을 추가해보세요.</span>
+            <span className="current-schedule-time">필요한 일정은 직접 추가할 수 있습니다.</span>
           </div>
         )}
         <div className="week-grid-affordance" aria-hidden="true">
@@ -657,7 +657,7 @@ export function ScheduleView() {
       showNotice({
         tone: "error",
         title: editingBlock ? "일정 블록 수정에 실패했습니다." : "일정 블록 추가에 실패했습니다.",
-        detail: saveError instanceof Error ? saveError.message : "입력값을 다시 확인해 주세요.",
+        detail: saveError instanceof Error ? saveError.message : "입력값 확인이 필요합니다.",
       });
     } finally {
       setIsMutating(false);
@@ -689,7 +689,7 @@ export function ScheduleView() {
       showNotice({
         tone: "error",
         title: "일정 블록 삭제에 실패했습니다.",
-        detail: deleteError instanceof Error ? deleteError.message : "잠시 후 다시 시도해 주세요.",
+        detail: deleteError instanceof Error ? deleteError.message : "잠시 후 다시 시도하면 됩니다.",
       });
     } finally {
       setIsMutating(false);
@@ -706,7 +706,7 @@ export function ScheduleView() {
     if (!trimmedReason) {
       showNotice({
         tone: "error",
-        title: "요청 내용을 먼저 적어 주세요.",
+        title: "요청 내용이 필요합니다.",
       });
       return;
     }
@@ -725,7 +725,7 @@ export function ScheduleView() {
         tone: "error",
         title: "변경 요청에 실패했습니다.",
         detail:
-          requestError instanceof Error ? requestError.message : "잠시 후 다시 시도해 주세요.",
+          requestError instanceof Error ? requestError.message : "잠시 후 다시 시도하면 됩니다.",
       });
     } finally {
       setIsMutating(false);
@@ -765,7 +765,7 @@ export function ScheduleView() {
         detail:
           decisionError instanceof Error
             ? decisionError.message
-            : "잠시 후 다시 시도해 주세요.",
+            : "잠시 후 다시 시도하면 됩니다.",
       });
     } finally {
       setIsMutating(false);
@@ -779,7 +779,7 @@ export function ScheduleView() {
     <AppShell
       eyebrow="이번 주"
       title="주간 일정"
-      description="이번 주 시간을 한 화면에서 확인하고 바로 조정합니다."
+      description="이번 주 시간을 한 화면에 보여주고 바로 조정할 수 있게 합니다."
       actions={
         <button className="ghost-btn" onClick={() => void loadSchedulePage()}>
           새로고침
@@ -789,14 +789,14 @@ export function ScheduleView() {
       {!data.week && status === "loading" ? (
         <section className="surface-card empty-state">
           <strong>주간 일정을 불러오는 중입니다.</strong>
-          <p>일정표를 준비하고 있습니다.</p>
+          <p>일정표를 준비합니다.</p>
         </section>
       ) : null}
 
       {!data.week && status === "error" ? (
         <section className="surface-card empty-state">
           <strong>주간 일정을 불러오지 못했습니다.</strong>
-          <p>{error ?? "잠시 후 다시 시도해 주세요."}</p>
+          <p>{error ?? "잠시 후 다시 시도하면 됩니다."}</p>
         </section>
       ) : null}
 

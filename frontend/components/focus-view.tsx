@@ -239,7 +239,7 @@ export function FocusView() {
         detail:
           mutationError instanceof Error
             ? mutationError.message
-            : "잠시 후 다시 시도해 주세요.",
+            : "잠시 후 다시 시도하면 됩니다.",
       });
     } finally {
       setIsMutating(false);
@@ -315,18 +315,18 @@ export function FocusView() {
       immersive
       eyebrow="지금 할 일"
       title="실행 모드"
-      description="지금은 한 가지 일만 봅니다. 끝나면 완료하거나 미루세요."
+      description="한 번에 한 가지 일만 보여주고, 완료와 미루기를 바로 제공합니다."
     >
       <section className="focus-mode-stage">
         {!data.week && !data.focus && status === "loading" ? (
           <section className="surface-card empty-state">
-            <strong>집중 화면을 준비하는 중입니다.</strong>
-            <p>현재 항목과 다음 일정 정보를 불러오고 있습니다.</p>
+            <strong>지금 할 일을 준비합니다.</strong>
+            <p>현재 항목과 다음 일정 정보를 함께 보여줍니다.</p>
           </section>
         ) : !data.week && !data.focus && status === "error" ? (
           <section className="surface-card empty-state">
             <strong>집중 데이터를 불러오지 못했습니다.</strong>
-            <p>{error ?? "서비스 응답을 다시 확인해 주세요."}</p>
+            <p>{error ?? "서비스 응답 확인이 필요합니다."}</p>
           </section>
         ) : (
           <div className="focus-mode-stack">
@@ -361,7 +361,7 @@ export function FocusView() {
                   : recommendedTask
                     ? "바로 시작할 일이 있습니다."
                     : fallbackBlock
-                      ? "다음 일정을 먼저 보여드립니다."
+                      ? "다음 일정을 먼저 보여줍니다."
                       : "아직 실행할 일정과 할 일이 없습니다."}
               </p>
 

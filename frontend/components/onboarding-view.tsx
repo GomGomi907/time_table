@@ -231,7 +231,7 @@ export function OnboardingView() {
       showNotice({
         tone: "error",
         title: "생활 리듬 저장에 실패했습니다.",
-        detail: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
       });
     }
   }
@@ -257,7 +257,7 @@ export function OnboardingView() {
       showNotice({
         tone: "error",
         title: "처음 설정 완료 처리에 실패했습니다.",
-        detail: error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
       });
     }
   }
@@ -272,8 +272,8 @@ export function OnboardingView() {
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">처음 설정</p>
-          <h1>처음 설정을 준비하고 있습니다.</h1>
-          <p>필요한 질문을 준비하고 있습니다.</p>
+          <h1>처음 설정을 준비합니다.</h1>
+          <p>필요한 질문을 준비합니다.</p>
         </div>
       </div>
     );
@@ -285,7 +285,7 @@ export function OnboardingView() {
         <div className="status-panel">
           <p className="eyebrow">처음 설정</p>
           <h1>처음 설정 상태를 불러오지 못했습니다.</h1>
-          <p>{onboardingError ?? "잠시 후 다시 시도해 주세요."}</p>
+          <p>{onboardingError ?? "잠시 후 다시 시도하면 됩니다."}</p>
           <button className="solid-btn" onClick={() => void refreshOnboarding()}>
             다시 시도
           </button>
@@ -307,7 +307,7 @@ export function OnboardingView() {
         <div className="onboarding-loading-panel">
           <section className="onboarding-loading-copy">
             <p className="eyebrow">처음 설정</p>
-            <h1>필요한 정보를 준비하고 있습니다.</h1>
+            <h1>필요한 정보를 준비합니다.</h1>
             <div className="loading-dots" aria-hidden="true">
               <span />
               <span />
@@ -336,7 +336,7 @@ export function OnboardingView() {
         <div className="onboarding-panel onboarding-panel-wide">
           <section className="onboarding-sidebar onboarding-sidebar-compact">
             <p className="eyebrow">처음 설정</p>
-            <h1>시작에 필요한 리듬만 알려 주세요.</h1>
+            <h1>시작에 필요한 리듬만 확인합니다.</h1>
           </section>
 
           <section className="onboarding-main">
@@ -344,7 +344,7 @@ export function OnboardingView() {
               <div className="onboarding-stage-head">
                 <div>
                   <p className="eyebrow">생활 리듬</p>
-                  <h2>시작에 필요한 것만 확인합니다.</h2>
+                  <h2>시작에 필요한 항목만 확인합니다.</h2>
                 </div>
                 <span className="accent-pill">
                   {answeredCount} / {questions.length} 답변

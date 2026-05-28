@@ -98,7 +98,7 @@ function buildBriefingLine({
   liveOrNextBlock: ScheduleBlock | null;
 }) {
   if (!blocks.length) {
-    return "주간 일정에서 오늘 시간을 먼저 잡아보세요.";
+    return "주간 일정에서 오늘 시간을 먼저 배치할 수 있습니다.";
   }
 
   if (liveOrNextBlock) {
@@ -130,7 +130,7 @@ function buildPrimaryAction({
       label: "실행 모드 시작",
       href: "/focus",
       detail: currentItem
-        ? `${formatServiceCopy(currentItem.title)}을 이어서 진행하세요.`
+        ? `${formatServiceCopy(currentItem.title)}을 이어서 진행할 수 있습니다.`
         : `${formatServiceCopy(recommendedTask?.title ?? "할 일")}부터 시작할 수 있습니다.`,
     };
   }
@@ -138,7 +138,7 @@ function buildPrimaryAction({
   return {
     label: "주간 일정 보기",
     href: "/schedule",
-    detail: "오늘 시간표를 정리해 보세요.",
+    detail: "오늘 시간표를 정리할 수 있습니다.",
   };
 }
 
@@ -199,7 +199,7 @@ export function DashboardView() {
         detail:
           mutationError instanceof Error
             ? mutationError.message
-            : "잠시 후 다시 시도해 주세요.",
+            : "잠시 후 다시 시도하면 됩니다.",
       });
     } finally {
       setIsMutating(false);
@@ -238,7 +238,7 @@ export function DashboardView() {
     <AppShell
       eyebrow="오늘"
       title="오늘 일정"
-      description="오늘 일정과 바로 시작할 일을 한눈에 확인합니다."
+      description="오늘 일정과 바로 시작할 일을 한눈에 보여줍니다."
       actions={
         <button className="ghost-btn" onClick={() => void loadDashboard()}>
           새로고침
@@ -255,7 +255,7 @@ export function DashboardView() {
       {!data.week && !data.focus && data.goals.length === 0 && status === "error" ? (
         <section className="surface-card empty-state">
           <strong>오늘 일정을 불러오지 못했습니다.</strong>
-          <p>{error ?? "서비스 응답을 다시 확인해 주세요."}</p>
+          <p>{error ?? "서비스 응답 확인이 필요합니다."}</p>
           <button className="solid-btn" onClick={() => void loadDashboard()}>
             다시 불러오기
           </button>
@@ -326,7 +326,7 @@ export function DashboardView() {
             {pendingSuggestion ? (
               <aside className="surface-card ai-approval-card pending">
                 <p className="eyebrow">변경 요청</p>
-                <h2>적용하거나 보류하세요.</h2>
+                <h2>변경을 적용하거나 보류할 수 있습니다.</h2>
                 <p className="section-header-note">검토할 변경이 있습니다.</p>
 
                 <div className="suggestion-actions approval-actions">

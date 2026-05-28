@@ -114,11 +114,11 @@ function getErrorMessage(payload: unknown, status: number) {
   }
 
   if (status === 401) {
-    return "로그인이 필요합니다. 로그인 화면에서 세션을 시작해 주세요.";
+    return "로그인이 필요합니다. 로그인 화면에서 세션을 시작할 수 있습니다.";
   }
 
   if (status === 403) {
-    return "보안 확인에 실패했습니다. 잠시 후 다시 시도하거나 페이지를 새로고침해 주세요.";
+    return "보안 확인에 실패했습니다. 잠시 후 다시 시도하거나 페이지를 새로고침하면 됩니다.";
   }
 
   return `요청에 실패했습니다. (${status})`;

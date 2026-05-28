@@ -43,8 +43,8 @@ export function LoginView() {
       <div className="status-screen">
         <div className="status-panel">
           <p className="eyebrow">작업 공간 준비</p>
-          <h1>오늘 일정을 준비하고 있습니다.</h1>
-          <p>필요한 생활 리듬만 짧게 설정합니다.</p>
+          <h1>오늘 일정을 준비합니다.</h1>
+          <p>필요한 생활 리듬만 짧게 설정할 수 있습니다.</p>
         </div>
       </div>
     );
@@ -56,7 +56,7 @@ export function LoginView() {
         <section className="login-hero">
           <p className="eyebrow">Time Table</p>
           <h1>오늘 일정과 지금 할 일을 바로 보여줍니다.</h1>
-          <p>오늘 일정, 지금 할 일, 주간 일정표만 한 화면에서 정리합니다.</p>
+          <p>오늘 일정, 지금 할 일, 주간 일정표만 한 화면에 정리해 보여줍니다.</p>
         </section>
 
         <section className="login-action-card">
@@ -73,7 +73,7 @@ export function LoginView() {
           {sessionPhase === "error" ? (
             <div className="inline-message error">
               <strong>세션 확인 실패</strong>
-              <p>{sessionError ?? "잠시 후 다시 시도해 주세요."}</p>
+              <p>{sessionError ?? "잠시 후 다시 시도하면 됩니다."}</p>
             </div>
           ) : null}
 

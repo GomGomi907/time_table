@@ -95,7 +95,7 @@ test("simplified schedule UX keeps only today, now, weekly table, edit controls,
 
   await ensurePendingSuggestion(page);
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: "적용하거나 보류하세요." })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "변경을 적용하거나 보류할 수 있습니다." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("button", { name: "보류" })).toBeVisible();
   await expect(page.getByRole("button", { name: "적용" })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
