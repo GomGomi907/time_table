@@ -41,7 +41,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   HEALTH: "건강",
 };
 
-export const PIXELS_PER_MINUTE = 1.14;
+export const PIXELS_PER_MINUTE = 0.95;
 export const DEFAULT_WEEK_VIEW_START_MINUTES = 6 * 60;
 export const DEFAULT_WEEK_VIEW_END_MINUTES = 24 * 60;
 export const DAY_TRACK_HEIGHT =

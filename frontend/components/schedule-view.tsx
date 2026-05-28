@@ -858,7 +858,7 @@ export function ScheduleView() {
 
                   {pendingSuggestions.length ? (
                     <div className="ai-suggestion-strip">
-                      {pendingSuggestions.slice(0, 2).map((suggestion) => (
+                      {pendingSuggestions.slice(0, 1).map((suggestion) => (
                         <div className="ai-suggestion-card suggestion-diff-card" key={suggestion.id}>
                           <div className="suggestion-diff-head">
                             <strong>요청한 변경이 있습니다.</strong>
