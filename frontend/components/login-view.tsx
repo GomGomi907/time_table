@@ -55,7 +55,7 @@ export function LoginView() {
       <div className="login-panel login-panel-rich">
         <section className="login-hero">
           <p className="eyebrow">Time Table</p>
-          <h1>오늘 일정과 지금 할 일을 바로 봅니다.</h1>
+          <h1>오늘 일정과 지금 할 일을 바로 보여줍니다.</h1>
           <p>오늘 일정, 지금 할 일, 주간 일정표만 한 화면에서 정리합니다.</p>
         </section>
 

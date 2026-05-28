@@ -64,7 +64,7 @@ test.describe("핵심 사용자 시나리오", () => {
     if (!(await loginStart.isVisible({ timeout: 5_000 }).catch(() => false))) {
       await page.goto("/login");
     }
-    await expect(page.getByRole("heading", { name: "오늘 일정과 지금 할 일을 바로 봅니다." })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "오늘 일정과 지금 할 일을 바로 보여줍니다." })).toBeVisible({
       timeout: 30_000,
     });
     await expect(loginStart).toBeVisible();
