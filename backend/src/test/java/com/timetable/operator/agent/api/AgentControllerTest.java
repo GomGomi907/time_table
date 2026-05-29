@@ -200,9 +200,10 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("pending"))
-                .andExpect(jsonPath("$.data.previewItems.length()").value(2))
-                .andExpect(jsonPath("$.data.previewItems[0].title").value("재조율 요청"))
-                .andExpect(jsonPath("$.data.executableCommandCount").value(1))
+                .andExpect(jsonPath("$.data.previewItems.length()").value(1))
+                .andExpect(jsonPath("$.data.previewItems[0].title").value("설명"))
+                .andExpect(jsonPath("$.data.executableCommandCount").value(0))
+                .andExpect(jsonPath("$.data.executable").value(false))
                 .andReturn();
 
         String suggestionId = suggestionResult.getResponse().getContentAsString()
@@ -286,9 +287,9 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.executionSummary.totalCount").value(2))
+                .andExpect(jsonPath("$.data.executionSummary.totalCount").value(1))
                 .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(0))
-                .andExpect(jsonPath("$.data.executionSummary.noOpCount").value(2));
+                .andExpect(jsonPath("$.data.executionSummary.noOpCount").value(1));
 
         assertThat(scheduleBlockRepository.count()).isEqualTo(blockCountBefore);
     }

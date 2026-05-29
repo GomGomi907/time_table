@@ -11,7 +11,6 @@ import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
 import com.timetable.operator.agent.infrastructure.RescheduleSuggestionRepository;
 import com.timetable.operator.auth.domain.AppUser;
-import com.timetable.operator.common.config.AppProperties;
 import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.events.domain.Event;
 import com.timetable.operator.events.domain.EventSourceType;
@@ -62,8 +61,7 @@ public class RescheduleSuggestionService {
     private final ObjectMapper objectMapper;
     private final ScheduleBlockRules scheduleBlockRules;
     private final ProviderWriteOutboxService providerWriteOutboxService;
-    private final AppProperties appProperties;
-    private final AiRescheduleClient aiRescheduleClient;
+    private final AiRequestAgentService aiRequestAgentService;
 
     @Transactional
     public RescheduleSuggestionResponse createManualSuggestion(ManualRescheduleRequest request) {
@@ -81,20 +79,7 @@ public class RescheduleSuggestionService {
     }
 
     private StructuredAiCommandBatch resolveManualSuggestionBatch(AppUser user, ManualRescheduleRequest request) {
-        if (!aiEnabled()) {
-            return manualFallbackBatch(request);
-        }
-
-        try {
-            return aiRescheduleClient.suggest(buildAiContext(user, request));
-        } catch (RuntimeException exception) {
-            log.warn(
-                    "AI reschedule planner unavailable; recording manual fallback suggestion for user {}.",
-                    user.getId(),
-                    exception
-            );
-            return manualFallbackBatch(request);
-        }
+        return aiRequestAgentService.resolveManualRequest(user, request.reason(), buildAiContext(user, request));
     }
 
     @Transactional
@@ -102,13 +87,17 @@ public class RescheduleSuggestionService {
             ChatCommandNormalizationService.NormalizedChatCommand normalizedChatCommand
     ) {
         AppUser user = currentUserProvider.getCurrentUser();
+        StructuredAiCommandBatch batch = aiRequestAgentService.resolvePrebuiltCommandBatch(
+                user.getId(),
+                normalizedChatCommand.commandBatch()
+        );
         return createSuggestion(
                 user.getId(),
                 RescheduleSuggestionTriggerType.MANUAL_REQUEST,
-                normalizedChatCommand.commandBatch().summary(),
+                batch.summary(),
                 normalizedChatCommand.normalizedMessage(),
-                normalizedChatCommand.commandBatch().explanation(),
-                normalizedChatCommand.commandBatch()
+                batch.explanation(),
+                batch
         );
     }
 
@@ -914,46 +903,6 @@ public class RescheduleSuggestionService {
         if (task.getStatus() == null) {
             task.setStatus(TaskStatus.TODO);
         }
-    }
-
-    private Map<String, Object> buildManualPayload(ManualRescheduleRequest request) {
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        if (request.targetRangeStart() != null) {
-            payload.put("targetRangeStart", request.targetRangeStart());
-        }
-        if (request.targetRangeEnd() != null) {
-            payload.put("targetRangeEnd", request.targetRangeEnd());
-        }
-        return Map.copyOf(payload);
-    }
-
-    private boolean aiEnabled() {
-        return appProperties.ai() != null && appProperties.ai().enabled();
-    }
-
-    private StructuredAiCommandBatch manualFallbackBatch(ManualRescheduleRequest request) {
-        return new StructuredAiCommandBatch(
-                "재조율 요청 기록",
-                "AI 재조율 기능이 비활성화되어 요청만 검토 대기 상태로 기록했습니다.",
-                List.of(
-                        new StructuredAiCommand(
-                                AgentCommandActionType.REQUEST_RESCHEDULE.wireValue(),
-                                AgentCommandTargetType.EVENT.wireValue(),
-                                null,
-                                buildManualPayload(request),
-                                blankToDefault(request.reason(), "사용자 수동 재조율 요청"),
-                                true
-                        ),
-                        new StructuredAiCommand(
-                                AgentCommandActionType.EXPLAIN_ONLY.wireValue(),
-                                AgentCommandTargetType.NONE.wireValue(),
-                                null,
-                                Map.of("summary", "APP_AI_ENABLED=true와 Gemini API 키를 설정하면 AI가 실행 가능한 변경 명령을 생성합니다."),
-                                "AI disabled",
-                                false
-                        )
-                )
-        );
     }
 
     private AiRescheduleClient.RescheduleAiContext buildAiContext(AppUser user, ManualRescheduleRequest request) {
