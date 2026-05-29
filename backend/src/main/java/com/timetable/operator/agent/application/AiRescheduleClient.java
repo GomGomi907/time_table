@@ -83,17 +83,15 @@ public class AiRescheduleClient {
     private static final String RESPONSE_SCHEMA = """
             {
               "type": "object",
-              "additionalProperties": false,
               "required": ["summary", "explanation", "commands"],
               "properties": {
-                "summary": {"type": "string", "minLength": 1},
-                "explanation": {"type": "string", "minLength": 1},
+                "summary": {"type": "string"},
+                "explanation": {"type": "string"},
                 "commands": {
                   "type": "array",
                   "minItems": 1,
                   "items": {
                     "type": "object",
-                    "additionalProperties": false,
                     "required": ["action_type", "target_type", "target_id", "payload", "reason", "requires_confirmation"],
                     "properties": {
                       "action_type": {
@@ -104,8 +102,23 @@ public class AiRescheduleClient {
                         "type": "string",
                         "enum": ["event", "task", "none"]
                       },
-                      "target_id": {"type": ["string", "null"]},
-                      "payload": {"type": "object"},
+                      "target_id": {"type": "string", "nullable": true},
+                      "payload": {
+                        "type": "object",
+                        "properties": {
+                          "title": {"type": "string", "nullable": true},
+                          "description": {"type": "string", "nullable": true},
+                          "startAt": {"type": "string", "nullable": true},
+                          "endAt": {"type": "string", "nullable": true},
+                          "suggestedShiftMinutes": {"type": "integer", "nullable": true},
+                          "dayOfWeek": {"type": "string", "nullable": true},
+                          "startTime": {"type": "string", "nullable": true},
+                          "endTime": {"type": "string", "nullable": true},
+                          "activity": {"type": "string", "nullable": true},
+                          "estimatedMinutes": {"type": "integer", "nullable": true},
+                          "priority": {"type": "integer", "nullable": true}
+                        }
+                      },
                       "reason": {"type": "string"},
                       "requires_confirmation": {"type": "boolean"}
                     }
@@ -212,9 +225,8 @@ public class AiRescheduleClient {
                 new GeminiGenerationConfig(
                         appProperties.ai().maxTokens(),
                         appProperties.ai().temperature(),
-                        new GeminiResponseFormat(
-                                new GeminiTextResponseFormat(MediaType.APPLICATION_JSON_VALUE, parseSchema())
-                        )
+                        MediaType.APPLICATION_JSON_VALUE,
+                        parseSchema()
                 )
         );
     }
@@ -366,18 +378,8 @@ public class AiRescheduleClient {
     private record GeminiGenerationConfig(
             int maxOutputTokens,
             double temperature,
-            GeminiResponseFormat responseFormat
-    ) {
-    }
-
-    private record GeminiResponseFormat(
-            GeminiTextResponseFormat text
-    ) {
-    }
-
-    private record GeminiTextResponseFormat(
-            String mimeType,
-            JsonNode schema
+            String responseMimeType,
+            JsonNode responseSchema
     ) {
     }
 

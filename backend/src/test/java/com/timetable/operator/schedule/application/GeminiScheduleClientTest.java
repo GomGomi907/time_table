@@ -107,13 +107,18 @@ class GeminiScheduleClientTest {
 
         JsonNode body = objectMapper.readTree(requestBody.get());
         assertEquals("application/json",
-                body.path("generationConfig").path("responseFormat").path("text").path("mimeType").asText());
+                body.path("generationConfig").path("responseMimeType").asText());
         assertEquals(768, body.path("generationConfig").path("maxOutputTokens").asInt());
         assertThat(body.path("systemInstruction").path("parts").get(0).path("text").asText())
                 .contains("strict JSON");
         assertThat(body.path("contents").get(0).path("parts").get(0).path("text").asText())
                 .contains("월요일 오전 딥워크");
-        assertThat(body.path("generationConfig").path("responseFormat").path("text").path("schema").path("properties").path("blocks"))
+        assertThat(body.path("generationConfig").path("responseSchema").path("properties").path("blocks"))
                 .isNotNull();
+        assertThat(body.path("generationConfig").path("responseSchema").path("additionalProperties").isMissingNode())
+                .isTrue();
+        assertThat(body.path("generationConfig").path("responseSchema")
+                .path("properties").path("blocks").path("items").path("properties").path("note").path("nullable").asBoolean())
+                .isTrue();
     }
 }

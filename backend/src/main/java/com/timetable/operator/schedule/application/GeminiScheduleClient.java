@@ -122,14 +122,12 @@ public class GeminiScheduleClient {
     private static final String RESPONSE_SCHEMA = """
             {
               "type": "object",
-              "additionalProperties": false,
               "required": ["blocks", "warnings"],
               "properties": {
                 "blocks": {
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "additionalProperties": false,
                     "required": ["dayOfWeek", "startTime", "endTime", "activity", "category", "note"],
                     "properties": {
                       "dayOfWeek": {
@@ -137,23 +135,21 @@ public class GeminiScheduleClient {
                         "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
                       },
                       "startTime": {
-                        "type": "string",
-                        "pattern": "^(?:[01]\\\\d|2[0-3]):[0-5]\\\\d$"
+                        "type": "string"
                       },
                       "endTime": {
-                        "type": "string",
-                        "pattern": "^(?:[01]\\\\d|2[0-3]):[0-5]\\\\d$"
+                        "type": "string"
                       },
                       "activity": {
-                        "type": "string",
-                        "minLength": 1
+                        "type": "string"
                       },
                       "category": {
                         "type": "string",
                          "enum": ["WORK", "LIFE", "HEALTH", "TRANSIT", "GROWTH", "HOBBY", "SLEEP", "ADMIN"]
                       },
                       "note": {
-                        "type": ["string", "null"]
+                        "type": "string",
+                        "nullable": true
                       }
                     }
                   }
@@ -244,9 +240,8 @@ public class GeminiScheduleClient {
                 new GeminiGenerationConfig(
                         appProperties.ai().maxTokens(),
                         appProperties.ai().temperature(),
-                        new GeminiResponseFormat(
-                                new GeminiTextResponseFormat(MediaType.APPLICATION_JSON_VALUE, parseSchema())
-                        )
+                        MediaType.APPLICATION_JSON_VALUE,
+                        parseSchema()
                 )
         );
     }
@@ -413,18 +408,8 @@ public class GeminiScheduleClient {
     private record GeminiGenerationConfig(
             int maxOutputTokens,
             double temperature,
-            GeminiResponseFormat responseFormat
-    ) {
-    }
-
-    private record GeminiResponseFormat(
-            GeminiTextResponseFormat text
-    ) {
-    }
-
-    private record GeminiTextResponseFormat(
-            String mimeType,
-            JsonNode schema
+            String responseMimeType,
+            JsonNode responseSchema
     ) {
     }
 
