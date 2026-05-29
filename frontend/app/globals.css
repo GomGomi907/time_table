@@ -4792,3 +4792,19 @@ body {
     line-height: 1.16;
   }
 }
+
+/* Dashboard width contract: the main page header and content cards must share one full-width grid. */
+.dashboard-top-bar,
+.today-briefing-shell {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.today-briefing-shell:not(.has-pending-approval) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.today-briefing-shell:not(.has-pending-approval) .today-flow-card,
+.today-briefing-shell:not(.has-pending-approval) .today-schedule-card {
+  grid-column: 1;
+}
