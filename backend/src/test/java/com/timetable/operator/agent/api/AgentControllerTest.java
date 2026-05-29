@@ -408,6 +408,63 @@ class AgentControllerTest {
     }
 
     @Test
+    void applySuggestionCreatesScheduleBlockEvenWhenAiOmitsCategory() throws Exception {
+        long blockCountBefore = scheduleBlockRepository.count();
+        RescheduleSuggestion suggestion = new RescheduleSuggestion();
+        suggestion.setUserId(savedUser.getId());
+        suggestion.setTriggerType(RescheduleSuggestionTriggerType.MANUAL_REQUEST);
+        suggestion.setStatus(RescheduleSuggestionStatus.PENDING);
+        suggestion.setSummary("주간 일정 추가");
+        suggestion.setReason("AI가 category 없이 주간 일정 추가 명령을 반환");
+        suggestion.setExplanation("category가 없어도 기본 분류로 실제 일정 블록이 생성되어야 한다.");
+        suggestion.setSuggestionPayload("""
+                {
+                  "summary": "주간 일정 추가",
+                  "explanation": "category가 없어도 기본 분류로 실제 일정 블록이 생성되어야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "dayOfWeek": "WEDNESDAY",
+                        "startTime": "15:00",
+                        "endTime": "16:00",
+                        "activity": "AI 일정 추가 검증"
+                      },
+                      "reason": "사용자가 새 일정을 요청했다.",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+        RescheduleSuggestion savedSuggestion = rescheduleSuggestionRepository.save(suggestion);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "category 없는 AI 일정 추가 적용"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"))
+                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1));
+
+        assertThat(scheduleBlockRepository.count()).isEqualTo(blockCountBefore + 1);
+        ScheduleBlock created = scheduleBlockRepository.findByUserId(savedUser.getId()).stream()
+                .filter(block -> "AI 일정 추가 검증".equals(block.getActivity()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(created.getDayOfWeek()).isEqualTo(DayOfWeek.WEDNESDAY);
+        assertThat(created.getStartTime()).isEqualTo(LocalTime.of(15, 0));
+        assertThat(created.getEndTime()).isEqualTo(LocalTime.of(16, 0));
+        assertThat(created.getCategory()).isEqualTo(ScheduleCategory.LIFE);
+    }
+
+    @Test
     void chatSuggestionApplyMutatesCanonicalEventAndQueuesProviderWrite() throws Exception {
         Event event = new Event();
         event.setUserId(savedUser.getId());

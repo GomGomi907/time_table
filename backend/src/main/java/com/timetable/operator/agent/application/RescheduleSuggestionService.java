@@ -803,8 +803,8 @@ public class RescheduleSuggestionService {
         String category = readString(payload, "category");
         String note = readString(payload, "note", "description");
 
-        if (requireAllFields && (dayOfWeek == null || startTime == null || endTime == null || activity == null || category == null)) {
-            throw new IllegalArgumentException("create_event payload에는 dayOfWeek, startTime, endTime, activity, category가 필요합니다.");
+        if (requireAllFields && (dayOfWeek == null || startTime == null || endTime == null || activity == null)) {
+            throw new IllegalArgumentException("create_event payload에는 dayOfWeek, startTime, endTime, activity가 필요합니다.");
         }
 
         if (dayOfWeek != null) {
@@ -821,6 +821,8 @@ public class RescheduleSuggestionService {
         }
         if (category != null) {
             block.setCategory(ScheduleCategory.valueOf(category.toUpperCase()));
+        } else if (requireAllFields) {
+            block.setCategory(ScheduleCategory.LIFE);
         }
         if (note != null || requireAllFields) {
             block.setNote(note == null || note.isBlank() ? null : note.trim());

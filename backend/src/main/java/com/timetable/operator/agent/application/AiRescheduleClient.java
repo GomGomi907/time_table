@@ -54,6 +54,8 @@ public class AiRescheduleClient {
                   "payload": {
                     "title": "optional title",
                     "description": "optional description",
+                    "category": "optional WORK | LIFE | HEALTH | TRANSIT | GROWTH | HOBBY | SLEEP | ADMIN",
+                    "note": "optional note",
                     "startAt": "optional ISO-8601 instant",
                     "endAt": "optional ISO-8601 instant",
                     "suggestedShiftMinutes": "optional integer",
@@ -74,7 +76,9 @@ public class AiRescheduleClient {
             - Use only ids present in the provided context for move/update/delete commands.
             - Existing weekly schedule blocks are applied through action_type *_event with target_type "event" and the block id.
             - Existing canonical events use target_type "event"; tasks use target_type "task".
+            - To add a weekly schedule block, use action_type create_event, target_type event, target_id null, and include dayOfWeek, startTime, endTime, activity, and category.
             - Use ISO-8601 UTC instants for canonical event/task dates.
+            - category must be one of WORK, LIFE, HEALTH, TRANSIT, GROWTH, HOBBY, SLEEP, ADMIN. Use LIFE only when the user gives no better clue.
             - Never invent external Google ids.
             - If no safe executable change exists, return one explain_only command with requires_confirmation=false.
             - Output JSON only. No markdown.
@@ -108,6 +112,12 @@ public class AiRescheduleClient {
                         "properties": {
                           "title": {"type": "string", "nullable": true},
                           "description": {"type": "string", "nullable": true},
+                          "category": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": ["WORK", "LIFE", "HEALTH", "TRANSIT", "GROWTH", "HOBBY", "SLEEP", "ADMIN"]
+                          },
+                          "note": {"type": "string", "nullable": true},
                           "startAt": {"type": "string", "nullable": true},
                           "endAt": {"type": "string", "nullable": true},
                           "suggestedShiftMinutes": {"type": "integer", "nullable": true},

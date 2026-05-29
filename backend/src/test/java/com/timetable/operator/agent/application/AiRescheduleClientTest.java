@@ -88,7 +88,9 @@ class AiRescheduleClientTest {
                 body.path("generationConfig").path("responseMimeType").asText());
         assertEquals(768, body.path("generationConfig").path("maxOutputTokens").asInt());
         assertThat(body.path("systemInstruction").path("parts").get(0).path("text").asText())
-                .contains("AI schedule adjustment planner");
+                .contains("AI schedule adjustment planner")
+                .contains("To add a weekly schedule block")
+                .contains("category");
         assertThat(body.path("contents").get(0).path("parts").get(0).path("text").asText())
                 .contains("오전 일정이 너무 빡빡함")
                 .contains("event-1");
@@ -99,6 +101,10 @@ class AiRescheduleClientTest {
         assertThat(body.path("generationConfig").path("responseSchema")
                 .path("properties").path("commands").path("items").path("properties").path("target_id").path("nullable").asBoolean())
                 .isTrue();
+        assertThat(body.path("generationConfig").path("responseSchema")
+                .path("properties").path("commands").path("items").path("properties").path("payload")
+                .path("properties").path("category").path("enum"))
+                .hasSize(8);
     }
 
     private AppProperties appProperties(String baseUrl) {
