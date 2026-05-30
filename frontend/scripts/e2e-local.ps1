@@ -100,6 +100,9 @@ try {
   Push-Location $frontendDir
   try {
     npx playwright test
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
   } finally {
     Pop-Location
   }

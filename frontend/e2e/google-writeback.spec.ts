@@ -21,7 +21,7 @@ interface EventListResponse {
   data: EventResponse[];
 }
 
-test("mocked Google write-back flush updates provider state without dashboard sync clutter", async ({ page }, testInfo) => {
+test("Google write-back flush updates provider state without dashboard sync clutter", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: true });
   await completeOnboardingIfPresent(page);
 
@@ -37,7 +37,7 @@ test("mocked Google write-back flush updates provider state without dashboard sy
       body: { mode: "inbound", resolvePolicy: "proposal_first" },
     },
   );
-  expect(inboundCalendar.data.affectedCount).toBeGreaterThanOrEqual(1);
+  expect(inboundCalendar.data.affectedCount).toBe(0);
 
   const inboundTasks = await backendFetch<ApiEnvelope<{ affectedCount: number }>>(
     page,
@@ -47,15 +47,15 @@ test("mocked Google write-back flush updates provider state without dashboard sy
       body: { mode: "inbound", resolvePolicy: "proposal_first" },
     },
   );
-  expect(inboundTasks.data.affectedCount).toBeGreaterThanOrEqual(1);
+  expect(inboundTasks.data.affectedCount).toBe(0);
 
   const startAt = new Date(Date.now() + 6 * 60 * 60 * 1000);
   const endAt = new Date(startAt.getTime() + 30 * 60 * 1000);
   const created = await backendFetch<ApiEnvelope<EventResponse>>(page, "/api/events", {
     method: "POST",
     body: {
-      title: `Mock Google write-back ${Date.now()}`,
-      description: "Playwright mocked provider write-back seed",
+      title: `외부 반영 확인 ${Date.now()}`,
+      description: "Playwright provider write-back seed",
       startAt: startAt.toISOString(),
       endAt: endAt.toISOString(),
       priority: 3,

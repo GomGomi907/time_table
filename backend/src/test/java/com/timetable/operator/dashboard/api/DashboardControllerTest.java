@@ -73,14 +73,16 @@ class DashboardControllerTest {
     }
 
     @Test
-    void summaryReturnsDashboardContractAndSeedsCoreWorkspaceData() throws Exception {
+    void summaryReturnsDashboardContractWithoutFixtureData() throws Exception {
         mockMvc.perform(get("/api/dashboard/summary").with(user("tester").roles("USER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.week.week.length()").value(7))
-                .andExpect(jsonPath("$.data.goals.length()").value(3))
-                .andExpect(jsonPath("$.data.metrics.averageGoalProgress").value(35))
-                .andExpect(jsonPath("$.data.metrics.topGoal.title").value("주 3회 운동"))
+                .andExpect(jsonPath("$.data.goals.length()").value(0))
+                .andExpect(jsonPath("$.data.metrics.averageGoalProgress").value(0))
+                .andExpect(jsonPath("$.data.metrics.scheduleBlockCount").value(0))
+                .andExpect(jsonPath("$.data.metrics.growthBlockCount").value(0))
+                .andExpect(jsonPath("$.data.metrics.topGoal").doesNotExist())
                 .andExpect(jsonPath("$.data.focus.focusState").value("NO_ACTIVE_ITEM"))
                 .andExpect(jsonPath("$.data.sync.data.googleCalendar.status").value("not_connected"))
                 .andExpect(jsonPath("$.data.sync.meta.adapterMode").value("read_only"))

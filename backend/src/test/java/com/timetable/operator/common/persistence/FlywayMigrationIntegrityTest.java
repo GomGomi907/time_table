@@ -34,8 +34,8 @@ class FlywayMigrationIntegrityTest {
 
         UUID userId = UUID.randomUUID();
         UUID otherUserId = UUID.randomUUID();
-        String duplicateTaskExternalId = "google_tasks:@default:mock-tasks-inbound-task";
-        String duplicateEventExternalId = "google_calendar:mock-calendar-inbound-event";
+        String duplicateTaskExternalId = "google_tasks:@default:duplicate-task";
+        String duplicateEventExternalId = "google_calendar:duplicate-event";
 
         try (Connection connection = DriverManager.getConnection(jdbcUrl, "sa", "")) {
             insertUser(connection, userId);

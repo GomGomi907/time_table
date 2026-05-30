@@ -320,7 +320,7 @@ flowchart TD
 
 Schedule은 반복 루틴 레이어다.
 
-- `default-routine.json`에서 초기 주간 루틴을 import할 수 있다.
+- 초기 주간 루틴 fixture는 운영 사용자에게 자동 생성하지 않는다.
 - 사용자는 schedule block을 직접 생성, 수정, 삭제한다.
 - schedule block은 focus 화면에서 현재/다음 시간대 컨텍스트로 사용된다.
 

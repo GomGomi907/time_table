@@ -1,7 +1,5 @@
 package com.timetable.operator.schedule.application;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timetable.operator.auth.domain.AppUser;
 import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.schedule.domain.ScheduleBlock;
@@ -11,8 +9,6 @@ import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.time.format.TextStyle;
@@ -23,7 +19,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,14 +37,12 @@ public class ScheduleService {
 
     private final ScheduleBlockRepository scheduleBlockRepository;
     private final CurrentUserProvider currentUserProvider;
-    private final ObjectMapper objectMapper;
     private final GeminiScheduleClient geminiScheduleClient;
     private final ScheduleBlockRules scheduleBlockRules;
 
     @Transactional
     public WeekScheduleResponse getWeeklySchedule() {
         AppUser user = currentUserProvider.getCurrentUser();
-        seedDefaultsIfNeeded(user);
         return WeekScheduleResponse.fromBlocks(scheduleBlockRepository.findByUserId(user.getId()));
     }
 
@@ -100,37 +93,6 @@ public class ScheduleService {
         scheduleBlockRepository.delete(block);
     }
 
-    private void seedDefaultsIfNeeded(AppUser user) {
-        if (scheduleBlockRepository.existsByUserId(user.getId())) {
-            return;
-        }
-
-        try (InputStream inputStream = new ClassPathResource("defaults/default-routine.json").getInputStream()) {
-            List<SeedScheduleBlock> defaults = objectMapper.readValue(inputStream, new TypeReference<>() {
-            });
-            List<ScheduleBlock> blocks = defaults.stream()
-                    .map(block -> toEntity(user, block))
-                    .toList();
-            scheduleBlockRepository.saveAll(blocks);
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to load default routine seed.", exception);
-        }
-    }
-
-    private ScheduleBlock toEntity(AppUser user, SeedScheduleBlock block) {
-        ScheduleBlock scheduleBlock = new ScheduleBlock();
-        scheduleBlock.setUserId(user.getId());
-        scheduleBlock.setDayOfWeek(block.dayOfWeek());
-        scheduleBlock.setStartTime(block.startTime());
-        scheduleBlock.setEndTime(block.endTime());
-        scheduleBlock.setActivity(block.activity());
-        scheduleBlock.setCategory(block.category());
-        scheduleBlock.setNote(block.note());
-        scheduleBlock.setSourceType(ScheduleSourceType.DEFAULT_ROUTINE);
-        scheduleBlock.setSourceRef("default-routine");
-        return scheduleBlock;
-    }
-
     private ScheduleBlock toEntity(AppUser user, GeminiScheduleClient.ImportedScheduleBlock block) {
         ScheduleBlock scheduleBlock = new ScheduleBlock();
         scheduleBlock.setUserId(user.getId());
@@ -177,16 +139,6 @@ public class ScheduleService {
             @NotBlank @Size(max = 255) String activity,
             @NotNull ScheduleCategory category,
             @Size(max = 1000) String note
-    ) {
-    }
-
-    public record SeedScheduleBlock(
-            DayOfWeek dayOfWeek,
-            LocalTime startTime,
-            LocalTime endTime,
-            String activity,
-            ScheduleCategory category,
-            String note
     ) {
     }
 

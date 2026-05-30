@@ -13,7 +13,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,6 @@ public class GoalService {
     @Transactional
     public List<Goal> listGoals() {
         AppUser user = currentUserProvider.getCurrentUser();
-        seedDefaultsIfNeeded(user);
         return goalRepository.findByUserIdOrderByPriorityAscCreatedAtAsc(user.getId());
     }
 
@@ -108,64 +106,6 @@ public class GoalService {
         goal.setStartDate(request.startDate());
         goal.setEndDate(request.endDate());
         goal.setPriority(request.priority() == null ? 3 : request.priority());
-    }
-
-    private void seedDefaultsIfNeeded(AppUser user) {
-        if (goalRepository.existsByUserId(user.getId())) {
-            return;
-        }
-
-        Goal english = new Goal();
-        english.setUserId(user.getId());
-        english.setTitle("영어 공부");
-        english.setDescription("이번 달 영어 공부 20시간 누적");
-        english.setCategory(GoalCategory.GROWTH);
-        english.setStatus(GoalStatus.IN_PROGRESS);
-        english.setProgress(35);
-        english.setGoalType(GoalType.QUANTITATIVE);
-        english.setMetricUnit("hours");
-        english.setTargetValue(BigDecimal.valueOf(20));
-        english.setCurrentValue(BigDecimal.valueOf(7));
-        english.setProgressRule("{\"type\":\"sum_task_minutes\"}");
-        english.setStartDate(LocalDate.now().withDayOfMonth(1));
-        english.setEndDate(LocalDate.now().withDayOfMonth(LocalDate.now().lengthOfMonth()));
-        english.setPriority((short) 1);
-
-        Goal health = new Goal();
-        health.setUserId(user.getId());
-        health.setTitle("주 3회 운동");
-        health.setDescription("운동 루틴을 주간 시간표에 안정적으로 배치");
-        health.setCategory(GoalCategory.HEALTH);
-        health.setStatus(GoalStatus.IN_PROGRESS);
-        health.setProgress(50);
-        health.setGoalType(GoalType.HYBRID);
-        health.setMetricUnit("sessions");
-        health.setTargetValue(BigDecimal.valueOf(3));
-        health.setCurrentValue(BigDecimal.valueOf(1.5));
-        health.setProgressRule("{\"type\":\"count_completed_events\"}");
-        health.setStartDate(LocalDate.now().minusDays(2));
-        health.setEndDate(LocalDate.now().plusDays(5));
-        health.setPriority((short) 2);
-
-        Goal project = new Goal();
-        project.setUserId(user.getId());
-        project.setTitle("시간표 서비스 MVP");
-        project.setDescription("문서-설계-구현-검증까지 한 주 안에 완료");
-        project.setCategory(GoalCategory.CAREER);
-        project.setStatus(GoalStatus.IN_PROGRESS);
-        project.setProgress(20);
-        project.setGoalType(GoalType.DURATION);
-        project.setMetricUnit("hours");
-        project.setTargetValue(BigDecimal.valueOf(30));
-        project.setCurrentValue(BigDecimal.valueOf(6));
-        project.setProgressRule("{\"type\":\"manual\"}");
-        project.setStartDate(LocalDate.now());
-        project.setEndDate(LocalDate.now().plusDays(7));
-        project.setPriority((short) 1);
-
-        goalRepository.saveAll(List.of(english, health, project).stream()
-                .sorted(Comparator.comparing(Goal::getTitle))
-                .toList());
     }
 
     private String blankToNull(String value) {
