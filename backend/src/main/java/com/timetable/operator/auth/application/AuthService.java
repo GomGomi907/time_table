@@ -36,6 +36,10 @@ public class AuthService {
                 && authentication.isAuthenticated()
                 && authentication.getPrincipal() instanceof OAuth2User;
 
+        if (!authenticated) {
+            return unauthenticatedSession();
+        }
+
         AppUser user = currentUserProvider.getCurrentUser();
         Optional<CalendarConnection> connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google");
         Optional<CalendarSyncRun> latestSync = calendarSyncRunRepository.findTopByUserIdOrderByStartedAtDesc(user.getId());
@@ -53,6 +57,24 @@ public class AuthService {
                 connection.map(CalendarConnection::isTasksWriteEnabled).orElse(false),
                 connection.map(this::capabilityStatus).orElse("not_connected"),
                 latestSync.map(CalendarSyncRun::getFinishedAt).orElse(null),
+                appProperties.frontendBaseUrl() + "/auth/callback"
+        );
+    }
+
+    private SessionResponse unauthenticatedSession() {
+        return new SessionResponse(
+                false,
+                "",
+                "",
+                "",
+                "Asia/Seoul",
+                false,
+                false,
+                CalendarConnectionStatus.NOT_CONNECTED.name(),
+                false,
+                false,
+                "not_connected",
+                null,
                 appProperties.frontendBaseUrl() + "/auth/callback"
         );
     }

@@ -3,6 +3,7 @@ package com.timetable.operator.auth.api;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.emptyString;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,5 +36,17 @@ class AuthProductionGuardTest {
     void mockLoginEndpointIsNotPublicWhenMockLoginIsDisabled() throws Exception {
         mockMvc.perform(get("/api/auth/mock/login"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void sessionDoesNotExposeLocalIdentityWhenUnauthenticated() throws Exception {
+        mockMvc.perform(get("/api/auth/session"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authenticated").value(false))
+                .andExpect(jsonPath("$.userId", emptyString()))
+                .andExpect(jsonPath("$.email", emptyString()))
+                .andExpect(jsonPath("$.displayName", emptyString()))
+                .andExpect(jsonPath("$.googleConnectionStatus").value("NOT_CONNECTED"))
+                .andExpect(jsonPath("$.googleCapabilityStatus").value("not_connected"));
     }
 }
