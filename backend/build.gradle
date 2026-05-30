@@ -28,6 +28,7 @@ dependencies {
 	implementation 'org.springframework:spring-webflux'
 	implementation 'org.flywaydb:flyway-core'
 	implementation 'org.flywaydb:flyway-database-postgresql'
+	implementation 'com.google.cloud.sql:postgres-socket-factory:1.28.3'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.h2database:h2'
 	runtimeOnly 'org.postgresql:postgresql'
