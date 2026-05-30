@@ -16,9 +16,11 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -41,6 +43,16 @@ public class AiRescheduleClient implements AiAgentStageClient {
 
     private static final String SYSTEM_PROMPT = """
             You are an AI schedule adjustment planner for a Korean time-table app.
+
+            Input contract:
+            - The user payload is JSON with userRequest, generatedAt, timezone, and context.
+            - context.weeklyBlocks are repeating weekly schedule blocks.
+            - context.events are dated calendar events.
+            - context.tasks are actionable tasks.
+            - Use only ids included in context for update, move, and delete.
+            - Treat Korean relative dates/times from userRequest in the provided timezone.
+            - Prefer small, directly executable commands over broad plans.
+            - If the user request is random, vague, not schedule/task related, or lacks required time/title information, return explain_only with requires_confirmation=false instead of guessing.
 
             Return exactly one JSON object with this shape:
             {
@@ -81,15 +93,30 @@ public class AiRescheduleClient implements AiAgentStageClient {
             - category must be one of WORK, LIFE, HEALTH, TRANSIT, GROWTH, HOBBY, SLEEP, ADMIN. Use LIFE only when the user gives no better clue.
             - Never invent external Google ids.
             - If no safe executable change exists, return one explain_only command with requires_confirmation=false.
+            - Return compact, complete JSON. Do not truncate string fields. Do not include markdown, comments, or prose outside JSON.
             - Output JSON only. No markdown.
             """;
 
     private static final String INTERPRETATION_PROMPT = """
             You are the first stage of a Korean schedule/task command agent.
 
-            Read the provided user request and context. Return JSON only.
+            Read the provided userRequest and context. Return JSON only.
             Decide whether the request is specific enough to draft executable commands.
             Prefer asking one short clarification when the request is vague.
+
+            Input contract:
+            - userRequest is the exact Korean text typed by the user.
+            - generatedAt is the server timestamp for this request.
+            - timezone is the user's timezone. Interpret relative Korean dates/times in this timezone.
+            - context.weeklyBlocks are recurring weekly blocks, context.events are dated events, and context.tasks are tasks.
+            - Existing ids must be copied exactly from context. Never invent targetId.
+
+            Decision rules:
+            - For create event/task, require a clear title/activity and either a concrete date/time or enough weekly-block information.
+            - For update/move/delete, require exactly one matching existing event/task/block from context.
+            - For random text, greetings, explanations, or non-schedule requests, use action explain_only, targetType none, confidence <= 0.4.
+            - For a plausible schedule request missing date, time, duration, or target identity, set repairable=true, list missingFields, and ask one short Korean clarification.
+            - Do not force executable confidence. Use confidence >= 0.78 only when action, target type, and required fields are explicit.
 
             Required action values: create, update, move, delete, request_reschedule, run_sync, explain_only.
             Required targetType values: event, task, none.
@@ -115,6 +142,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
               "repairable": true,
               "clarificationQuestion": "one short Korean question"
             }
+            Return a complete compact JSON object only. No markdown. No trailing explanation.
             """;
 
     private static final String INTERPRETATION_SCHEMA = """
@@ -147,6 +175,8 @@ public class AiRescheduleClient implements AiAgentStageClient {
             You receive the original context, the interpretation, a failed command batch, and the backend failure reason.
             Return one corrected command batch using the exact command schema.
             Do not invent ids. Do not guess missing user information. If repair is impossible, return explain_only.
+            Preserve the user's original intent from userRequest. Fix only the invalid or mismatched fields.
+            Return compact, complete JSON only.
             Output JSON only.
             """;
 
@@ -215,13 +245,13 @@ public class AiRescheduleClient implements AiAgentStageClient {
         try {
             String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
                     INTERPRETATION_PROMPT,
-                    objectMapper.writeValueAsString(request.context()),
+                    objectMapper.writeValueAsString(promptPayload(request)),
                     INTERPRETATION_SCHEMA
             )));
             if (content == null || content.isBlank()) {
                 throw new IllegalStateException("AI 요청 해석 응답을 읽지 못했습니다.");
             }
-            return objectMapper.readValue(content, AiAgentInterpretation.class);
+            return objectMapper.readValue(normalizeJsonObject(content), AiAgentInterpretation.class);
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
@@ -236,7 +266,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
             throw new IllegalStateException("AI reschedule planner is disabled.");
         }
         try {
-            DraftRequest draftRequest = new DraftRequest(request.context(), interpretation);
+            DraftRequest draftRequest = new DraftRequest(promptPayload(request), interpretation);
             String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
                     SYSTEM_PROMPT,
                     objectMapper.writeValueAsString(draftRequest),
@@ -265,7 +295,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
             throw new IllegalStateException("AI reschedule planner is disabled.");
         }
         try {
-            RepairRequest repairRequest = new RepairRequest(request.context(), interpretation, failedBatch, failure);
+            RepairRequest repairRequest = new RepairRequest(promptPayload(request), interpretation, failedBatch, failure);
             String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
                     REPAIR_PROMPT,
                     objectMapper.writeValueAsString(repairRequest),
@@ -364,6 +394,25 @@ public class AiRescheduleClient implements AiAgentStageClient {
         return apiKey.trim();
     }
 
+    private AgentPromptPayload promptPayload(AiAgentRequest request) {
+        String timezone = request.context() == null || request.context().user() == null
+                ? null
+                : request.context().user().timezone();
+        if ((timezone == null || timezone.isBlank()) && request.user() != null) {
+            timezone = request.user().getTimezone();
+        }
+        String userId = request.user() == null || request.user().getId() == null
+                ? null
+                : request.user().getId().toString();
+        return new AgentPromptPayload(
+                request.reason(),
+                Instant.now().toString(),
+                blankToDefault(timezone, "Asia/Seoul"),
+                userId,
+                request.context()
+        );
+    }
+
     private GeminiGenerateContentRequest buildRequest(RescheduleAiContext context) {
         String userPayload;
         try {
@@ -403,16 +452,39 @@ public class AiRescheduleClient implements AiAgentStageClient {
         if (content == null || content.parts() == null || content.parts().isEmpty()) {
             return null;
         }
-        return content.parts().stream()
+        String generatedText = content.parts().stream()
                 .map(GeminiPart::text)
                 .filter(text -> text != null && !text.isBlank())
-                .findFirst()
-                .orElse(null);
+                .collect(Collectors.joining());
+        if (generatedText.isBlank() && response.candidates().getFirst().finishReason() != null
+                && !response.candidates().getFirst().finishReason().isBlank()) {
+            throw new IllegalStateException("Gemini returned no text. finishReason="
+                    + response.candidates().getFirst().finishReason());
+        }
+        return generatedText.isBlank() ? null : generatedText;
+    }
+
+    private String normalizeJsonObject(String rawContent) {
+        if (rawContent == null) {
+            throw new IllegalArgumentException("AI response body is null.");
+        }
+        String content = rawContent.trim();
+        if (content.startsWith("```")) {
+            content = content.replaceFirst("^```[a-zA-Z]*\\R?", "")
+                    .replaceFirst("\\R?```$", "")
+                    .trim();
+        }
+        int start = content.indexOf('{');
+        int end = content.lastIndexOf('}');
+        if (start >= 0 && end > start && (start > 0 || end < content.length() - 1)) {
+            content = content.substring(start, end + 1).trim();
+        }
+        return content;
     }
 
     private StructuredAiCommandBatch canonicalize(String rawContent) {
         try {
-            StructuredAiCommandBatch batch = objectMapper.readValue(rawContent, StructuredAiCommandBatch.class);
+            StructuredAiCommandBatch batch = objectMapper.readValue(normalizeJsonObject(rawContent), StructuredAiCommandBatch.class);
             if (batch == null) {
                 throw new IllegalArgumentException("AI response body is null.");
             }
@@ -525,7 +597,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
     }
 
     private record RepairRequest(
-            RescheduleAiContext context,
+            AgentPromptPayload request,
             AiAgentInterpretation interpretation,
             StructuredAiCommandBatch failedBatch,
             AiRequestProposalMatchService.MatchResult failure
@@ -533,8 +605,17 @@ public class AiRescheduleClient implements AiAgentStageClient {
     }
 
     private record DraftRequest(
-            RescheduleAiContext context,
+            AgentPromptPayload request,
             AiAgentInterpretation interpretation
+    ) {
+    }
+
+    private record AgentPromptPayload(
+            String userRequest,
+            String generatedAt,
+            String timezone,
+            String userId,
+            RescheduleAiContext context
     ) {
     }
 
@@ -559,7 +640,8 @@ public class AiRescheduleClient implements AiAgentStageClient {
     }
 
     private record GeminiCandidate(
-            GeminiContent content
+            GeminiContent content,
+            String finishReason
     ) {
     }
 
