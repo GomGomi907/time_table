@@ -26,7 +26,7 @@ const QUESTION_GROUPS = [
   },
   {
     id: "weekend",
-    title: "주말 한 칸의 성향",
+    title: "주말 사용 방식",
     questionIds: ["weekendStyle"],
   },
   {

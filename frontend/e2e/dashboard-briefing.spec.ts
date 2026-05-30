@@ -250,7 +250,7 @@ test("dashboard shows clarification as a question instead of an approval task", 
 
   await expect(page.getByRole("heading", { name: "확인이 필요합니다." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("어느 날짜로 옮길까요?")).toBeVisible();
-  await expect(page.getByText("변경 요청 입력에 답변을 적어 다시 보내세요.")).toBeVisible();
+  await expect(page.getByText("일정 정리 입력에 답변을 적어 다시 보내세요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "적용할 변경 없음" })).toBeDisabled();
   await expect(page.locator("body")).not.toContainText(BANNED_AI_METADATA);
@@ -269,9 +269,9 @@ test("dashboard shows provider-unavailable as retry guidance without AI internal
 
   await page.goto("/dashboard");
 
-  await expect(page.getByRole("heading", { name: "AI 요청 처리 실패" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "지금은 적용할 수 없습니다." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("잠시 후 다시 시도해 주세요.")).toBeVisible();
-  await expect(page.getByText("잠시 후 요청을 다시 보내세요.")).toBeVisible();
+  await expect(page.getByText("잠시 후 다시 시도하세요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "다시 요청 필요" })).toBeDisabled();
   await expect(page.locator("body")).not.toContainText(BANNED_AI_METADATA);
@@ -330,7 +330,7 @@ test("stacked today view keeps today's schedule before pending change actions", 
   await expect(page.getByRole("heading", { name: /오늘 일정은/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("heading", { name: /변경을 적용하거나 보류할 수 있습니다\.|확인이 필요합니다\.|AI 요청 처리 실패/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /최적화 제안|확인이 필요합니다\.|지금은 적용할 수 없습니다./ })).toBeVisible();
   await expectPendingSuggestionAction(page, pendingSuggestion);
   await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);

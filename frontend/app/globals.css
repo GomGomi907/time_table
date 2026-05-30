@@ -32,7 +32,7 @@
   --content-max: 1180px;
   --shell-gap: clamp(18px, 3vw, 34px);
   --page-pad: clamp(18px, 4vw, 48px);
-  --font-sans: "Noto Sans KR", "Apple SD Gothic Neo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: var(--font-body), "Noto Sans KR", "Apple SD Gothic Neo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: "Space Grotesk", "Noto Sans KR", system-ui, sans-serif;
 }
 
@@ -108,17 +108,24 @@ h2,
 .brand-name,
 .top-title {
   color: var(--ink-strong);
-  letter-spacing: -0.045em;
+  letter-spacing: -0.014em;
+}
+
+h1,
+h2,
+.top-title {
+  font-family: var(--font-sans);
+  font-weight: 500;
 }
 
 h1 {
-  font-size: clamp(2.25rem, 5vw, 5.75rem);
-  line-height: 0.98;
+  font-size: clamp(2rem, 4.2vw, 4.7rem);
+  line-height: 1.12;
 }
 
 h2 {
-  font-size: clamp(1.25rem, 2vw, 2rem);
-  line-height: 1.12;
+  font-size: clamp(1.2rem, 1.8vw, 1.78rem);
+  line-height: 1.24;
 }
 
 p {
@@ -128,6 +135,48 @@ p {
 
 strong {
   color: var(--ink-strong);
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  line-break: strict;
+}
+
+h1,
+h2,
+h3,
+.top-title,
+.hero-copy,
+.section-header-copy,
+.status-panel,
+.login-hero,
+.login-action-card,
+.onboarding-sidebar,
+.onboarding-card,
+.notice-card,
+.inline-message {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+p,
+li,
+label,
+summary,
+.micro-copy,
+.section-header-note,
+.current-schedule-note,
+.event-note,
+.next-card-note {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
 }
 
 /* Product primitives */
@@ -188,9 +237,12 @@ strong {
   border: 1px solid transparent;
   padding: 0 18px;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.22;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, opacity 160ms ease;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-align: center;
 }
 
 .solid-btn:hover:not(:disabled),
@@ -309,7 +361,7 @@ strong {
 }
 
 .status-panel h1 {
-  font-size: clamp(2rem, 5vw, 4.3rem);
+  font-size: clamp(1.9rem, 4.4vw, 3.6rem);
 }
 
 .login-panel-rich,
@@ -397,13 +449,13 @@ strong {
   background: var(--ink-strong);
   color: #fff;
   font-family: var(--font-display);
-  font-weight: 900;
-  letter-spacing: -0.06em;
+  font-weight: 700;
+  letter-spacing: -0.04em;
 }
 
 .brand-name {
   font-family: var(--font-display);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .brand-sub {
@@ -458,8 +510,8 @@ strong {
 }
 
 .top-title {
-  font-size: clamp(2.15rem, 5vw, 4.8rem);
-  line-height: 0.98;
+  font-size: clamp(1.95rem, 4.2vw, 4rem);
+  line-height: 1.12;
 }
 
 .hero-copy.compact {
@@ -552,8 +604,9 @@ strong {
 
 .today-flow-copy h2 {
   max-width: 720px;
-  font-size: clamp(2rem, 4.6vw, 5rem);
-  line-height: 0.98;
+  font-size: clamp(1.9rem, 4vw, 4.15rem);
+  font-weight: 500;
+  line-height: 1.12;
 }
 
 .today-primary-action {
@@ -1336,7 +1389,7 @@ button.current-schedule-card:hover {
 
 @media (max-width: 900px) {
   h1 {
-    font-size: clamp(2.1rem, 10vw, 4rem);
+    font-size: clamp(1.9rem, 8.5vw, 3.3rem);
   }
 
   .login-panel-rich,
@@ -1561,7 +1614,7 @@ button.current-schedule-card:hover {
   }
 
   .today-flow-copy h2 {
-    font-size: 2.35rem;
+    font-size: 2.05rem;
   }
 
   .ai-compose-actions {

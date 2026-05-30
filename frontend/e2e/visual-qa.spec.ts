@@ -97,7 +97,7 @@ async function captureResponsiveSurface(
 
 test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   await page.goto("/auth/callback?status=error&reason=e2e");
-  await expect(page.getByRole("heading", { name: /로그인 재시도가 필요합니다/ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /로그인을 다시 시도해 주세요/ })).toBeVisible({ timeout: 30_000 });
   await captureResponsiveSurface(page, testInfo, "auth-callback", async () => {
     await expect(page.getByRole("link", { name: /로그인 화면으로 돌아가기/ })).toBeVisible();
   });
