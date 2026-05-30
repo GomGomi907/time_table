@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "e2e": "playwright test",
+    "e2e:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/e2e-local.ps1",
     "e2e:headed": "playwright test --headed",
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install chromium"

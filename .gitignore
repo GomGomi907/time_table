@@ -36,6 +36,9 @@
 /frontend/playwright-report/
 /frontend/test-results/
 /frontend/post-impl-review/
+/frontend/.omx/
+/frontend/ai-schedule-planner/
+/frontend/ai-schedule-planner.zip
 
 # gemma
 /gemma4/.venv/
