@@ -32,7 +32,7 @@ export function FocusActionBar({
       <div className="focus-action-stack">
         <div className="focus-actions">
           {onCompleteCurrent ? (
-            <button className="solid-btn" disabled={isPending} onClick={onCompleteCurrent}>
+            <button className="solid-btn" data-testid="focus-primary-action" disabled={isPending} onClick={onCompleteCurrent}>
               {itemLabel} 완료
             </button>
           ) : null}
@@ -65,7 +65,7 @@ export function FocusActionBar({
   if (hasRecommendedTask && onStartRecommended) {
     return (
       <div className="focus-actions">
-        <button className="solid-btn" disabled={isPending} onClick={onStartRecommended}>
+        <button className="solid-btn" data-testid="focus-primary-action" disabled={isPending} onClick={onStartRecommended}>
           할 일 시작
         </button>
       </div>

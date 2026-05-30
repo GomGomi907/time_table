@@ -118,6 +118,15 @@ public class AiCommandValidationService {
         );
     }
 
+    public StructuredAiCommandBatch clarificationRequiredBatch(
+            String question,
+            List<String> missingFields,
+            List<String> ambiguousFields,
+            String reason
+    ) {
+        return clarificationBatch(question, missingFields, ambiguousFields, reason);
+    }
+
     private StructuredAiCommandBatch nonExecutableBatch(
             String summary,
             String explanation,

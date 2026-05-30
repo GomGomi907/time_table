@@ -9,7 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.timetable.operator.agent.application.AiRescheduleClient;
+import com.timetable.operator.agent.application.AiAgentInterpretation;
+import com.timetable.operator.agent.application.AiAgentStageClient;
 import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
 import com.timetable.operator.agent.domain.StructuredAiCommand;
@@ -72,7 +73,7 @@ class AgentAiOrchestrationControllerTest {
     private RescheduleSuggestionRepository rescheduleSuggestionRepository;
 
     @MockBean
-    private AiRescheduleClient aiRescheduleClient;
+    private AiAgentStageClient aiAgentStageClient;
 
     private AppUser user;
 
@@ -97,7 +98,8 @@ class AgentAiOrchestrationControllerTest {
 
     @Test
     void fakeLlmExecutableScheduleCreateUsesExistingApiEnvelopeAndAppliesToDb() throws Exception {
-        when(aiRescheduleClient.suggest(any())).thenReturn(new StructuredAiCommandBatch(
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation("create", "event", null, "제품 회의", "WEDNESDAY", "15:00", "16:00", null, null, null, List.of(), List.of(), 0.95, true, ""));
+        when(aiAgentStageClient.draft(any(), any())).thenReturn(new StructuredAiCommandBatch(
                 "주간 일정 추가",
                 "명확한 시간과 활동이 있어 적용 후보로 만들었습니다.",
                 List.of(scheduleCreate("WEDNESDAY", "15:00", "16:00", "제품 회의"))
@@ -153,17 +155,22 @@ class AgentAiOrchestrationControllerTest {
 
     @Test
     void fakeLlmMissingFieldsReturnsClarificationAndApplyDoesNotMutateDb() throws Exception {
-        when(aiRescheduleClient.suggest(any())).thenReturn(new StructuredAiCommandBatch(
-                "시간이 부족한 일정 추가",
-                "LLM이 불완전한 명령을 반환한 상황",
-                List.of(new StructuredAiCommand(
-                        AgentCommandActionType.CREATE_EVENT.wireValue(),
-                        AgentCommandTargetType.EVENT.wireValue(),
-                        null,
-                        Map.of("activity", "회의"),
-                        "fake missing time",
-                        true
-                ))
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create",
+                "event",
+                null,
+                "회의",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of("startTime"),
+                List.of(),
+                0.45,
+                false,
+                "언제 회의를 추가할까요?"
         ));
 
         long beforeCount = scheduleBlockRepository.countByUserId(user.getId());
@@ -203,10 +210,53 @@ class AgentAiOrchestrationControllerTest {
 
         assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
     }
-
     @Test
     void providerFailureIsNotReportedAsAiDisabledOrExecutable() throws Exception {
-        when(aiRescheduleClient.suggest(any())).thenThrow(new IllegalStateException("fake provider down"));
+        when(aiAgentStageClient.interpret(any())).thenThrow(new IllegalStateException("fake provider down"));
+
+        long beforeCount = scheduleBlockRepository.countByUserId(user.getId());
+        MvcResult suggestionResult = mockMvc.perform(post("/api/agent/reschedule")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "triggerType": "manual_request",
+                                  "reason": "수요일 15:00-16:00 제품 회의 추가해줘"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary").value("AI 요청 처리 실패"))
+                .andExpect(jsonPath("$.data.executableCommandCount").value(0))
+                .andExpect(jsonPath("$.data.executable").value(false))
+                .andExpect(jsonPath("$.data.commandBatch.commands[0].payload.resolutionType").value("provider_unavailable"))
+                .andReturn();
+
+        String body = suggestionResult.getResponse().getContentAsString();
+        assertThat(body).doesNotContain("confidence", "stage", "matchEvidence", "validationTrace", "repairAttempt", "chainOfThought", "reasoning");
+        String suggestionId = body.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", suggestionId)
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "provider unavailable apply safety"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(0));
+
+        assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
+    }
+
+    @Test
+    void providerFailureDuringDraftReturnsProviderUnavailableSuggestion() throws Exception {
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation("create", "event", null, "제품 회의", "WEDNESDAY", "15:00", "16:00", null, null, null, List.of(), List.of(), 0.95, true, ""));
+        when(aiAgentStageClient.draft(any(), any())).thenThrow(new IllegalStateException("fake draft down"));
+
+        long beforeCount = scheduleBlockRepository.countByUserId(user.getId());
 
         mockMvc.perform(post("/api/agent/reschedule")
                         .with(user("tester").roles("USER"))
@@ -223,6 +273,39 @@ class AgentAiOrchestrationControllerTest {
                 .andExpect(jsonPath("$.data.executableCommandCount").value(0))
                 .andExpect(jsonPath("$.data.executable").value(false))
                 .andExpect(jsonPath("$.data.commandBatch.commands[0].payload.resolutionType").value("provider_unavailable"));
+
+        assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
+    }
+
+    @Test
+    void providerFailureDuringRepairReturnsProviderUnavailableSuggestion() throws Exception {
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation("create", "event", null, "제품 회의", "WEDNESDAY", "15:00", "16:00", null, null, null, List.of(), List.of(), 0.95, true, ""));
+        when(aiAgentStageClient.draft(any(), any())).thenReturn(new StructuredAiCommandBatch(
+                "잘못된 초안",
+                "수리 대상",
+                List.of(scheduleCreate("WEDNESDAY", "17:00", "18:00", "제품 회의"))
+        ));
+        when(aiAgentStageClient.repair(any(), any(), any(), any())).thenThrow(new IllegalStateException("fake repair down"));
+
+        long beforeCount = scheduleBlockRepository.countByUserId(user.getId());
+
+        mockMvc.perform(post("/api/agent/reschedule")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "triggerType": "manual_request",
+                                  "reason": "수요일 15:00-16:00 제품 회의 추가해줘"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary").value("AI 요청 처리 실패"))
+                .andExpect(jsonPath("$.data.executableCommandCount").value(0))
+                .andExpect(jsonPath("$.data.executable").value(false))
+                .andExpect(jsonPath("$.data.commandBatch.commands[0].payload.resolutionType").value("provider_unavailable"));
+
+        assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
     }
 
     private static StructuredAiCommand scheduleCreate(String day, String start, String end, String activity) {

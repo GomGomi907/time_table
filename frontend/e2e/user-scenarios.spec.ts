@@ -29,6 +29,7 @@ interface SuggestionResponse {
   id: string;
   status: string;
   summary: string;
+  executable: boolean;
 }
 
 function minutesFromNow(minutes: number) {
@@ -171,11 +172,18 @@ test.describe("핵심 사용자 시나리오", () => {
     });
 
     const suggestions = await backendFetch<ApiEnvelope<SuggestionResponse[]>>(page, "/api/agent/suggestions");
-    const afterPendingCount = suggestions.data.filter((suggestion) => suggestion.status === "pending").length;
+    const pendingSuggestions = suggestions.data.filter((suggestion) => suggestion.status === "pending");
+    const afterPendingCount = pendingSuggestions.length;
     expect(afterPendingCount).toBeGreaterThan(beforePendingCount);
 
     await expect(page.getByText("변경 요청")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("button", { name: "적용" })).toBeVisible({ timeout: 30_000 });
+    if (pendingSuggestions.some((suggestion) => suggestion.executable)) {
+      await expect(page.getByRole("button", { name: "적용" })).toBeEnabled({ timeout: 30_000 });
+    } else {
+      await expect(page.getByRole("button", { name: /적용할 변경 없음|다시 요청 필요/ })).toBeDisabled({
+        timeout: 30_000,
+      });
+    }
     await expect(page.getByRole("button", { name: "보류" })).toBeVisible({ timeout: 30_000 });
 
     await page.getByRole("button", { name: "보류" }).click();

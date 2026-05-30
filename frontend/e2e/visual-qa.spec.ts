@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, Locator, Page, TestInfo, test } from "@playwright/test";
 
 import {
   backendFetch,
@@ -12,7 +12,13 @@ import {
 } from "./helpers";
 
 const BANNED_USER_COPY =
-  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어/;
+  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어|confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields/;
+
+const VIEWPORTS = [
+  { name: "desktop-1440", width: 1440, height: 1000 },
+  { name: "tablet-768", width: 768, height: 1024 },
+  { name: "mobile-375", width: 375, height: 812 },
+] as const;
 
 interface WeekScheduleResponse {
   week: Array<{
@@ -55,19 +61,66 @@ function isActiveNow(block: { startTime: string; endTime: string }, currentMinut
   return normalizedNow >= start && normalizedNow < end;
 }
 
+function preferredAction(
+  page: Page,
+  testId: string,
+  fallbackName: string | RegExp,
+): Locator {
+  return page
+    .getByTestId(testId)
+    .or(page.getByRole("button", { name: fallbackName }))
+    .or(page.getByRole("link", { name: fallbackName }))
+    .first();
+}
+
+async function assertNoHorizontalOverflow(page: Page) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    )
+    .toBe(true);
+}
+
+async function captureResponsiveSurface(
+  page: Page,
+  testInfo: TestInfo,
+  surface: string,
+  assertPrimaryVisible: () => Promise<void>,
+) {
+  for (const { name, width, height } of VIEWPORTS) {
+    await page.setViewportSize({ width, height });
+    await assertPrimaryVisible();
+    await assertNoHorizontalOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath(`${surface}-${name}.png`), fullPage: true });
+  }
+}
+
 test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
+  await page.goto("/auth/callback?status=error&reason=e2e");
+  await expect(page.getByRole("heading", { name: /로그인 재시도가 필요합니다/ })).toBeVisible({ timeout: 30_000 });
+  await captureResponsiveSurface(page, testInfo, "auth-callback", async () => {
+    await expect(page.getByRole("link", { name: /로그인 화면으로 돌아가기/ })).toBeVisible();
+  });
+
   await page.goto("/login");
   await expect(page.getByRole("button", { name: /Google로 시작|로그인 준비 중/ })).toBeVisible({
     timeout: 30_000,
   });
-  await page.screenshot({ path: testInfo.outputPath("login.png"), fullPage: true });
+  await captureResponsiveSurface(page, testInfo, "login", async () => {
+    await expect(page.getByRole("button", { name: /Google로 시작|로그인 준비 중/ })).toBeVisible();
+  });
 
-  await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
+  await loginAsUniqueMockUser(page, testInfo, { connectGoogle: false, writeCapable: false });
   if (new URL(page.url()).pathname.includes("/onboarding")) {
-    await expect(
-      page.getByRole("button", { name: /저장하고 계속|둘러보기|적용하고 시작/ }).first(),
-    ).toBeVisible({ timeout: 45_000 });
-    await page.screenshot({ path: testInfo.outputPath("onboarding.png"), fullPage: true });
+    const onboardingPrimary = preferredAction(
+      page,
+      "onboarding-continue-button",
+      /저장하고 계속|둘러보기|적용하고 시작/,
+    );
+    await expect(onboardingPrimary).toBeVisible({ timeout: 45_000 });
+    await captureResponsiveSurface(page, testInfo, "onboarding", async () => {
+      await expect(onboardingPrimary).toBeVisible();
+    });
   }
 
   await completeOnboardingIfPresent(page);
@@ -89,10 +142,15 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
     timeout: 30_000,
   });
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
-  await page.screenshot({ path: testInfo.outputPath("dashboard-today.png"), fullPage: true });
+  await captureResponsiveSurface(page, testInfo, "dashboard", async () => {
+    const dashboardPrimary = preferredAction(page, "dashboard-primary-action", /주간 일정 보기|오늘 일정 보기|일정 보러가기|다시 불러오기/);
+    await expect(dashboardPrimary).toBeVisible();
+  });
 
   await page.goto("/schedule");
-  await expect(page.getByRole("button", { name: "일정 직접 추가" })).toBeVisible({ timeout: 30_000 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const scheduleAddButton = preferredAction(page, "schedule-add-button", "일정 직접 추가");
+  await expect(scheduleAddButton).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
   await expect(page.getByRole("button", { name: new RegExp(escapeRegExp(activeScheduleTitle)) }).first()).toBeVisible({
     timeout: 30_000,
@@ -114,10 +172,24 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
         .evaluate((block) => (block as HTMLElement).offsetTop),
     )
     .toBeLessThan(760);
-  await page.screenshot({ path: testInfo.outputPath("weekly-schedule.png"), fullPage: true });
+  await captureResponsiveSurface(page, testInfo, "schedule", async () => {
+    await expect(scheduleAddButton).toBeVisible();
+  });
+
+  await scheduleAddButton.click();
+  const createDialog = page.getByRole("dialog", { name: /새 블록 추가/ });
+  await expect(createDialog).toBeVisible({ timeout: 15_000 });
+  await captureResponsiveSurface(page, testInfo, "schedule-modal", async () => {
+    await expect(createDialog.getByRole("button", { name: "블록 추가" })).toBeVisible();
+    await expect(createDialog.getByRole("button", { name: "취소" })).toBeVisible();
+  });
+  await createDialog.getByRole("button", { name: "취소" }).click();
 
   await page.goto("/focus");
   await expect(page.getByText(/지금 실행|지금 할 일/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
-  await page.screenshot({ path: testInfo.outputPath("focus-mode.png"), fullPage: true });
+  await captureResponsiveSurface(page, testInfo, "focus", async () => {
+    const focusPrimary = preferredAction(page, "focus-primary-action", /완료|삭제|일정 보기|오늘 일정 보기/);
+    await expect(focusPrimary).toBeVisible();
+  });
 });

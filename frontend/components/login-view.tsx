@@ -89,7 +89,7 @@ export function LoginView() {
             >
               {isPending ? "로그인 준비 중..." : "Google로 시작"}
             </button>
-            <button className="ghost-btn wide-btn" onClick={() => void refreshSession()}>
+            <button className="ghost-btn wide-btn" data-testid="status-retry-action" onClick={() => void refreshSession()}>
               다시 시도
             </button>
           </div>

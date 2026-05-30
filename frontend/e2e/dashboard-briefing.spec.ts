@@ -18,10 +18,13 @@ interface SuggestionResponse {
   id: string;
   status: string;
   summary: string;
+  executable: boolean;
 }
 
 const BANNED_USER_COPY =
   /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어/;
+const BANNED_AI_METADATA =
+  /confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
 
 async function clearPendingSuggestions(page: Page) {
   const suggestions = await backendFetch<ApiEnvelope<SuggestionResponse[]>>(page, "/api/agent/suggestions");
@@ -82,6 +85,119 @@ async function expectDashboardContentWidthMatchesHeader(page: Page) {
   expect(Math.abs(headerBox.width - contentBox.width)).toBeLessThanOrEqual(2);
 }
 
+async function expectPendingSuggestionAction(page: Page, suggestion: Pick<SuggestionResponse, "executable">) {
+  await expect(page.getByRole("button", { name: "보류" })).toBeVisible();
+
+  if (suggestion.executable) {
+    await expect(page.getByRole("button", { name: "적용" })).toBeEnabled();
+    return;
+  }
+
+  await expect(page.getByRole("button", { name: /적용할 변경 없음|다시 요청 필요/ })).toBeDisabled();
+}
+
+const WEEK = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+
+function buildNonExecutableSuggestion(
+  resolutionType: "clarification_required" | "provider_unavailable",
+  text: string,
+) {
+  const payload =
+    resolutionType === "clarification_required"
+      ? {
+          resolutionType,
+          clarificationQuestion: text,
+          missingFields: ["date"],
+          ambiguousFields: ["target"],
+          reason: "INTERNAL_REASON_SHOULD_NOT_RENDER",
+        }
+      : {
+          resolutionType,
+          message: text,
+        };
+
+  return {
+    id: `mock-${resolutionType}`,
+    triggerType: "manual_request",
+    status: "pending",
+    statusLabel: "대기",
+    statusDetail: "사용자 확인 필요",
+    summary: resolutionType === "clarification_required" ? "확인이 필요합니다." : "요청을 처리하지 못했습니다.",
+    reason: "INTERNAL_REASON_SHOULD_NOT_RENDER",
+    explanation: text,
+    commandBatch: {
+      summary: "안내",
+      explanation: text,
+      commands: [
+        {
+          actionType: "explain_only",
+          targetType: "schedule",
+          targetId: null,
+          payload,
+          reason: "INTERNAL_REASON_SHOULD_NOT_RENDER",
+          executable: false,
+        },
+      ],
+    },
+    previewItems: [],
+    executableCommandCount: 0,
+    executable: false,
+    executionSummary: null,
+    createdAt: new Date().toISOString(),
+    appliedAt: null,
+    rejectedAt: null,
+    revertedAt: null,
+  };
+}
+
+async function mockDashboardSummary(page: Page, suggestion: ReturnType<typeof buildNonExecutableSuggestion>) {
+  await page.route("**/api/dashboard/summary", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: {
+          week: {
+            week: WEEK.map((dayOfWeek) => ({
+              dayOfWeek,
+              blocks: [],
+            })),
+          },
+          goals: [],
+          focus: {
+            focusState: "IDLE",
+            currentItem: null,
+            nextItem: null,
+            scheduleContext: null,
+            preferenceContext: null,
+            recommendedTasks: [],
+            activeSuggestion: null,
+            remainingMinutes: null,
+          },
+          sync: null,
+          suggestions: [suggestion],
+          metrics: {
+            averageGoalProgress: 0,
+            weeklyShapeScore: 0,
+            scheduleBlockCount: 0,
+            growthBlockCount: 0,
+            topGoal: null,
+          },
+        },
+        meta: {},
+      }),
+    });
+  });
+  await page.route(`**/api/agent/suggestions/${suggestion.id}/reject`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: { ...suggestion, status: "rejected" }, meta: {} }),
+    });
+  });
+}
+
 
 test("dashboard answers today's schedule before operational details", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
@@ -122,6 +238,45 @@ test("dashboard answers today's schedule before operational details", async ({ p
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
 });
 
+test("dashboard shows clarification as a question instead of an approval task", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
+  await completeOnboardingIfPresent(page);
+  await mockDashboardSummary(
+    page,
+    buildNonExecutableSuggestion("clarification_required", "어느 날짜로 옮길까요?"),
+  );
+
+  await page.goto("/dashboard");
+
+  await expect(page.getByRole("heading", { name: "확인이 필요합니다." })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("어느 날짜로 옮길까요?")).toBeVisible();
+  await expect(page.getByText("변경 요청 입력에 답변을 적어 다시 보내세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "적용할 변경 없음" })).toBeDisabled();
+  await expect(page.locator("body")).not.toContainText(BANNED_AI_METADATA);
+
+  await page.getByRole("button", { name: "보류" }).click();
+  await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", { timeout: 30_000 });
+});
+
+test("dashboard shows provider-unavailable as retry guidance without AI internals", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
+  await completeOnboardingIfPresent(page);
+  await mockDashboardSummary(
+    page,
+    buildNonExecutableSuggestion("provider_unavailable", "잠시 후 다시 시도해 주세요."),
+  );
+
+  await page.goto("/dashboard");
+
+  await expect(page.getByRole("heading", { name: "AI 요청 처리 실패" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("잠시 후 다시 시도해 주세요.")).toBeVisible();
+  await expect(page.getByText("잠시 후 요청을 다시 보내세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "다시 요청 필요" })).toBeDisabled();
+  await expect(page.locator("body")).not.toContainText(BANNED_AI_METADATA);
+});
+
 test("stacked today view keeps today's schedule first when no approval is pending", async ({
   page,
 }, testInfo) => {
@@ -157,7 +312,7 @@ test("stacked today view keeps today's schedule before pending change actions", 
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
   await completeOnboardingIfPresent(page);
   await clearPendingSuggestions(page);
-  await ensurePendingSuggestion(page);
+  const pendingSuggestion = await ensurePendingSuggestion(page);
   await clearScheduleBlocksForDay(page, getCurrentBackendDay());
 
   await createScheduleBlockViaApi(page, {
@@ -175,9 +330,8 @@ test("stacked today view keeps today's schedule before pending change actions", 
   await expect(page.getByRole("heading", { name: /오늘 일정은/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("heading", { name: "변경을 적용하거나 보류할 수 있습니다." })).toBeVisible();
-  await expect(page.getByRole("button", { name: "보류" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "적용" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /변경을 적용하거나 보류할 수 있습니다\.|확인이 필요합니다\.|AI 요청 처리 실패/ })).toBeVisible();
+  await expectPendingSuggestionAction(page, pendingSuggestion);
   await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
   await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card", ".ai-approval-card"]);

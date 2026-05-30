@@ -95,7 +95,7 @@ export function AppShell({
           <p className="eyebrow">오류</p>
           <h1>세션을 확인하지 못했습니다.</h1>
           <p>{sessionError ?? "잠시 후 다시 시도하면 됩니다."}</p>
-          <button className="solid-btn" onClick={() => void refreshSession()}>
+          <button className="solid-btn" data-testid="status-retry-action" onClick={() => void refreshSession()}>
             다시 시도
           </button>
         </div>
@@ -114,7 +114,7 @@ export function AppShell({
             <Link className="solid-btn link-btn" href="/login">
               로그인 화면으로 이동
             </Link>
-            <button className="ghost-btn" onClick={() => void refreshSession()}>
+            <button className="ghost-btn" data-testid="status-retry-action" onClick={() => void refreshSession()}>
               세션 다시 확인
             </button>
           </div>
@@ -142,7 +142,7 @@ export function AppShell({
           <p className="eyebrow">초기 설정 확인</p>
           <h1>초기 설정 상태를 확인하지 못했습니다.</h1>
           <p>{onboardingError ?? "처음 설정 상태를 다시 불러올 수 있습니다."}</p>
-          <button className="solid-btn" onClick={() => void refreshOnboarding()}>
+          <button className="solid-btn" data-testid="status-retry-action" onClick={() => void refreshOnboarding()}>
             다시 시도
           </button>
         </div>
@@ -173,7 +173,7 @@ export function AppShell({
           </div>
         </div>
 
-        <nav className="nav-links" aria-label="주요 화면">
+        <nav className="nav-links" aria-label="주요 화면" data-testid="shell-primary-nav">
           {NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href;
             return (

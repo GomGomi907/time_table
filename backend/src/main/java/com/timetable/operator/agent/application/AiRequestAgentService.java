@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 public class AiRequestAgentService {
 
     private final AppProperties appProperties;
-    private final AiRescheduleClient aiRescheduleClient;
+    private final AiAgentOrchestrator aiAgentOrchestrator;
     private final AiCommandValidationService aiCommandValidationService;
 
     public StructuredAiCommandBatch resolveManualRequest(
@@ -27,8 +27,7 @@ public class AiRequestAgentService {
         }
 
         try {
-            StructuredAiCommandBatch batch = aiRescheduleClient.suggest(context);
-            return aiCommandValidationService.requireExecutableOrClarification(user.getId(), batch);
+            return aiAgentOrchestrator.resolve(new AiAgentRequest(user, reason, context));
         } catch (RuntimeException exception) {
             log.warn(
                     "AI request agent provider unavailable; recording provider-unavailable suggestion for user {}.",

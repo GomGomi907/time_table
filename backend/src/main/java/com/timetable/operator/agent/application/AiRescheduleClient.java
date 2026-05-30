@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AiRescheduleClient {
+public class AiRescheduleClient implements AiAgentStageClient {
 
     private static final Set<String> EXECUTABLE_ACTIONS = Set.of(
             AgentCommandActionType.CREATE_EVENT.wireValue(),
@@ -82,6 +82,72 @@ public class AiRescheduleClient {
             - Never invent external Google ids.
             - If no safe executable change exists, return one explain_only command with requires_confirmation=false.
             - Output JSON only. No markdown.
+            """;
+
+    private static final String INTERPRETATION_PROMPT = """
+            You are the first stage of a Korean schedule/task command agent.
+
+            Read the provided user request and context. Return JSON only.
+            Decide whether the request is specific enough to draft executable commands.
+            Prefer asking one short clarification when the request is vague.
+
+            Required action values: create, update, move, delete, request_reschedule, run_sync, explain_only.
+            Required targetType values: event, task, none.
+            For update/move/delete, include an existing targetId only if the request clearly identifies exactly one item from context.
+            For create, include title/activity and explicit time/date fields when present.
+            Confidence is 0.0..1.0. Use >=0.78 only when action, target, time, and intent are explicit.
+
+            Return:
+            {
+              "action": "create|update|move|delete|request_reschedule|run_sync|explain_only",
+              "targetType": "event|task|none",
+              "targetId": "id or null",
+              "title": "title/activity or null",
+              "dayOfWeek": "MONDAY..SUNDAY or null",
+              "startTime": "HH:MM or null",
+              "endTime": "HH:MM or null",
+              "startAt": "ISO-8601 instant or null",
+              "endAt": "ISO-8601 instant or null",
+              "suggestedShiftMinutes": "integer or null",
+              "missingFields": ["most important missing fields"],
+              "ambiguousFields": ["ambiguous fields"],
+              "confidence": 0.0,
+              "repairable": true,
+              "clarificationQuestion": "one short Korean question"
+            }
+            """;
+
+    private static final String INTERPRETATION_SCHEMA = """
+            {
+              "type": "object",
+              "required": ["action", "targetType", "targetId", "title", "dayOfWeek", "startTime", "endTime", "startAt", "endAt", "suggestedShiftMinutes", "missingFields", "ambiguousFields", "confidence", "repairable", "clarificationQuestion"],
+              "properties": {
+                "action": {"type": "string"},
+                "targetType": {"type": "string"},
+                "targetId": {"type": "string", "nullable": true},
+                "title": {"type": "string", "nullable": true},
+                "dayOfWeek": {"type": "string", "nullable": true},
+                "startTime": {"type": "string", "nullable": true},
+                "endTime": {"type": "string", "nullable": true},
+                "startAt": {"type": "string", "nullable": true},
+                "endAt": {"type": "string", "nullable": true},
+                "suggestedShiftMinutes": {"type": "integer", "nullable": true},
+                "missingFields": {"type": "array", "items": {"type": "string"}},
+                "ambiguousFields": {"type": "array", "items": {"type": "string"}},
+                "confidence": {"type": "number"},
+                "repairable": {"type": "boolean"},
+                "clarificationQuestion": {"type": "string"}
+              }
+            }
+            """;
+
+    private static final String REPAIR_PROMPT = """
+            You are the repair stage of a Korean schedule/task command agent.
+
+            You receive the original context, the interpretation, a failed command batch, and the backend failure reason.
+            Return one corrected command batch using the exact command schema.
+            Do not invent ids. Do not guess missing user information. If repair is impossible, return explain_only.
+            Output JSON only.
             """;
 
     private static final String RESPONSE_SCHEMA = """
@@ -140,6 +206,82 @@ public class AiRescheduleClient {
 
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
+
+    @Override
+    public AiAgentInterpretation interpret(AiAgentRequest request) {
+        if (!appProperties.ai().enabled()) {
+            throw new IllegalStateException("AI reschedule planner is disabled.");
+        }
+        try {
+            String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
+                    INTERPRETATION_PROMPT,
+                    objectMapper.writeValueAsString(request.context()),
+                    INTERPRETATION_SCHEMA
+            )));
+            if (content == null || content.isBlank()) {
+                throw new IllegalStateException("AI 요청 해석 응답을 읽지 못했습니다.");
+            }
+            return objectMapper.readValue(content, AiAgentInterpretation.class);
+        } catch (IllegalStateException exception) {
+            throw exception;
+        } catch (IOException | IllegalArgumentException exception) {
+            log.error("Failed to call Gemini interpretation stage.", exception);
+            throw new IllegalStateException("AI 요청 해석에 실패했습니다.");
+        }
+    }
+
+    @Override
+    public StructuredAiCommandBatch draft(AiAgentRequest request, AiAgentInterpretation interpretation) {
+        if (!appProperties.ai().enabled()) {
+            throw new IllegalStateException("AI reschedule planner is disabled.");
+        }
+        try {
+            DraftRequest draftRequest = new DraftRequest(request.context(), interpretation);
+            String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
+                    SYSTEM_PROMPT,
+                    objectMapper.writeValueAsString(draftRequest),
+                    RESPONSE_SCHEMA
+            )));
+            if (content == null || content.isBlank()) {
+                throw new IllegalStateException("AI draft 응답을 읽지 못했습니다.");
+            }
+            return canonicalize(content);
+        } catch (IllegalStateException exception) {
+            throw exception;
+        } catch (IOException | IllegalArgumentException exception) {
+            log.error("Failed to call Gemini draft stage.", exception);
+            throw new IllegalStateException("AI draft 요청에 실패했습니다.");
+        }
+    }
+
+    @Override
+    public StructuredAiCommandBatch repair(
+            AiAgentRequest request,
+            AiAgentInterpretation interpretation,
+            StructuredAiCommandBatch failedBatch,
+            AiRequestProposalMatchService.MatchResult failure
+    ) {
+        if (!appProperties.ai().enabled()) {
+            throw new IllegalStateException("AI reschedule planner is disabled.");
+        }
+        try {
+            RepairRequest repairRequest = new RepairRequest(request.context(), interpretation, failedBatch, failure);
+            String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
+                    REPAIR_PROMPT,
+                    objectMapper.writeValueAsString(repairRequest),
+                    RESPONSE_SCHEMA
+            )));
+            if (content == null || content.isBlank()) {
+                throw new IllegalStateException("AI repair 응답을 읽지 못했습니다.");
+            }
+            return canonicalize(content);
+        } catch (IllegalStateException exception) {
+            throw exception;
+        } catch (IOException | IllegalArgumentException exception) {
+            log.error("Failed to call Gemini repair stage.", exception);
+            throw new IllegalStateException("AI repair 요청에 실패했습니다.");
+        }
+    }
 
     public StructuredAiCommandBatch suggest(RescheduleAiContext context) {
         if (!appProperties.ai().enabled()) {
@@ -229,21 +371,25 @@ public class AiRescheduleClient {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("AI 재조율 컨텍스트를 만들지 못했습니다.", exception);
         }
+        return buildRequest(SYSTEM_PROMPT, userPayload, RESPONSE_SCHEMA);
+    }
+
+    private GeminiGenerateContentRequest buildRequest(String systemPrompt, String userPayload, String responseSchema) {
         return new GeminiGenerateContentRequest(
-                new GeminiContent(List.of(new GeminiPart(SYSTEM_PROMPT))),
+                new GeminiContent(List.of(new GeminiPart(systemPrompt))),
                 List.of(new GeminiContent("user", List.of(new GeminiPart(userPayload)))),
                 new GeminiGenerationConfig(
                         appProperties.ai().maxTokens(),
                         appProperties.ai().temperature(),
                         MediaType.APPLICATION_JSON_VALUE,
-                        parseSchema()
+                        parseSchema(responseSchema)
                 )
         );
     }
 
-    private JsonNode parseSchema() {
+    private JsonNode parseSchema(String schema) {
         try {
-            return objectMapper.readTree(RESPONSE_SCHEMA);
+            return objectMapper.readTree(schema);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("AI 재조율 응답 스키마를 준비하지 못했습니다.", exception);
         }
@@ -375,6 +521,20 @@ public class AiRescheduleClient {
             short priority,
             String status,
             String syncState
+    ) {
+    }
+
+    private record RepairRequest(
+            RescheduleAiContext context,
+            AiAgentInterpretation interpretation,
+            StructuredAiCommandBatch failedBatch,
+            AiRequestProposalMatchService.MatchResult failure
+    ) {
+    }
+
+    private record DraftRequest(
+            RescheduleAiContext context,
+            AiAgentInterpretation interpretation
     ) {
     }
 

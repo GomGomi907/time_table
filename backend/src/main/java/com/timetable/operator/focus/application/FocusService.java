@@ -382,6 +382,9 @@ public class FocusService {
 
     private LocalTime resolveScheduleBlockCompletionEnd(ScheduleBlock block, LocalTime nowTime) {
         int elapsedMinutes = displayMinute(nowTime) - displayMinute(block.getStartTime());
+        if (elapsedMinutes < 0) {
+            elapsedMinutes = rawMinute(nowTime) - rawMinute(block.getStartTime());
+        }
         if (elapsedMinutes < ScheduleBlockRules.MIN_BLOCK_DURATION_MINUTES) {
             return block.getStartTime().plusMinutes(ScheduleBlockRules.MIN_BLOCK_DURATION_MINUTES);
         }
@@ -393,6 +396,10 @@ public class FocusService {
         return time.isBefore(ScheduleBlockRules.OVERNIGHT_DISPLAY_CUTOFF)
                 ? minuteOfDay + (24 * 60)
                 : minuteOfDay;
+    }
+
+    private int rawMinute(LocalTime time) {
+        return time.getHour() * 60 + time.getMinute();
     }
 
     private CurrentItem toCurrentItem(Event event) {

@@ -4,8 +4,9 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
+import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
-import { formatClockValue, formatServiceCopy } from "@/lib/format";
+import { formatClockValue, formatServiceCopy, getSuggestionDisplayState } from "@/lib/format";
 import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
@@ -738,9 +739,11 @@ export function ScheduleView() {
     }
     const suggestion = data.suggestions.find((item) => item.id === suggestionId);
     if (action === "apply" && !suggestion?.executable) {
+      const display = suggestion ? getSuggestionDisplayState(suggestion) : null;
       showNotice({
         tone: "error",
-        title: "적용할 변경이 없습니다.",
+        title: display?.title ?? "적용할 변경이 없습니다.",
+        detail: display?.detail,
       });
       return;
     }
@@ -781,8 +784,8 @@ export function ScheduleView() {
       title="주간 일정"
       description="이번 주 시간을 한 화면에 보여주고 바로 조정할 수 있게 합니다."
       actions={
-        <button className="ghost-btn" onClick={() => void loadSchedulePage()}>
-          새로고침
+        <button className="ghost-btn" disabled={status === "loading"} onClick={() => void loadSchedulePage()}>
+          {status === "loading" ? "새로고침 중..." : "새로고침"}
         </button>
       }
     >
@@ -797,6 +800,9 @@ export function ScheduleView() {
         <section className="surface-card empty-state">
           <strong>주간 일정을 불러오지 못했습니다.</strong>
           <p>{error ?? "잠시 후 다시 시도하면 됩니다."}</p>
+          <button className="solid-btn" data-testid="status-retry-action" onClick={() => void loadSchedulePage()}>
+            다시 불러오기
+          </button>
         </section>
       ) : null}
 
@@ -829,7 +835,7 @@ export function ScheduleView() {
                 <section className="ai-compose-card">
                   <SectionHeader
                     eyebrow="요청"
-                    title="AI에게 요청"
+                    title="변경 요청"
                     description="바꾸고 싶은 내용을 짧게 적으세요."
                   />
 
@@ -844,6 +850,7 @@ export function ScheduleView() {
                     <div className="ai-compose-actions">
                       <button
                         className="ghost-btn"
+                        data-testid="schedule-add-button"
                         disabled={isMutating}
                         type="button"
                         onClick={openCreateModal}
@@ -859,29 +866,14 @@ export function ScheduleView() {
                   {pendingSuggestions.length ? (
                     <div className="ai-suggestion-strip">
                       {pendingSuggestions.slice(0, 1).map((suggestion) => (
-                        <div className="ai-suggestion-card suggestion-diff-card" key={suggestion.id}>
-                          <div className="suggestion-diff-head">
-                            <strong>검토할 변경이 있습니다.</strong>
-                          </div>
-                          <div className="suggestion-actions">
-                            <button
-                              className="ghost-btn"
-                              type="button"
-                              disabled={isMutating}
-                              onClick={() => void handleSuggestionDecision("reject", suggestion.id)}
-                            >
-                              보류
-                            </button>
-                            <button
-                              className="solid-btn"
-                              type="button"
-                              disabled={isMutating || !suggestion.executable}
-                              onClick={() => void handleSuggestionDecision("apply", suggestion.id)}
-                            >
-                              적용
-                            </button>
-                          </div>
-                        </div>
+                        <SuggestionReviewCard
+                          className="ai-suggestion-card suggestion-diff-card"
+                          key={suggestion.id}
+                          isPending={isMutating}
+                          suggestion={suggestion}
+                          onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
+                          onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
+                        />
                       ))}
                     </div>
                   ) : null}

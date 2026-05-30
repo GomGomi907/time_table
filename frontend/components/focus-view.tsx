@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { FocusActionBar } from "@/components/focus-action-bar";
 import { FocusRailCard } from "@/components/focus-rail-card";
 import { api } from "@/lib/api";
-import { formatClockValue, formatRelativeMinutes, formatServiceCopy } from "@/lib/format";
+import { formatClockValue, formatRelativeMinutes, formatServiceCopy, getSuggestionDisplayState } from "@/lib/format";
 import {
   DAY_FULL_LABELS,
   DAY_ORDER,
@@ -293,9 +293,11 @@ export function FocusView() {
       return;
     }
     if (action === "apply" && !pendingSuggestion.executable) {
+      const display = getSuggestionDisplayState(pendingSuggestion);
       showNotice({
         tone: "error",
-        title: "적용할 변경이 없습니다.",
+        title: display.title,
+        detail: display.detail,
       });
       return;
     }
@@ -327,6 +329,9 @@ export function FocusView() {
           <section className="surface-card empty-state">
             <strong>집중 데이터를 불러오지 못했습니다.</strong>
             <p>{error ?? "서비스 응답 확인이 필요합니다."}</p>
+            <button className="solid-btn" data-testid="status-retry-action" onClick={() => void loadFocusPage()}>
+              다시 시도
+            </button>
           </section>
         ) : (
           <div className="focus-mode-stack">
@@ -421,6 +426,7 @@ export function FocusView() {
                     {canCompleteScheduleBlock ? (
                       <button
                         className="solid-btn"
+                        data-testid="focus-primary-action"
                         disabled={isMutating}
                         onClick={() =>
                           void withFocusMutation(
@@ -435,6 +441,7 @@ export function FocusView() {
                     ) : null}
                     <button
                       className={canCompleteScheduleBlock ? "ghost-btn" : "solid-btn"}
+                      data-testid={!canCompleteScheduleBlock ? "focus-primary-action" : undefined}
                       disabled={isMutating}
                       onClick={() =>
                         void withFocusMutation(

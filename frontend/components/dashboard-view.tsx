@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
+import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
 import { formatClockValue, formatServiceCopy } from "@/lib/format";
 import {
@@ -240,8 +241,8 @@ export function DashboardView() {
       title="오늘 일정"
       description="오늘 일정과 바로 시작할 일을 한눈에 보여줍니다."
       actions={
-        <button className="ghost-btn" onClick={() => void loadDashboard()}>
-          새로고침
+        <button className="ghost-btn" disabled={status === "loading"} onClick={() => void loadDashboard()}>
+          {status === "loading" ? "새로고침 중..." : "새로고침"}
         </button>
       }
     >
@@ -256,7 +257,7 @@ export function DashboardView() {
         <section className="surface-card empty-state">
           <strong>오늘 일정을 불러오지 못했습니다.</strong>
           <p>{error ?? "서비스 응답 확인이 필요합니다."}</p>
-          <button className="solid-btn" onClick={() => void loadDashboard()}>
+          <button className="solid-btn" data-testid="status-retry-action" onClick={() => void loadDashboard()}>
             다시 불러오기
           </button>
         </section>
@@ -275,7 +276,7 @@ export function DashboardView() {
                   <h2>{dayHeadline}</h2>
                   <p>{nextShiftDescription}</p>
                 </div>
-                <Link className="solid-btn link-btn today-primary-action" href={primaryAction.href}>
+                <Link className="solid-btn link-btn today-primary-action" data-testid="dashboard-primary-action" href={primaryAction.href}>
                   {primaryAction.label}
                 </Link>
               </div>
@@ -324,42 +325,26 @@ export function DashboardView() {
             </article>
 
             {pendingSuggestion ? (
-              <aside className="surface-card ai-approval-card pending">
-                <p className="eyebrow">변경 요청</p>
-                <h2>변경을 적용하거나 보류할 수 있습니다.</h2>
-                <p className="section-header-note">검토할 변경이 있습니다.</p>
-
-                <div className="suggestion-actions approval-actions">
-                  <button
-                    className="ghost-btn"
-                    disabled={isMutating}
-                    onClick={() =>
-                      void withDashboardMutation(
-                        () => api.rejectSuggestion(pendingSuggestion.id),
-                        "변경을 보류했습니다.",
-                        "변경 처리에 실패했습니다.",
-                      )
-                    }
-                    type="button"
-                  >
-                    보류
-                  </button>
-                  <button
-                    className="solid-btn"
-                    disabled={isMutating || !pendingSuggestion.executable}
-                    onClick={() =>
-                      void withDashboardMutation(
-                        () => api.applySuggestion(pendingSuggestion.id),
-                        "변경을 적용했습니다.",
-                        "변경 처리에 실패했습니다.",
-                      )
-                    }
-                    type="button"
-                  >
-                    적용
-                  </button>
-                </div>
-              </aside>
+              <SuggestionReviewCard
+                className="surface-card ai-approval-card pending"
+                isPending={isMutating}
+                suggestion={pendingSuggestion}
+                titleElement="h2"
+                onApply={() =>
+                  void withDashboardMutation(
+                    () => api.applySuggestion(pendingSuggestion.id),
+                    "변경을 적용했습니다.",
+                    "변경 처리에 실패했습니다.",
+                  )
+                }
+                onReject={() =>
+                  void withDashboardMutation(
+                    () => api.rejectSuggestion(pendingSuggestion.id),
+                    "변경을 보류했습니다.",
+                    "변경 처리에 실패했습니다.",
+                  )
+                }
+              />
             ) : null}
           </section>
 

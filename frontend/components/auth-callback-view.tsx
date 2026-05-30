@@ -72,7 +72,7 @@ export function AuthCallbackView() {
             <p>{errorReason ? "로그인 요청이 만료되었거나 취소되었습니다." : "세션을 만들지 못했습니다."}</p>
           </div>
         ) : null}
-        <Link className="ghost-btn link-btn" href="/login">
+        <Link className="ghost-btn link-btn" data-testid="status-retry-action" href="/login">
           로그인 화면으로 돌아가기
         </Link>
       </div>

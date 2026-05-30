@@ -1,3 +1,5 @@
+import type { RescheduleSuggestion } from "@/lib/types";
+
 function buildTimeFormatter(timeZone?: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
@@ -113,4 +115,93 @@ export function formatAiPreviewDetail(value: string | null | undefined) {
     (detail, [day, label]) => detail.replaceAll(day, label),
     formatServiceCopy(value),
   );
+}
+
+export type SuggestionDisplayKind = "executable" | "clarification" | "provider_unavailable" | "non_executable";
+
+export interface SuggestionDisplayState {
+  kind: SuggestionDisplayKind;
+  title: string;
+  detail: string;
+  guidance: string | null;
+  canApply: boolean;
+  applyLabel: string;
+}
+
+const INTERNAL_AI_METADATA_PATTERN =
+  /\b(confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields)\b/i;
+
+function getFirstCommandPayload(suggestion: RescheduleSuggestion) {
+  const payload = suggestion.commandBatch?.commands?.[0]?.payload;
+  return payload && typeof payload === "object" ? payload as Record<string, unknown> : null;
+}
+
+function getStringField(record: Record<string, unknown> | null, key: string) {
+  const value = record?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function toSafeSuggestionText(value: string | null | undefined, fallback: string) {
+  const normalized = formatServiceCopy(value).trim();
+  if (!normalized || INTERNAL_AI_METADATA_PATTERN.test(normalized)) {
+    return fallback;
+  }
+  return normalized;
+}
+
+export function getSuggestionResolutionType(suggestion: RescheduleSuggestion) {
+  const resolutionType = getStringField(getFirstCommandPayload(suggestion), "resolutionType");
+  return resolutionType || null;
+}
+
+export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): SuggestionDisplayState {
+  if (suggestion.executable) {
+    return {
+      kind: "executable",
+      title: "변경을 적용하거나 보류할 수 있습니다.",
+      detail: "검토할 변경이 있습니다.",
+      guidance: null,
+      canApply: true,
+      applyLabel: "적용",
+    };
+  }
+
+  const payload = getFirstCommandPayload(suggestion);
+  const resolutionType = getSuggestionResolutionType(suggestion);
+
+  if (resolutionType === "clarification_required") {
+    const question = getStringField(payload, "clarificationQuestion");
+    return {
+      kind: "clarification",
+      title: toSafeSuggestionText(suggestion.summary, "확인이 필요합니다."),
+      detail: toSafeSuggestionText(
+        question || suggestion.explanation,
+        "바꾸고 싶은 내용을 한 문장으로 더 알려주세요.",
+      ),
+      guidance: "변경 요청 입력에 답변을 적어 다시 보내세요.",
+      canApply: false,
+      applyLabel: "적용할 변경 없음",
+    };
+  }
+
+  if (resolutionType === "provider_unavailable") {
+    const message = getStringField(payload, "message");
+    return {
+      kind: "provider_unavailable",
+      title: "AI 요청 처리 실패",
+      detail: toSafeSuggestionText(message || suggestion.explanation, "잠시 후 다시 시도해 주세요."),
+      guidance: "잠시 후 요청을 다시 보내세요.",
+      canApply: false,
+      applyLabel: "다시 요청 필요",
+    };
+  }
+
+  return {
+    kind: "non_executable",
+    title: toSafeSuggestionText(suggestion.summary, "적용할 변경이 없습니다."),
+    detail: toSafeSuggestionText(suggestion.explanation, "요청을 더 구체적으로 다시 보내주세요."),
+    guidance: "필요하면 요청을 다시 작성해 보내세요.",
+    canApply: false,
+    applyLabel: "적용할 변경 없음",
+  };
 }

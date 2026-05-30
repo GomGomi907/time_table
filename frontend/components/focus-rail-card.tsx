@@ -1,4 +1,5 @@
 import { SectionHeader } from "@/components/section-header";
+import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { formatClockValue, formatRelativeMinutes, formatServiceCopy } from "@/lib/format";
 import { DAY_FULL_LABELS, UpcomingScheduleBlock } from "@/lib/schedule";
 import {
@@ -65,7 +66,6 @@ export function FocusRailCard({
   onRejectSuggestion = null,
 }: FocusRailCardProps) {
   const visibleTasks = uniqueRecommendedTasks(recommendedTasks, 3);
-  const canHandleSuggestion = Boolean(onApplySuggestion && onRejectSuggestion);
 
   return (
     <article className="surface-card focus-rail-card focus-now-card">
@@ -148,29 +148,14 @@ export function FocusRailCard({
           <p className="warning-copy rail-empty-copy">다음 일정이 없습니다.</p>
         )}
 
-        {pendingSuggestion ? (
-          <div className="suggestion-box">
-            <p className="panel-kicker">변경 요청</p>
-            <strong>검토할 변경이 있습니다.</strong>
-            {canHandleSuggestion ? (
-              <div className="suggestion-actions">
-                <button
-                  className="ghost-btn"
-                  disabled={isPending}
-                  onClick={onRejectSuggestion ?? undefined}
-                >
-                  보류
-                </button>
-                <button
-                  className="solid-btn"
-                  disabled={isPending || !pendingSuggestion.executable}
-                  onClick={onApplySuggestion ?? undefined}
-                >
-                  적용
-                </button>
-              </div>
-            ) : null}
-          </div>
+        {pendingSuggestion && onApplySuggestion && onRejectSuggestion ? (
+          <SuggestionReviewCard
+            className="suggestion-box"
+            isPending={isPending}
+            suggestion={pendingSuggestion}
+            onApply={onApplySuggestion}
+            onReject={onRejectSuggestion}
+          />
         ) : null}
       </div>
     </article>

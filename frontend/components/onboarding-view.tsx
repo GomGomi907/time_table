@@ -286,7 +286,7 @@ export function OnboardingView() {
           <p className="eyebrow">처음 설정</p>
           <h1>처음 설정 상태를 불러오지 못했습니다.</h1>
           <p>{onboardingError ?? "잠시 후 다시 시도하면 됩니다."}</p>
-          <button className="solid-btn" onClick={() => void refreshOnboarding()}>
+          <button className="solid-btn" data-testid="status-retry-action" onClick={() => void refreshOnboarding()}>
             다시 시도
           </button>
         </div>
@@ -316,10 +316,10 @@ export function OnboardingView() {
             {bootstrapMessage ? <p className="micro-copy">{bootstrapMessage}</p> : null}
             {bootstrapPhase === "error" ? (
               <div className="guest-actions">
-                <button className="solid-btn" onClick={() => void handleBootstrapRetry()}>
+                <button className="solid-btn" data-testid="status-retry-action" onClick={() => void handleBootstrapRetry()}>
                   다시 읽기
                 </button>
-                <button className="ghost-btn" onClick={() => void refreshOnboarding()}>
+                <button className="ghost-btn" data-testid="status-retry-action" onClick={() => void refreshOnboarding()}>
                   상태 새로고침
                 </button>
               </div>
@@ -392,6 +392,7 @@ export function OnboardingView() {
               <div className="onboarding-step-actions">
                 <button
                   className="solid-btn"
+                  data-testid="onboarding-continue-button"
                   disabled={!canSubmitAnswers || submitPhase === "loading"}
                   onClick={() => void handleSubmitAnswers()}
                   type="button"
@@ -446,6 +447,7 @@ export function OnboardingView() {
               <div className="board-head-actions">
                 <button
                   className="ghost-btn"
+                  data-testid={!suggestionId ? "onboarding-complete-primary" : undefined}
                   disabled={completionPhase === "loading"}
                   onClick={() => void handleComplete(false)}
                   type="button"
@@ -455,6 +457,7 @@ export function OnboardingView() {
                 {suggestionId ? (
                   <button
                     className="solid-btn"
+                    data-testid="onboarding-complete-primary"
                     disabled={completionPhase === "loading"}
                     onClick={() => void handleComplete(true)}
                     type="button"
