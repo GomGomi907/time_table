@@ -986,8 +986,9 @@ summary,
 
 .schedule-device-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  gap: 20px;
+  align-items: start;
   min-width: 0;
 }
 
@@ -996,12 +997,129 @@ summary,
   min-width: 0;
 }
 
+.schedule-ai-rail {
+  align-self: start;
+}
+
 .ai-compose-card {
   display: grid;
   gap: 18px;
   padding: 20px;
   position: sticky;
   top: 24px;
+}
+
+.ai-chat-card {
+  max-height: calc(100vh - 48px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-color: rgba(17, 24, 39, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 253, 0.92));
+  box-shadow: var(--shadow-sm);
+}
+
+.ai-chat-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ai-chat-head h2 {
+  margin-top: 4px;
+  font-size: 1.18rem;
+  line-height: 1.25;
+}
+
+.ai-chat-thread {
+  display: grid;
+  min-height: 260px;
+  max-height: min(56vh, 620px);
+  align-content: start;
+  gap: 16px;
+  overflow: auto;
+  padding: 2px 2px 4px;
+}
+
+.ai-chat-turn {
+  display: grid;
+  gap: 10px;
+}
+
+.chat-bubble {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.chat-bubble > span {
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-bubble > p {
+  width: fit-content;
+  max-width: 92%;
+  border-radius: 18px;
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.55;
+  padding: 11px 13px;
+}
+
+.chat-bubble.user {
+  justify-items: end;
+}
+
+.chat-bubble.user > p {
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-top-right-radius: 6px;
+  background: #111827;
+  color: #fff;
+}
+
+.chat-bubble.assistant {
+  justify-items: start;
+}
+
+.chat-suggestion-card {
+  width: 100%;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.chat-suggestion-card .suggestion-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.chat-suggestion-card .suggestion-actions .ghost-btn,
+.chat-suggestion-card .suggestion-actions .solid-btn {
+  width: 100%;
+}
+
+.chat-empty-state {
+  display: grid;
+  gap: 8px;
+  border: 1px dashed rgba(17, 24, 39, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--muted);
+  padding: 16px;
+}
+
+.chat-empty-state strong {
+  color: var(--ink);
+}
+
+.ai-chat-input {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
 }
 
 .ai-compose-form {
@@ -1018,6 +1136,12 @@ summary,
   background: rgba(255, 255, 255, 0.85);
   color: var(--ink);
   padding: 14px;
+}
+
+.ai-chat-input .ai-compose-textarea {
+  min-height: 96px;
+  max-height: 180px;
+  resize: vertical;
 }
 
 .ai-compose-actions {

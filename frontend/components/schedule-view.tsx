@@ -628,21 +628,63 @@ export function ScheduleView() {
             />
 
             <div className="schedule-device-layout">
-              <aside className="schedule-command-panel" aria-label="일정 추가와 변경 요청">
-                <section className="ai-compose-card">
-                  <SectionHeader
-                    eyebrow="요청"
-                    title="변경 요청"
-                    description="바꾸고 싶은 내용을 짧게 적으세요."
-                  />
+              <section className="schedule-calendar-panel" aria-label="반응형 주간 일정">
+                <WeeklyStack
+                  week={data.week}
+                  onBlockSelect={openEditModal}
+                  timeZone={session?.timezone}
+                />
+              </section>
 
-                  <form className="ai-compose-form" onSubmit={(event) => void handleRequestSuggestion(event)}>
+              <aside className="schedule-command-panel schedule-ai-rail" aria-label="AI 변경 요청 대화">
+                <section className="ai-compose-card ai-chat-card">
+                  <div className="ai-chat-head">
+                    <div>
+                      <p className="panel-kicker">AI 변경 요청</p>
+                      <h2>요청과 답변</h2>
+                    </div>
+                    <span className="accent-pill">{pendingSuggestions.length ? `${pendingSuggestions.length}건 대기` : "대기 없음"}</span>
+                  </div>
+
+                  <div className="ai-chat-thread" aria-live="polite">
+                    {pendingSuggestions.length ? (
+                      pendingSuggestions.map((suggestion) => {
+                        const display = getSuggestionDisplayState(suggestion);
+                        return (
+                          <div className="ai-chat-turn" key={suggestion.id}>
+                            <div className="chat-bubble user">
+                              <span>요청</span>
+                              <p>{formatServiceCopy(suggestion.reason || suggestion.summary)}</p>
+                            </div>
+                            <div className={`chat-bubble assistant ${display.kind}`}>
+                              <span>답변</span>
+                              <SuggestionReviewCard
+                                className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
+                                isPending={isMutating}
+                                suggestion={suggestion}
+                                kicker="검토"
+                                onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
+                                onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="chat-empty-state">
+                        <strong>아직 대화가 없습니다.</strong>
+                        <p>아래 입력창에 “내일 오전 회의 준비 시간을 비워줘”처럼 요청하면 답변이 이어집니다.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <form className="ai-compose-form ai-chat-input" onSubmit={(event) => void handleRequestSuggestion(event)}>
                     <textarea
                       className="ai-compose-textarea"
                       value={requestReason}
                       onChange={(event) => setRequestReason(event.target.value)}
                       placeholder="예: 내일 오전 회의 준비 시간을 비워줘"
-                      rows={2}
+                      rows={3}
                     />
                     <div className="ai-compose-actions">
                       <button
@@ -659,31 +701,8 @@ export function ScheduleView() {
                       </button>
                     </div>
                   </form>
-
-                  {pendingSuggestions.length ? (
-                    <div className="ai-suggestion-strip">
-                      {pendingSuggestions.slice(0, 1).map((suggestion) => (
-                        <SuggestionReviewCard
-                          className="ai-suggestion-card suggestion-diff-card"
-                          key={suggestion.id}
-                          isPending={isMutating}
-                          suggestion={suggestion}
-                          onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
-                          onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
                 </section>
               </aside>
-
-              <section className="schedule-calendar-panel" aria-label="반응형 주간 일정">
-                <WeeklyStack
-                  week={data.week}
-                  onBlockSelect={openEditModal}
-                  timeZone={session?.timezone}
-                />
-              </section>
             </div>
           </article>
         </section>
