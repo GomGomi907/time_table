@@ -65,7 +65,7 @@ async function expectPendingSuggestionAction(page: Page, suggestion: Pick<Sugges
   await expect(page.getByRole("button", { name: /적용할 변경 없음|다시 요청 필요/ })).toBeDisabled();
 }
 
-test("simplified schedule UX keeps only today, now, weekly table, edit controls, and AI input", async ({
+test("simplified schedule UX keeps only today, now, weekly stack, edit controls, and AI input", async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -138,7 +138,7 @@ test("simplified schedule UX keeps only today, now, weekly table, edit controls,
           "login hides sync/status clutter",
           "dashboard starts with today/now",
           "pending changes distinguish approval and non-executable states",
-          "schedule keeps weekly table, edit controls, and AI input",
+          "schedule keeps weekly stack, edit controls, and AI input",
           "focus keeps now task only",
           "mobile and desktop screenshots captured",
         ],

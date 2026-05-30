@@ -81,6 +81,41 @@ async function assertNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+async function assertReleaseVisualDiscipline(page: Page) {
+  await assertNoHorizontalOverflow(page);
+  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const viewportWidth = document.documentElement.clientWidth;
+        const interactiveElements = Array.from(
+          document.querySelectorAll<HTMLElement>("button, a, input, textarea, select, [role='button']"),
+        );
+
+        return interactiveElements
+          .filter((element) => {
+            const style = window.getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+          })
+          .every((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.left >= -1 && rect.right <= viewportWidth + 1;
+          });
+      }),
+    )
+    .toBe(true);
+}
+
+async function assertElementDoesNotOverflow(page: Page, selector: string) {
+  await expect
+    .poll(async () =>
+      page.locator(selector).evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+    )
+    .toBe(true);
+}
+
 async function captureResponsiveSurface(
   page: Page,
   testInfo: TestInfo,
@@ -90,7 +125,7 @@ async function captureResponsiveSurface(
   for (const { name, width, height } of VIEWPORTS) {
     await page.setViewportSize({ width, height });
     await assertPrimaryVisible();
-    await assertNoHorizontalOverflow(page);
+    await assertReleaseVisualDiscipline(page);
     await page.screenshot({ path: testInfo.outputPath(`${surface}-${name}.png`), fullPage: true });
   }
 }
@@ -159,11 +194,8 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
     timeout: 30_000,
   });
   await expect(page.locator(".current-schedule-card").getByText("지금 일정")).toBeVisible({ timeout: 30_000 });
-  await expect
-    .poll(async () =>
-      page.locator(".week-grid-scroll").evaluate((element) => element.clientHeight >= element.scrollHeight - 1),
-    )
-    .toBe(true);
+  await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
+  await assertElementDoesNotOverflow(page, ".week-stack-board");
   await expect
     .poll(async () =>
       page
@@ -172,6 +204,10 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
         .evaluate((block) => (block as HTMLElement).offsetTop),
     )
     .toBeLessThan(760);
+  await page.setViewportSize({ width: 960, height: 1000 });
+  await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
+  await assertNoHorizontalOverflow(page);
+  await assertElementDoesNotOverflow(page, ".week-stack-board");
   await captureResponsiveSurface(page, testInfo, "schedule", async () => {
     await expect(scheduleAddButton).toBeVisible();
   });

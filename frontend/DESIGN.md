@@ -39,6 +39,7 @@
 - Card usage: cards are allowed, but they must feel like one continuous workspace. Do not let the sidebar and content drift apart into separate islands.
 - App shell: left navigation and main content must stay visually close. Use a modest shell gap; content should stretch beside the sidebar instead of floating in the center of unused space.
 - Focus/execution mode: the main execution content is an immersive center-axis surface. Title, description, timer, and primary actions should be centered inside the main focus card.
+- Weekly schedule: do not use a fixed time-axis table as the primary desktop view. Short events become too hard to scan. Use a day-by-day stack where each day shows morning-to-night schedule cards in order, with start/end time as card metadata.
 - Onboarding: first impression matters even if onboarding conversion is not the top product metric. The onboarding start and completion screens must look polished, calm, and trustworthy.
 - Login/onboarding hero titles: these are not marketing billboards. They should be smaller than generic page heroes and should not dominate the card.
 - Do not reintroduce oversized demo typography, heavy heading weight, excessive negative tracking, or disconnected wide gutters.
@@ -107,9 +108,45 @@
 - Compatibility constraints: API contract frozen; do not change `lib/api.ts` request/response shape or backend.
 - Test/screenshot expectations: run typecheck/build and Playwright visual QA after UI edits.
 
+## Release visual QA rubric
+- Use this rubric for release gating, not only subjective screenshot review. A screen fails if any P0 item is observed at 375px, 768/960px, or 1440px.
+
+### P0 visual failures
+- Horizontal page overflow, clipped primary action, or controls outside the viewport.
+- A primary CTA, form field, schedule block, modal action, or navigation item is hidden, overlapped, disabled without explanation, or visually detached from its section.
+- Korean text breaks at awkward syllable boundaries in headings, buttons, schedule cards, or error messages.
+- A single card/hero consumes so much vertical space that today/now content is pushed below the first viewport on dashboard or schedule.
+- Login/onboarding/schedule/focus screens show AI internals, Google implementation details, sync diagnostics, validation traces, or provider metadata.
+- Mobile and desktop use the same cramped composition instead of distinct responsive arrangements.
+
+### P1 visual failures
+- Page title, toolbar, and main content widths do not share an obvious grid anchor.
+- Adjacent cards use inconsistent padding, radius, shadow, or border treatment.
+- Weekly schedule cards become visually equal-weight noise; current/next item is not easy to identify.
+- Modal width or button layout changes unpredictably across breakpoints.
+- Empty/error states feel like placeholders or mock data rather than product copy.
+
+### Layout measurement targets
+- Root page horizontal overflow: `scrollWidth <= clientWidth` at every supported viewport.
+- Main content width: desktop content should align to one container rhythm; mobile content should use full-width cards with safe gutters.
+- Primary action visibility: at least one obvious next action must be visible without horizontal scrolling on each core screen.
+- First viewport priority:
+  - dashboard: today schedule and now/next action visible;
+  - schedule: today/current block, weekly stack, edit action, and AI input discoverable without feeling crowded;
+  - focus: current task and primary completion/action visible;
+  - onboarding/login: title, explanation, and primary action visible without oversized hero treatment.
+
+### Screenshot review checklist
+- Compare mobile and desktop screenshots separately; do not approve by checking only one viewport.
+- Check edges first: left/right gutters, card alignment, clipped shadows, and fixed-width children.
+- Check text second: Korean wrapping, title size, button labels, and empty/error copy.
+- Check interaction affordance last: primary action, secondary action, disabled state explanation, modal close/cancel path.
+- Mark screenshot evidence with route, viewport, date, and pass/fail notes.
+
 ## Current CSS anchors to preserve
 - `app/globals.css` owns global layout, typography, wrapping, and product surface tokens.
 - App shell spacing is intentionally modest so the left sidebar and content read as one workspace.
+- Weekly schedule desktop view intentionally uses `.week-stack-shell` / `.week-stack-board` instead of a rigid time grid.
 - `.login-hero h1` and `.onboarding-sidebar h1` intentionally override generic `h1` sizing to keep entry/onboarding screens calm.
 - `.focus-primary` content is intentionally center-aligned for execution mode.
 - Korean wrapping rules on `body`, headings, copy, and buttons are product requirements, not incidental CSS cleanup.

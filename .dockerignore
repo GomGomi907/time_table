@@ -19,6 +19,9 @@ oh-my-codex
 .env
 .env.*
 !*.env.example
+client_secret_*.json
+**/client_secret_*.json
+**/*credentials*.json
 *.log
 *.tsbuildinfo
 *.db

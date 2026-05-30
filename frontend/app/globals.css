@@ -1049,7 +1049,7 @@ summary,
   display: none;
 }
 
-.week-grid-shell {
+.week-stack-shell {
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -1124,117 +1124,54 @@ button.current-schedule-card:hover {
   font-size: 0.9rem;
 }
 
-.week-grid-affordance {
-  display: none;
-  color: var(--muted-2);
-  font-size: 0.82rem;
-  text-align: center;
+.week-stack-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+  min-width: 0;
 }
 
-.week-grid-scroll {
-  width: 100%;
+.week-stack-day {
+  display: grid;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: visible;
+  align-content: start;
+  gap: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.72);
-  -webkit-overflow-scrolling: touch;
+  padding: 12px;
 }
 
-.week-grid-header,
-.week-grid-body {
-  display: grid;
-  grid-template-columns: 58px repeat(7, minmax(0, 1fr));
-  min-width: 0;
+.week-stack-day.today {
+  border-color: rgba(91, 110, 225, 0.28);
+  background: rgba(237, 240, 255, 0.56);
 }
 
-.week-grid-header {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.week-grid-corner,
-.week-grid-day-head {
+.week-stack-day-head {
   display: grid;
   gap: 4px;
   min-width: 0;
-  border-right: 1px solid var(--line);
-  padding: 10px;
 }
 
-.week-grid-day-head.today {
-  background: var(--accent-soft);
+.week-stack-day-head span,
+.week-stack-empty {
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
-.week-grid-day-head.empty small,
-.week-grid-corner span {
-  color: var(--muted-2);
-}
-
-.week-grid-body {
-  position: relative;
-}
-
-.schedule-time-axis,
-.schedule-day-column {
-  position: relative;
-  min-width: 0;
-  border-right: 1px solid var(--line);
-  background:
-    repeating-linear-gradient(to bottom, rgba(17, 24, 39, 0.05) 0 1px, transparent 1px 48px),
-    rgba(255, 255, 255, 0.42);
-}
-
-.schedule-day-column.today {
-  background:
-    repeating-linear-gradient(to bottom, rgba(91, 110, 225, 0.07) 0 1px, transparent 1px 48px),
-    rgba(237, 240, 255, 0.32);
-}
-
-.schedule-time-tick {
-  position: absolute;
-  right: 10px;
-  transform: translateY(-50%);
-  color: var(--muted-2);
-  font-size: 0.72rem;
-  font-weight: 760;
-}
-
-.schedule-time-tick.start { transform: none; }
-.schedule-time-tick.end { transform: translateY(-100%); }
-
-.schedule-now-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 4;
-  border-top: 2px solid var(--accent);
-}
-
-.schedule-now-line span {
-  position: absolute;
-  right: 6px;
-  top: -12px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: white;
-  font-size: 0.68rem;
-  font-weight: 900;
-  padding: 3px 7px;
+.week-stack-list {
+  display: grid;
+  gap: 8px;
 }
 
 .schedule-block {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  display: flex;
+  display: grid;
+  width: 100%;
   min-width: 0;
-  flex-direction: column;
   gap: 4px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid color-mix(in srgb, var(--tone, var(--meeting)) 22%, transparent);
   border-radius: 14px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--tone, var(--meeting)) 13%, white), #fff);
@@ -1249,6 +1186,19 @@ button.current-schedule-card:hover {
   box-shadow: 0 16px 32px rgba(91, 110, 225, 0.18);
 }
 
+.week-stack-block {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 78px;
+  height: auto;
+  left: auto;
+  top: auto;
+  gap: 6px;
+  overflow: visible;
+  padding: 12px;
+}
+
 .schedule-block.compact,
 .schedule-block.tight {
   padding: 6px 8px;
@@ -1260,6 +1210,12 @@ button.current-schedule-card:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.week-stack-block strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .event-time,
@@ -1585,10 +1541,6 @@ button.current-schedule-card:hover {
     width: 100%;
   }
 
-  .week-grid-affordance {
-    display: block;
-  }
-
   .week-summary-strip {
     width: 100%;
   }
@@ -1701,7 +1653,7 @@ button.current-schedule-card:hover {
     gap: 14px;
   }
 
-  .week-grid-shell {
+  .week-stack-shell {
     display: none;
   }
 

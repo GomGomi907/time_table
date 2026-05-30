@@ -11,14 +11,10 @@ import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
   DAY_ORDER,
-  DEFAULT_WEEK_VIEW_END_MINUTES,
-  DEFAULT_WEEK_VIEW_START_MINUTES,
-  PIXELS_PER_MINUTE,
   durationInMinutes,
   getCurrentDayName,
   getCurrentMinutes,
   getDailyBlocks,
-  getLaidOutBlocks,
   isBlockActive,
   minutesFromClock,
 } from "@/lib/schedule";
@@ -54,10 +50,6 @@ function categoryTone(category: string) {
   return "meeting";
 }
 
-function isSleepBlock(block: ScheduleBlock) {
-  return block.category === "SLEEP";
-}
-
 function getWeekBlocks(week: WeekScheduleResponse | null) {
   return DAY_ORDER.flatMap((day) =>
     getDailyBlocks(week, day).map((block) => ({
@@ -86,16 +78,16 @@ function dedupeBlocks<T extends ScheduleBlock & { dayOfWeek?: string }>(blocks: 
   });
 }
 
-function shouldShowInWeeklyGrid(block: ScheduleBlock) {
+function shouldShowInWeeklyStack(block: ScheduleBlock) {
   return block.category !== "SLEEP";
 }
 
 function getVisibleWeekBlocks(week: WeekScheduleResponse | null) {
-  return dedupeBlocks(getWeekBlocks(week).filter(shouldShowInWeeklyGrid));
+  return dedupeBlocks(getWeekBlocks(week).filter(shouldShowInWeeklyStack));
 }
 
 function getVisibleDailyBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
-  return dedupeBlocks(getDailyBlocks(week, dayOfWeek).filter(shouldShowInWeeklyGrid));
+  return dedupeBlocks(getDailyBlocks(week, dayOfWeek).filter(shouldShowInWeeklyStack));
 }
 
 function formatDurationLabel(totalMinutes: number) {
@@ -109,148 +101,7 @@ function formatDurationLabel(totalMinutes: number) {
   return minutes === 0 ? `${hours}시간` : `${hours}시간 ${minutes}분`;
 }
 
-function formatHourLabel(hour: number) {
-  return `${String(((hour % 24) + 24) % 24).padStart(2, "0")}:00`;
-}
-
-function formatMinuteBoundary(minutes: number) {
-  const hour = Math.floor(minutes / 60);
-  const minute = minutes % 60;
-  const label = `${String(((hour % 24) + 24) % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  return hour >= 24 ? `다음 ${label}` : label;
-}
-
-function formatRangeBoundary(hour: number) {
-  return hour >= 24 ? `다음 ${formatHourLabel(hour)}` : formatHourLabel(hour);
-}
-
-function normalizeAfterWake(minutes: number, wakeMinutes: number) {
-  return minutes < wakeMinutes ? minutes + 24 * 60 : minutes;
-}
-
-function getSleepBoundedRange(week: WeekScheduleResponse | null) {
-  const wakeCandidates: number[] = [];
-  const bedtimeCandidates: number[] = [];
-
-  for (const block of getWeekBlocks(week)) {
-    const start = minutesFromClock(block.startTime);
-    const end = minutesFromClock(block.endTime);
-
-    if (isSleepBlock(block)) {
-      bedtimeCandidates.push(start < 12 * 60 ? start + 24 * 60 : start);
-
-      if (end <= start) {
-        wakeCandidates.push(end);
-      }
-      continue;
-    }
-
-    if (block.activity.includes("기상")) {
-      wakeCandidates.push(start);
-    }
-  }
-
-  if (!wakeCandidates.length || !bedtimeCandidates.length) {
-    return null;
-  }
-
-  const startMinutes = Math.floor(Math.min(...wakeCandidates) / 60) * 60;
-  const normalizedBedtimes = bedtimeCandidates.map((minutes) =>
-    minutes < startMinutes ? minutes + 24 * 60 : minutes,
-  );
-  const endMinutes = Math.ceil(Math.max(...normalizedBedtimes) / 60) * 60;
-
-  if (endMinutes <= startMinutes) {
-    return null;
-  }
-
-  return {
-    startMinutes,
-    endMinutes,
-  };
-}
-
-function expandRangeToMinimum(
-  range: { startMinutes: number; endMinutes: number },
-  bounds: { startMinutes: number; endMinutes: number },
-  minimumMinutes = 8 * 60,
-) {
-  if (range.endMinutes - range.startMinutes >= minimumMinutes) {
-    return range;
-  }
-
-  const midpoint = Math.round((range.startMinutes + range.endMinutes) / 2);
-  const halfMinimum = Math.floor(minimumMinutes / 2);
-  const boundedStart = Math.max(bounds.startMinutes, midpoint - halfMinimum);
-  const boundedEnd = Math.min(bounds.endMinutes, boundedStart + minimumMinutes);
-  const startMinutes = Math.max(bounds.startMinutes, boundedEnd - minimumMinutes);
-
-  return {
-    startMinutes,
-    endMinutes: boundedEnd,
-  };
-}
-
-function getWeekViewRange(
-  week: WeekScheduleResponse | null,
-  currentMinutes?: number,
-) {
-  const sleepRange = getSleepBoundedRange(week);
-
-  if (sleepRange) {
-    const visiblePoints = getVisibleWeekBlocks(week).flatMap((block) => {
-      const start = normalizeAfterWake(minutesFromClock(block.startTime), sleepRange.startMinutes);
-      return [start, start + durationInMinutes(block.startTime, block.endTime)];
-    });
-    const normalizedCurrent =
-      currentMinutes === undefined ? null : normalizeAfterWake(currentMinutes, sleepRange.startMinutes);
-
-    if (!visiblePoints.length) {
-      return sleepRange;
-    }
-
-    const focusPoints =
-      normalizedCurrent !== null &&
-      normalizedCurrent >= sleepRange.startMinutes &&
-      normalizedCurrent <= sleepRange.endMinutes
-        ? [...visiblePoints, normalizedCurrent]
-        : visiblePoints;
-    const startMinutes = Math.floor(Math.max(sleepRange.startMinutes, Math.min(...focusPoints) - 60) / 60) * 60;
-    const endMinutes = Math.ceil(Math.min(sleepRange.endMinutes, Math.max(...focusPoints) + 60) / 60) * 60;
-
-    return expandRangeToMinimum(
-      { startMinutes, endMinutes },
-      sleepRange,
-    );
-  }
-
-  const points = getVisibleWeekBlocks(week).flatMap((block) => {
-    const start = minutesFromClock(block.startTime);
-    const end = start + durationInMinutes(block.startTime, block.endTime);
-    return [start, end];
-  });
-
-  if (!points.length) {
-    return {
-      startMinutes: DEFAULT_WEEK_VIEW_START_MINUTES,
-      endMinutes: DEFAULT_WEEK_VIEW_END_MINUTES,
-    };
-  }
-
-  const currentPoint = currentMinutes === undefined ? [] : [currentMinutes];
-  const focusPoints = [...points, ...currentPoint];
-  const earliest = Math.min(...focusPoints);
-  const latest = Math.max(...focusPoints);
-  const startHour = Math.max(0, Math.min(8, Math.floor((earliest - 30) / 60)));
-  const endHour = Math.min(26, Math.max(20, Math.ceil((latest + 30) / 60)));
-
-  return {
-    startMinutes: startHour * 60,
-    endMinutes: Math.max(endHour * 60, startHour * 60 + 10 * 60),
-  };
-}
-
-function WeeklyGrid({
+function WeeklyStack({
   week,
   onBlockSelect,
   timeZone,
@@ -273,14 +124,6 @@ function WeeklyGrid({
   const nextScheduleBlock = todayBlocks.find((block) => minutesFromClock(block.startTime) > currentMinutes) ?? null;
   const focusScheduleBlock = activeScheduleBlock ?? nextScheduleBlock ?? todayBlocks[0] ?? null;
   const focusScheduleLabel = activeScheduleBlock ? "지금 일정" : "다음 일정";
-  const viewRange = getWeekViewRange(week, currentMinutes);
-  const currentTimelineMinutes = normalizeAfterWake(currentMinutes, viewRange.startMinutes);
-  const trackHeight = (viewRange.endMinutes - viewRange.startMinutes) * PIXELS_PER_MINUTE;
-  const startHour = Math.floor(viewRange.startMinutes / 60);
-  const endHour = Math.ceil(viewRange.endMinutes / 60);
-  const timeTicks = Array.from({ length: endHour - startHour + 1 }, (_, index) => startHour + index);
-  const showNowLine =
-    currentTimelineMinutes >= viewRange.startMinutes && currentTimelineMinutes <= viewRange.endMinutes;
   const mobileDays = [currentDay, ...DAY_ORDER.filter((day) => day !== currentDay)];
 
   return (
@@ -380,13 +223,13 @@ function WeeklyGrid({
         })}
       </div>
 
-      <div className="week-grid-shell">
+      <div className="week-stack-shell">
         <div className="week-planner-head">
           <div>
-            <p className="panel-kicker">주간 시간표</p>
-            <h2>이번 주 시간표</h2>
+            <p className="panel-kicker">주간 일정</p>
+            <h2>이번 주 일정 흐름</h2>
             <p>
-              오늘과 이번 주 흐름을 한 화면에 보여주고 바로 수정할 수 있게 합니다.
+              고정된 시간표 대신 아침부터 밤까지의 일정이 요일별로 쌓여 보입니다.
             </p>
           </div>
           <div className="week-summary-strip" aria-label="주간 일정 요약">
@@ -396,7 +239,7 @@ function WeeklyGrid({
             </span>
             <span>
               <strong>{formatDurationLabel(totalMinutes)}</strong>
-              깨어있는 배치
+              총 일정 시간
             </span>
             <span>
               <strong>{busyDays}</strong>
@@ -429,98 +272,52 @@ function WeeklyGrid({
             <span className="current-schedule-time">필요한 일정은 직접 추가할 수 있습니다.</span>
           </div>
         )}
-        <div className="week-grid-affordance" aria-hidden="true">
-          <span>← 좌우로 밀어 다른 요일 보기 →</span>
-        </div>
-        <div className="week-grid-scroll">
-          <div className="week-grid-header">
-            <div className="week-grid-corner">
-              <strong>시간</strong>
-              <span>
-                {formatMinuteBoundary(viewRange.startMinutes)}–{formatMinuteBoundary(viewRange.endMinutes)}
-              </span>
-            </div>
-            {DAY_ORDER.map((day) => {
-              const blocks = getVisibleDailyBlocks(week, day);
-              const isToday = currentDay === day;
-              return (
-                <div
-                  key={day}
-                  className={`week-grid-day-head ${isToday ? "today" : ""} ${blocks.length === 0 ? "empty" : ""}`}
-                >
-                  <strong>{DAY_FULL_LABELS[day]}</strong>
-                  <small>{blocks.length ? `${blocks.length}개 일정` : "비어 있음"}</small>
-                </div>
-              );
-            })}
-          </div>
 
-          <div className="week-grid-body">
-            <div className="schedule-time-axis" style={{ height: `${trackHeight}px` }}>
-              {timeTicks.map((hour, index) => (
-                <div
-                  key={hour}
-                  className={`schedule-time-tick ${index === 0 ? "start" : ""} ${hour === endHour ? "end" : ""}`}
-                  style={{ top: `${(hour * 60 - viewRange.startMinutes) * PIXELS_PER_MINUTE}px` }}
-                >
-                  {formatRangeBoundary(hour)}
-                </div>
-              ))}
-            </div>
-
+        <div className="week-stack-board" aria-label="주간 일정 스택">
           {DAY_ORDER.map((day) => {
+            const isToday = currentDay === day;
             const blocks = getVisibleDailyBlocks(week, day);
-            const laidOutBlocks = getLaidOutBlocks(blocks, viewRange.startMinutes, viewRange.endMinutes);
             return (
-              <div
-                key={day}
-                className={`schedule-day-column ${currentDay === day ? "today" : ""}`}
-                style={{ height: `${trackHeight}px` }}
-              >
-                {currentDay === day && showNowLine ? (
-                  <div
-                    className="schedule-now-line"
-                    style={{ top: `${(currentTimelineMinutes - viewRange.startMinutes) * PIXELS_PER_MINUTE}px` }}
-                  >
-                    <span>지금</span>
-                  </div>
-                ) : null}
+              <section key={day} className={`week-stack-day ${isToday ? "today" : ""}`}>
+                <div className="week-stack-day-head">
+                  <strong>{isToday ? "오늘 · " : ""}{DAY_FULL_LABELS[day]}</strong>
+                  <span>{blocks.length ? `${blocks.length}개 일정` : "비어 있음"}</span>
+                </div>
 
-                {laidOutBlocks.map((block) => {
-                  const isCurrentBlock = day === currentDay && isBlockActive(block, currentMinutes);
-                  return (
-                    <button
-                      key={block.id}
-                      type="button"
-                      aria-label={`${DAY_FULL_LABELS[day]} ${formatClockValue(block.startTime)}부터 ${formatClockValue(block.endTime)}까지 ${formatServiceCopy(block.activity)} 수정`}
-                      className={`schedule-block ${categoryTone(block.category)} ${block.isCompact ? "compact" : ""} ${block.isTight ? "tight" : ""} ${isCurrentBlock ? "current" : ""}`}
-                      style={{
-                        top: block.top,
-                        height: block.height,
-                        left: block.left,
-                        width: block.width,
-                      }}
-                      onClick={() =>
-                        onBlockSelect({
-                          ...block,
-                          dayOfWeek: day,
-                        })
-                      }
-                    >
-                      {isCurrentBlock ? <span className="current-event-chip">지금 일정</span> : null}
-                      <strong>{formatServiceCopy(block.activity)}</strong>
-                      <span className="event-time">
-                        {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
-                      </span>
-                      {block.note ? <p className="event-note">{formatServiceCopy(block.note)}</p> : null}
-                    </button>
-                  );
-                })}
-              </div>
+                {blocks.length ? (
+                  <div className="week-stack-list">
+                    {blocks.map((block) => {
+                      const isCurrentBlock = day === currentDay && isBlockActive(block, currentMinutes);
+                      return (
+                        <button
+                          key={block.id}
+                          type="button"
+                          aria-label={`${DAY_FULL_LABELS[day]} ${formatClockValue(block.startTime)}부터 ${formatClockValue(block.endTime)}까지 ${formatServiceCopy(block.activity)} 수정`}
+                          className={`schedule-block week-stack-block ${categoryTone(block.category)} ${isCurrentBlock ? "current" : ""}`}
+                          onClick={() =>
+                            onBlockSelect({
+                              ...block,
+                              dayOfWeek: day,
+                            })
+                          }
+                        >
+                          <span className="event-time">
+                            {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
+                          </span>
+                          <strong>{formatServiceCopy(block.activity)}</strong>
+                          {isCurrentBlock ? <span className="current-event-chip">지금 일정</span> : null}
+                          {block.note ? <p className="event-note">{formatServiceCopy(block.note)}</p> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="week-stack-empty">비어 있는 시간입니다.</p>
+                )}
+              </section>
             );
           })}
         </div>
-      </div>
       </div>
     </>
   );
@@ -881,7 +678,7 @@ export function ScheduleView() {
               </aside>
 
               <section className="schedule-calendar-panel" aria-label="반응형 주간 일정">
-                <WeeklyGrid
+                <WeeklyStack
                   week={data.week}
                   onBlockSelect={openEditModal}
                   timeZone={session?.timezone}

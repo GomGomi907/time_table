@@ -4,13 +4,20 @@ set -eu
 export BACKEND_PORT="${BACKEND_PORT:-8081}"
 export SERVER_PORT="$BACKEND_PORT"
 export PORT="${PORT:-8080}"
-export HOSTNAME="${HOSTNAME:-0.0.0.0}"
+# Cloud Run requires the ingress process to listen on all interfaces. Some
+# runtimes set HOSTNAME to a container hostname, so do not preserve an inherited
+# value here.
+export HOSTNAME="0.0.0.0"
 
 java -jar /app/backend/app.jar &
 backend_pid="$!"
+frontend_pid=""
 
 cleanup() {
   kill "$backend_pid" 2>/dev/null || true
+  if [ -n "$frontend_pid" ]; then
+    kill "$frontend_pid" 2>/dev/null || true
+  fi
 }
 trap cleanup INT TERM EXIT
 
@@ -33,4 +40,24 @@ if [ "$backend_ready" -ne 1 ]; then
 fi
 
 cd /app/frontend
-exec node server.js
+node server.js &
+frontend_pid="$!"
+
+while :; do
+  if ! kill -0 "$backend_pid" 2>/dev/null; then
+    backend_status=0
+    wait "$backend_pid" || backend_status="$?"
+    echo "Backend process exited; stopping Cloud Run container" >&2
+    kill "$frontend_pid" 2>/dev/null || true
+    wait "$frontend_pid" 2>/dev/null || true
+    exit "$backend_status"
+  fi
+
+  if ! kill -0 "$frontend_pid" 2>/dev/null; then
+    frontend_status=0
+    wait "$frontend_pid" || frontend_status="$?"
+    exit "$frontend_status"
+  fi
+
+  sleep 2
+done

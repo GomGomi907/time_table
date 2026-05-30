@@ -54,6 +54,6 @@ RUN chmod +x /app/start-cloud-run.sh
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-  CMD curl -fsS http://127.0.0.1:${PORT:-8080}/login >/dev/null || exit 1
+  CMD curl -fsS http://127.0.0.1:${PORT:-8080}/actuator/health >/dev/null || exit 1
 
 ENTRYPOINT ["/app/start-cloud-run.sh"]

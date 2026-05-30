@@ -5,8 +5,10 @@ $frontendDir = Resolve-Path (Join-Path $scriptDir "..")
 $repoRoot = Resolve-Path (Join-Path $frontendDir "..")
 $backendDir = Join-Path $repoRoot "backend"
 $logDir = Join-Path $repoRoot ".omx\logs"
+$e2eDataDir = Join-Path $repoRoot ".omx\e2e-data"
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+New-Item -ItemType Directory -Force -Path $e2eDataDir | Out-Null
 
 function Wait-HttpOk {
   param(
@@ -57,17 +59,31 @@ function Assert-PortFree {
   }
 }
 
+function Get-BindableFrontendPort {
+  if (-not [string]::IsNullOrWhiteSpace($env:E2E_FRONTEND_PORT)) {
+    return [int]$env:E2E_FRONTEND_PORT
+  }
+
+  return [int](& node -e "const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{console.log(s.address().port);s.close();});")
+}
+
 $backendProcess = $null
 $frontendProcess = $null
+$frontendPort = Get-BindableFrontendPort
 
 try {
   Assert-PortFree -Port 8080
-  Assert-PortFree -Port 3000
+  Assert-PortFree -Port $frontendPort
 
   $env:APP_AUTH_MOCK_LOGIN_ENABLED = "true"
   $env:APP_SYNC_GOOGLE_MOCK_ENABLED = "true"
   $env:APP_AI_ENABLED = "false"
-  $env:APP_FRONTEND_URL = "http://localhost:3000"
+  $env:APP_FRONTEND_URL = "http://localhost:$frontendPort"
+  $e2eDbName = "timetable-e2e-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+  $e2eDbPath = (Join-Path $e2eDataDir $e2eDbName).Replace("\", "/")
+  $env:APP_DB_URL = "jdbc:h2:file:$e2eDbPath;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
+  $env:APP_DB_USERNAME = "sa"
+  $env:APP_DB_PASSWORD = ""
 
   $backendProcess = Start-Process `
     -FilePath "powershell" `
@@ -82,19 +98,20 @@ try {
 
   $env:BACKEND_INTERNAL_URL = "http://127.0.0.1:8080"
   $env:NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080"
+  $env:HOSTNAME = "127.0.0.1"
 
   $frontendProcess = Start-Process `
     -FilePath "npm.cmd" `
-    -ArgumentList @("run", "dev") `
+    -ArgumentList @("run", "dev", "--", "--hostname", "127.0.0.1", "--port", "$frontendPort") `
     -WorkingDirectory $frontendDir `
     -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $logDir "e2e-local-frontend.out.log") `
     -RedirectStandardError (Join-Path $logDir "e2e-local-frontend.err.log") `
     -PassThru
 
-  Wait-HttpOk -Url "http://127.0.0.1:3000/login" -TimeoutSeconds 90
+  Wait-HttpOk -Url "http://127.0.0.1:$frontendPort/login" -TimeoutSeconds 90
 
-  $env:PLAYWRIGHT_BASE_URL = "http://localhost:3000"
+  $env:PLAYWRIGHT_BASE_URL = "http://localhost:$frontendPort"
   $env:PLAYWRIGHT_API_URL = "http://localhost:8080"
 
   Push-Location $frontendDir
