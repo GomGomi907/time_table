@@ -11,6 +11,7 @@ import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
 import com.timetable.operator.agent.infrastructure.RescheduleSuggestionRepository;
 import com.timetable.operator.auth.domain.AppUser;
+import com.timetable.operator.common.api.UserActionRequiredException;
 import com.timetable.operator.common.security.CurrentUserProvider;
 import com.timetable.operator.events.domain.Event;
 import com.timetable.operator.events.domain.EventSourceType;
@@ -147,6 +148,10 @@ public class RescheduleSuggestionService {
         for (StructuredAiCommand command : batch.commands()) {
             snapshots.add(applyCommandSafely(user.getId(), command));
         }
+        SuggestionExecutionSummaryResponse executionSummary = summarizeSnapshots(snapshots);
+        if (executionSummary == null || executionSummary.appliedCount() == 0) {
+            throw new UserActionRequiredException("적용할 수 있는 변경이 없습니다. 요청을 더 구체적으로 다시 보내주세요.");
+        }
 
         suggestion.setStatus(RescheduleSuggestionStatus.APPLIED);
         suggestion.setAppliedAt(Instant.now());
@@ -252,6 +257,10 @@ public class RescheduleSuggestionService {
             return null;
         }
 
+        return summarizeSnapshots(snapshots);
+    }
+
+    private SuggestionExecutionSummaryResponse summarizeSnapshots(List<AppliedCommandSnapshot> snapshots) {
         int appliedCount = (int) snapshots.stream()
                 .filter(snapshot -> "applied".equals(snapshot.outcome()))
                 .count();

@@ -257,7 +257,7 @@ class AgentControllerTest {
     }
 
     @Test
-    void manualSuggestionApplyReportsNoOpExecutionSummary() throws Exception {
+    void manualSuggestionApplyWithoutExecutableChangesReturnsConflictAndKeepsPending() throws Exception {
         long blockCountBefore = scheduleBlockRepository.count();
         MvcResult suggestionResult = mockMvc.perform(post("/api/agent/reschedule")
                         .with(user("tester").roles("USER"))
@@ -285,17 +285,16 @@ class AgentControllerTest {
                                   "reason": "no-op 요약 검증"
                                 }
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.executionSummary.totalCount").value(1))
-                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(0))
-                .andExpect(jsonPath("$.data.executionSummary.noOpCount").value(1));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
 
         assertThat(scheduleBlockRepository.count()).isEqualTo(blockCountBefore);
+        assertThat(rescheduleSuggestionRepository.findById(java.util.UUID.fromString(suggestionId)).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
     }
 
     @Test
-    void applySuggestionSkipsConflictingCommandWithoutBlockingDecisionFlow() throws Exception {
+    void applySuggestionWithOnlyConflictingCommandsReturnsConflictAndDoesNotOverclaim() throws Exception {
         ScheduleBlock movable = new ScheduleBlock();
         movable.setUserId(savedUser.getId());
         movable.setDayOfWeek(DayOfWeek.TUESDAY);
@@ -343,14 +342,14 @@ class AgentControllerTest {
                                   "reason": "충돌이어도 검토 완료 처리"
                                 }
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(0))
-                .andExpect(jsonPath("$.data.executionSummary.noOpCount").value(2));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
 
         ScheduleBlock unchanged = scheduleBlockRepository.findById(movable.getId()).orElseThrow();
         assertThat(unchanged.getStartTime()).isEqualTo(LocalTime.of(9, 0));
         assertThat(unchanged.getEndTime()).isEqualTo(LocalTime.of(10, 0));
+        assertThat(rescheduleSuggestionRepository.findById(java.util.UUID.fromString(suggestionId)).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
     }
 
     @Test

@@ -182,7 +182,7 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
   if (suggestion.executable) {
     return {
       kind: "executable",
-      title: "최적화 제안",
+      title: "변경 제안",
       detail: "변경 시간을 확인하고 적용하세요.",
       guidance: null,
       canApply: true,

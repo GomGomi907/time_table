@@ -253,11 +253,21 @@ public class ChatCommandNormalizationService {
 
     private boolean containsAny(String source, String... tokens) {
         for (String token : tokens) {
-            if (source.contains(token.toLowerCase(Locale.ROOT))) {
+            if (containsToken(source, token)) {
                 return true;
             }
         }
         return false;
+    }
+
+    private boolean containsToken(String source, String token) {
+        String normalizedToken = token.toLowerCase(Locale.ROOT);
+        if (normalizedToken.chars().allMatch(character -> character < 128)) {
+            return Pattern.compile("(?<![a-z0-9])" + Pattern.quote(normalizedToken) + "(?![a-z0-9])")
+                    .matcher(source)
+                    .find();
+        }
+        return source.contains(normalizedToken);
     }
 
     public record NormalizedChatCommand(

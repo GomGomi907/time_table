@@ -236,9 +236,9 @@ function WeeklyStack({
         <div className="week-planner-head">
           <div>
             <p className="panel-kicker">주간 일정</p>
-            <h2>이번 주 일정 흐름</h2>
+            <h2>이번 주 일정</h2>
             <p>
-              고정된 시간표 대신 아침부터 밤까지의 일정이 요일별로 쌓여 보입니다.
+              요일별 일정을 아침부터 밤까지 순서대로 보여줍니다.
             </p>
           </div>
           <div className="week-summary-strip" aria-label="주간 일정 요약">
@@ -589,12 +589,13 @@ export function ScheduleView() {
 
 
   const pendingSuggestions = data.suggestions.filter((suggestion) => suggestion.status === "pending");
+  const conversationSuggestions = data.suggestions.slice(0, 8);
   const aiRequestRail = (
     <section className="ai-compose-card ai-chat-card" data-testid="schedule-ai-right-rail" aria-label="AI 변경 요청 대화">
       <div className="ai-chat-head">
         <div>
           <p className="panel-kicker">AI 변경 요청</p>
-          <h2>요청과 답변</h2>
+          <h2>변경 요청</h2>
         </div>
         <span className="accent-pill" data-testid="schedule-pending-count">
           {pendingSuggestions.length ? `${pendingSuggestions.length}건 대기` : "대기 없음"}
@@ -602,9 +603,10 @@ export function ScheduleView() {
       </div>
 
       <div className="ai-chat-thread" aria-live="polite">
-        {pendingSuggestions.length ? (
-          pendingSuggestions.map((suggestion) => {
+        {conversationSuggestions.length ? (
+          conversationSuggestions.map((suggestion) => {
             const display = getSuggestionDisplayState(suggestion);
+            const isPendingSuggestion = suggestion.status === "pending";
             return (
               <div className="ai-chat-turn" key={suggestion.id}>
                 <div className="chat-bubble user">
@@ -617,7 +619,8 @@ export function ScheduleView() {
                     className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
                     isPending={isMutating}
                     suggestion={suggestion}
-                    kicker="검토"
+                    kicker={isPendingSuggestion ? "검토" : suggestion.statusLabel}
+                    readOnly={!isPendingSuggestion}
                     onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
                     onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
                   />

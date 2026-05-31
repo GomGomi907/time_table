@@ -326,7 +326,7 @@ test("stacked today view keeps today's schedule before pending change actions", 
   await expect(page.getByRole("heading", { name: /오늘 일정은/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("heading", { name: /최적화 제안|확인이 필요합니다\.|지금은 적용할 수 없습니다./ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /변경 제안|확인이 필요합니다\.|지금은 적용할 수 없습니다./ })).toBeVisible();
   await expectPendingSuggestionAction(page, pendingSuggestion);
   await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
   await assertNoInternalUserCopy(page);

@@ -13,6 +13,7 @@ import com.timetable.operator.agent.application.AiAgentInterpretation;
 import com.timetable.operator.agent.application.AiAgentStageClient;
 import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
+import com.timetable.operator.agent.domain.RescheduleSuggestionStatus;
 import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
 import com.timetable.operator.agent.infrastructure.RescheduleSuggestionRepository;
@@ -203,12 +204,12 @@ class AgentAiOrchestrationControllerTest {
                                   "reason": "직접 apply해도 no mutation"
                                 }
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(0))
-                .andExpect(jsonPath("$.data.executionSummary.noOpCount").value(1));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
 
         assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
+        assertThat(rescheduleSuggestionRepository.findById(java.util.UUID.fromString(suggestionId)).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
     }
     @Test
     void providerFailureIsNotReportedAsAiDisabledOrExecutable() throws Exception {
@@ -245,10 +246,12 @@ class AgentAiOrchestrationControllerTest {
                                   "reason": "provider unavailable apply safety"
                                 }
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(0));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
 
         assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
+        assertThat(rescheduleSuggestionRepository.findById(java.util.UUID.fromString(suggestionId)).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
     }
 
     @Test

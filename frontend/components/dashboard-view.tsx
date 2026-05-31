@@ -75,12 +75,18 @@ function dedupeTodayBlocks(blocks: ScheduleBlock[]) {
   });
 }
 
-function pickBriefingScheduleRows(blocks: ScheduleBlock[], _currentMinutes: number, limit = 4) {
+function pickBriefingScheduleRows(blocks: ScheduleBlock[], currentMinutes: number, limit = 4) {
   if (blocks.length <= limit) {
     return blocks;
   }
 
-  return blocks.slice(0, limit);
+  const anchorIndex = blocks.findIndex(
+    (block) => isBlockActive(block, currentMinutes) || minutesFromClock(block.startTime) > currentMinutes,
+  );
+  const desiredStart = anchorIndex < 0 ? blocks.length - limit : anchorIndex - 1;
+  const boundedStart = Math.max(0, Math.min(desiredStart, blocks.length - limit));
+
+  return blocks.slice(boundedStart, boundedStart + limit);
 }
 
 function buildDayHeadline(blocks: ScheduleBlock[]) {

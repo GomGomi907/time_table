@@ -786,6 +786,52 @@ summary,
   overflow-wrap: anywhere;
 }
 
+.suggestion-preview-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestion-preview-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 10px 12px;
+}
+
+.suggestion-preview-item span {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.suggestion-preview-item strong,
+.suggestion-preview-item p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-preview-item strong {
+  font-size: 0.92rem;
+}
+
+.suggestion-preview-item p,
+.suggestion-preview-more {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.suggestion-preview-more {
+  padding: 0 2px;
+  font-weight: 800;
+}
+
 /* Onboarding */
 .onboarding-shell {
   align-items: center;
@@ -1171,6 +1217,26 @@ summary,
   box-shadow: var(--shadow-sm);
 }
 
+@media (min-width: 1181px) {
+  .app-frame.with-right-rail {
+    align-items: stretch;
+  }
+
+  .app-frame.with-right-rail .page-stack,
+  .app-frame.with-right-rail .app-right-rail,
+  .app-frame.with-right-rail .page-stack > .planner-layout,
+  .app-frame.with-right-rail .schedule-main-board,
+  .app-frame.with-right-rail .ai-chat-card {
+    min-height: 0;
+    height: 100%;
+    max-height: 100%;
+  }
+
+  .app-frame.with-right-rail .app-right-rail {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
+
 .ai-chat-head {
   display: flex;
   min-width: 0;
@@ -1248,12 +1314,23 @@ summary,
 
 .chat-suggestion-card .suggestion-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chat-suggestion-card .suggestion-actions .ghost-btn,
 .chat-suggestion-card .suggestion-actions .solid-btn {
   width: 100%;
+}
+
+.suggestion-status-note {
+  margin: 0;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.07);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 7px 10px;
 }
 
 .chat-empty-state {
