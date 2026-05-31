@@ -435,6 +435,25 @@ summary,
 .app-frame.with-right-rail {
   width: min(100%, calc(var(--content-max) + 252px + 360px + (var(--shell-gap) * 2)));
   grid-template-columns: 252px minmax(0, 1fr) minmax(320px, 360px);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-frame.with-right-rail .side-nav {
+  grid-row: 1 / span 2;
+}
+
+.app-frame.with-right-rail .content-shell {
+  display: contents;
+}
+
+.app-frame.with-right-rail .top-bar {
+  grid-column: 2 / 4;
+  grid-row: 1;
+}
+
+.app-frame.with-right-rail .page-stack {
+  grid-column: 2;
+  grid-row: 2;
 }
 
 .side-nav {
@@ -513,20 +532,23 @@ summary,
 .content-shell {
   grid-column: 2;
   grid-row: 1;
+  display: grid;
+  min-height: calc(100vh - (var(--page-pad) * 2));
   min-width: 0;
   width: min(100%, var(--content-max));
+  grid-template-rows: auto minmax(0, 1fr);
   justify-self: stretch;
 }
 
 .app-right-rail {
   grid-column: 3;
-  grid-row: 1;
-  align-self: start;
-  position: sticky;
-  top: var(--page-pad);
+  grid-row: 2;
+  align-self: stretch;
+  display: grid;
+  position: static;
   width: 100%;
   min-width: 0;
-  max-height: calc(100vh - (var(--page-pad) * 2));
+  max-height: none;
   z-index: 2;
 }
 
@@ -565,7 +587,9 @@ summary,
 
 .page-stack {
   display: grid;
+  min-height: 0;
   gap: clamp(18px, 3vw, 28px);
+  align-content: stretch;
 }
 
 .immersive-shell {
@@ -625,8 +649,8 @@ summary,
 
 .today-flow-card {
   display: grid;
-  min-height: 320px;
-  align-content: end;
+  min-height: clamp(460px, calc(100vh - (var(--page-pad) * 2) - 150px), 640px);
+  align-content: center;
   background:
     radial-gradient(circle at top right, rgba(91, 110, 225, 0.16), transparent 42%),
     rgba(255, 255, 255, 0.9);
@@ -679,6 +703,7 @@ summary,
 
 .today-schedule-panel {
   display: grid;
+  align-content: start;
   gap: 18px;
 }
 
@@ -743,6 +768,24 @@ summary,
   padding-left: 10px;
 }
 
+.ai-approval-card .suggestion-diff-head,
+.ai-suggestion-card .suggestion-diff-head,
+.suggestion-box .suggestion-diff-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  align-items: start;
+  justify-content: stretch;
+  gap: 8px;
+}
+
+.ai-approval-card .suggestion-diff-head > *,
+.ai-suggestion-card .suggestion-diff-head > *,
+.suggestion-box .suggestion-diff-head > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Onboarding */
 .onboarding-shell {
   align-items: center;
@@ -795,7 +838,18 @@ summary,
 }
 
 .onboarding-sidebar {
-  justify-content: space-between;
+  gap: 20px;
+  justify-content: flex-start;
+}
+
+.onboarding-quickstart-rail {
+  align-self: start;
+  position: sticky;
+  top: var(--page-pad);
+}
+
+.onboarding-quickstart-rail .onboarding-sidebar-body h1 {
+  font-size: clamp(1.58rem, 2.05vw, 2.35rem);
 }
 
 .onboarding-sidebar-body,
@@ -817,6 +871,53 @@ summary,
   border: 1px solid rgba(91, 110, 225, 0.16);
   background: rgba(255, 255, 255, 0.56);
   padding: 16px;
+}
+
+.onboarding-readiness-card {
+  gap: 15px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(246, 248, 255, 0.72));
+}
+
+.onboarding-readiness-head {
+  display: grid;
+  gap: 5px;
+}
+
+.onboarding-readiness-head span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.onboarding-readiness-head strong {
+  color: var(--ink);
+  font-size: 1.28rem;
+  letter-spacing: -0.01em;
+}
+
+.onboarding-readiness-card > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+.onboarding-readiness-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.onboarding-readiness-summary span {
+  border-radius: 999px;
+  border: 1px solid rgba(91, 110, 225, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+  color: #4757bf;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1;
+  padding: 8px 10px;
+  white-space: nowrap;
 }
 
 .onboarding-progress-head {
@@ -977,6 +1078,10 @@ summary,
   line-height: 1.45;
 }
 
+.onboarding-answer-count {
+  flex: 0 0 auto;
+}
+
 .onboarding-answer-summary {
   display: grid;
   gap: 10px;
@@ -1005,6 +1110,8 @@ summary,
 .planner-board {
   display: grid;
   gap: 22px;
+  min-height: clamp(540px, calc(100vh - (var(--page-pad) * 2) - 150px), 760px);
+  align-content: start;
   padding: clamp(18px, 3vw, 30px);
 }
 
@@ -1054,7 +1161,8 @@ summary,
 }
 
 .ai-chat-card {
-  max-height: calc(100vh - (var(--page-pad) * 2));
+  height: 100%;
+  min-height: clamp(540px, calc(100vh - (var(--page-pad) * 2) - 150px), 760px);
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   border-color: rgba(17, 24, 39, 0.14);
@@ -1580,6 +1688,24 @@ button.current-schedule-card:hover {
   gap: 10px;
 }
 
+.compact-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.compact-list li {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.compact-list li span,
+.compact-list li b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .focus-now-card,
 .next-card {
   border: 1px solid var(--line);
@@ -1636,6 +1762,17 @@ button.current-schedule-card:hover {
 
   .app-frame.with-right-rail {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .app-frame.with-right-rail .content-shell {
+    display: grid;
+  }
+
+  .app-frame.with-right-rail .top-bar,
+  .app-frame.with-right-rail .page-stack {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .content-shell {
@@ -1648,6 +1785,7 @@ button.current-schedule-card:hover {
     grid-row: auto;
     position: static;
     max-height: none;
+    margin-top: 0;
   }
 
   .side-nav {
@@ -1679,11 +1817,17 @@ button.current-schedule-card:hover {
     grid-template-columns: 1fr;
   }
 
+  .today-briefing-shell,
+  .planner-board {
+    min-height: auto;
+  }
+
   .ai-compose-card {
     position: static;
   }
 
   .ai-chat-card {
+    height: auto;
     max-height: none;
   }
 
@@ -1814,6 +1958,43 @@ button.current-schedule-card:hover {
     gap: 18px;
   }
 
+  .onboarding-quickstart-rail {
+    position: static;
+  }
+
+  .onboarding-readiness-card {
+    gap: 12px;
+  }
+
+  .onboarding-readiness-head {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .onboarding-readiness-head strong {
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  .onboarding-readiness-card > p {
+    font-size: 0.88rem;
+  }
+
+  .onboarding-readiness-summary,
+  .onboarding-readiness-card .onboarding-helper-list {
+    display: none;
+  }
+
+  .onboarding-card-intro {
+    font-size: 0.86rem;
+    line-height: 1.48;
+  }
+
+  .onboarding-group-head p,
+  .onboarding-question-head p {
+    display: none;
+  }
+
   .onboarding-group-card {
     gap: 12px;
     padding: 14px;
@@ -1937,6 +2118,22 @@ button.current-schedule-card:hover {
   .focus-rail-card,
   .focus-mode-card {
     padding: 18px;
+  }
+
+  .focus-mode-card {
+    padding-top: 76px;
+  }
+
+  .focus-primary h1 {
+    max-width: 100%;
+    font-size: clamp(2.25rem, 11vw, 3.2rem);
+    line-height: 1.08;
+    overflow-wrap: anywhere;
+  }
+
+  .focus-back-btn {
+    left: 18px;
+    top: 18px;
   }
 
   .login-hero,

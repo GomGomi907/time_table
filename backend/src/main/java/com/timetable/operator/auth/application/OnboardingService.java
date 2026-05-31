@@ -55,104 +55,104 @@ public class OnboardingService {
             new OnboardingQuestionResponse(
                     "wakeTime",
                     "보통 몇 시에 일어나세요?",
-                    "캘린더에 잘 안 남는 기상 패턴을 먼저 잡습니다.",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("05:30", "05:30", "아주 이른 새벽형"),
-                            new OnboardingQuestionOptionResponse("06:00", "06:00", "이른 아침부터 시작"),
-                            new OnboardingQuestionOptionResponse("06:30", "06:30", "조금 일찍 여유 있게"),
-                            new OnboardingQuestionOptionResponse("07:00", "07:00", "가장 일반적인 패턴"),
-                            new OnboardingQuestionOptionResponse("07:30", "07:30", "출근 직전까지 아끼는 편"),
-                            new OnboardingQuestionOptionResponse("08:00", "08:00", "늦게 시작하는 편"),
-                            new OnboardingQuestionOptionResponse("08:30", "08:30", "여유 있게 늦게 시작"),
-                            new OnboardingQuestionOptionResponse("09:00", "09:00", "오전 후반부터 움직임"),
-                            new OnboardingQuestionOptionResponse("09:30", "09:30", "아주 늦게 일어나는 편")
+                            new OnboardingQuestionOptionResponse("05:30", "05:30", ""),
+                            new OnboardingQuestionOptionResponse("06:00", "06:00", ""),
+                            new OnboardingQuestionOptionResponse("06:30", "06:30", ""),
+                            new OnboardingQuestionOptionResponse("07:00", "07:00", ""),
+                            new OnboardingQuestionOptionResponse("07:30", "07:30", ""),
+                            new OnboardingQuestionOptionResponse("08:00", "08:00", ""),
+                            new OnboardingQuestionOptionResponse("08:30", "08:30", ""),
+                            new OnboardingQuestionOptionResponse("09:00", "09:00", ""),
+                            new OnboardingQuestionOptionResponse("09:30", "09:30", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "workStartTime",
-                    "보통 몇 시쯤 출근 또는 업무를 시작하세요?",
-                    "고정 이동/준비 시간을 먼저 보호합니다.",
+                    "출근이나 업무는 보통 몇 시에 시작하세요?",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("07:30", "07:30", "이른 출근 또는 오전 교대"),
-                            new OnboardingQuestionOptionResponse("08:00", "08:00", "아침형 근무"),
-                            new OnboardingQuestionOptionResponse("08:30", "08:30", "조금 이른 편"),
-                            new OnboardingQuestionOptionResponse("09:00", "09:00", "표준 출근"),
-                            new OnboardingQuestionOptionResponse("09:30", "09:30", "유연 근무"),
-                            new OnboardingQuestionOptionResponse("10:00", "10:00", "늦게 시작"),
-                            new OnboardingQuestionOptionResponse("10:30", "10:30", "오전 후반 시작"),
-                            new OnboardingQuestionOptionResponse("11:00", "11:00", "느긋하게 시작")
+                            new OnboardingQuestionOptionResponse("07:30", "07:30", ""),
+                            new OnboardingQuestionOptionResponse("08:00", "08:00", ""),
+                            new OnboardingQuestionOptionResponse("08:30", "08:30", ""),
+                            new OnboardingQuestionOptionResponse("09:00", "09:00", ""),
+                            new OnboardingQuestionOptionResponse("09:30", "09:30", ""),
+                            new OnboardingQuestionOptionResponse("10:00", "10:00", ""),
+                            new OnboardingQuestionOptionResponse("10:30", "10:30", ""),
+                            new OnboardingQuestionOptionResponse("11:00", "11:00", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "dinnerTime",
-                    "저녁은 보통 몇 시쯤 드세요?",
-                    "퇴근 후 회복 시간대를 먼저 비워 두겠습니다.",
+                    "저녁은 보통 몇 시에 드세요?",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("17:30", "17:30", "아주 이른 저녁"),
-                            new OnboardingQuestionOptionResponse("18:00", "18:00", "이른 저녁"),
-                            new OnboardingQuestionOptionResponse("18:30", "18:30", "평균보다 조금 빠름"),
-                            new OnboardingQuestionOptionResponse("19:00", "19:00", "가장 일반적인 패턴"),
-                            new OnboardingQuestionOptionResponse("19:30", "19:30", "약간 늦은 편"),
-                            new OnboardingQuestionOptionResponse("20:00", "20:00", "늦은 저녁"),
-                            new OnboardingQuestionOptionResponse("20:30", "20:30", "야간 일정 후 저녁"),
-                            new OnboardingQuestionOptionResponse("21:00", "21:00", "아주 늦은 저녁")
+                            new OnboardingQuestionOptionResponse("17:30", "17:30", ""),
+                            new OnboardingQuestionOptionResponse("18:00", "18:00", ""),
+                            new OnboardingQuestionOptionResponse("18:30", "18:30", ""),
+                            new OnboardingQuestionOptionResponse("19:00", "19:00", ""),
+                            new OnboardingQuestionOptionResponse("19:30", "19:30", ""),
+                            new OnboardingQuestionOptionResponse("20:00", "20:00", ""),
+                            new OnboardingQuestionOptionResponse("20:30", "20:30", ""),
+                            new OnboardingQuestionOptionResponse("21:00", "21:00", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "sleepTime",
                     "보통 몇 시에 잠드세요?",
-                    "수면 보호 구간을 기본 루틴으로 고정합니다.",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("22:00", "22:00", "아주 일찍 쉬는 편"),
-                            new OnboardingQuestionOptionResponse("22:30", "22:30", "일찍 쉬는 편"),
-                            new OnboardingQuestionOptionResponse("23:00", "23:00", "안정적인 루틴"),
-                            new OnboardingQuestionOptionResponse("23:30", "23:30", "조금 늦는 편"),
-                            new OnboardingQuestionOptionResponse("00:00", "00:00", "자정 전후"),
-                            new OnboardingQuestionOptionResponse("00:30", "00:30", "야행성에 가까움"),
-                            new OnboardingQuestionOptionResponse("01:00", "01:00", "새벽형에 가까움"),
-                            new OnboardingQuestionOptionResponse("01:30", "01:30", "늦게 마감하는 편")
+                            new OnboardingQuestionOptionResponse("22:00", "22:00", ""),
+                            new OnboardingQuestionOptionResponse("22:30", "22:30", ""),
+                            new OnboardingQuestionOptionResponse("23:00", "23:00", ""),
+                            new OnboardingQuestionOptionResponse("23:30", "23:30", ""),
+                            new OnboardingQuestionOptionResponse("00:00", "00:00", ""),
+                            new OnboardingQuestionOptionResponse("00:30", "00:30", ""),
+                            new OnboardingQuestionOptionResponse("01:00", "01:00", ""),
+                            new OnboardingQuestionOptionResponse("01:30", "01:30", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "weekendStyle",
-                    "주말 한 칸은 어떻게 쓰는 편인가요?",
-                    "주말 블록 한 칸도 함께 제안합니다.",
+                    "주말은 보통 어떻게 보내세요?",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("recovery", "회복 중심", "충전과 정리에 더 가깝게"),
-                            new OnboardingQuestionOptionResponse("balanced", "균형 있게", "조금 쉬고 조금 정리"),
-                            new OnboardingQuestionOptionResponse("productive", "몰입형", "프로젝트나 공부에 확실히 사용")
+                            new OnboardingQuestionOptionResponse("recovery", "쉬는 쪽", ""),
+                            new OnboardingQuestionOptionResponse("balanced", "반반", ""),
+                            new OnboardingQuestionOptionResponse("productive", "작업 쪽", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "focusSessionMinutes",
-                    "집중 블록은 한 번에 몇 분이 가장 현실적인가요?",
-                    "추천 할 일와 빈 시간 감지 기준에 함께 사용합니다.",
+                    "한 번에 몇 분 정도 일하기 좋으세요?",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("25", "25분", "짧게 시작하고 자주 전환"),
-                            new OnboardingQuestionOptionResponse("45", "45분", "무난한 기본 몰입 단위"),
-                            new OnboardingQuestionOptionResponse("60", "60분", "한 가지를 충분히 밀어붙임"),
-                            new OnboardingQuestionOptionResponse("90", "90분", "긴 집중 업무 중심")
+                            new OnboardingQuestionOptionResponse("25", "25분", ""),
+                            new OnboardingQuestionOptionResponse("45", "45분", ""),
+                            new OnboardingQuestionOptionResponse("60", "60분", ""),
+                            new OnboardingQuestionOptionResponse("90", "90분", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "focusBreakMinutes",
-                    "집중 뒤 회복 버퍼는 어느 정도가 필요하세요?",
-                    "일정 사이 전환과 휴식 여유를 계산할 때 씁니다.",
+                    "일한 뒤 몇 분 정도 쉬면 좋으세요?",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("5", "5분", "바로 다음 일로 넘어가는 편"),
-                            new OnboardingQuestionOptionResponse("10", "10분", "짧게 정리하고 전환"),
-                            new OnboardingQuestionOptionResponse("15", "15분", "숨을 돌릴 시간이 필요"),
-                            new OnboardingQuestionOptionResponse("20", "20분", "전환 피로를 넉넉히 반영")
+                            new OnboardingQuestionOptionResponse("5", "5분", ""),
+                            new OnboardingQuestionOptionResponse("10", "10분", ""),
+                            new OnboardingQuestionOptionResponse("15", "15분", ""),
+                            new OnboardingQuestionOptionResponse("20", "20분", "")
                     )
             ),
             new OnboardingQuestionResponse(
                     "focusInterventionStyle",
-                    "집중 중 조정 제안은 얼마나 적극적이면 좋을까요?",
-                    "초과·공백 감지 후 제안 빈도를 조절합니다.",
+                    "일이 밀리면 언제 알려드릴까요?",
+                    "",
                     List.of(
-                            new OnboardingQuestionOptionResponse("minimal", "최소 개입", "정말 필요할 때만 묻기"),
-                            new OnboardingQuestionOptionResponse("balanced", "균형 있게", "집중을 방해하지 않는 수준"),
-                            new OnboardingQuestionOptionResponse("proactive", "적극 제안", "놓치기 전에 먼저 알려주기")
+                            new OnboardingQuestionOptionResponse("minimal", "거의 안 함", ""),
+                            new OnboardingQuestionOptionResponse("balanced", "가끔", ""),
+                            new OnboardingQuestionOptionResponse("proactive", "자주", "")
                     )
             )
     );
@@ -193,17 +193,17 @@ public class OnboardingService {
         String message;
 
         if (!googleConnected) {
-            message = "Google 연결은 조용히 다시 확인하되, 지금은 현재 워크스페이스 데이터와 답변을 기준으로 먼저 맞춥니다.";
+            message = "현재 저장된 일정으로 시작합니다.";
         } else if (shouldRefreshBootstrap(profile.getBootstrapCompletedAt())) {
             syncTriggered = true;
             try {
                 triggerSilentSync();
-                message = "Google 캘린더와 할 일 연결을 확인하고 최근 데이터를 조용히 불러왔습니다.";
+                message = "최근 일정을 불러왔습니다.";
             } catch (RuntimeException exception) {
-                message = "Google 연결은 확인됐지만 가져오기 중 일부가 지연되어 현재 저장된 데이터를 기준으로 먼저 진행합니다.";
+                message = "현재 저장된 일정으로 시작합니다.";
             }
         } else {
-            message = "방금 가져온 데이터를 그대로 이어서 사용합니다.";
+            message = "최근 일정으로 시작합니다.";
         }
 
         profile.setBootstrapCompletedAt(Instant.now());
@@ -250,7 +250,7 @@ public class OnboardingService {
         ImportedWorkspaceSummaryResponse importSummary = buildImportSummary(user.getId(), isGoogleConnected(user.getId()));
         OnboardingStatusResponse status = buildStatus(user, profile, isGoogleConnected(user.getId()), importSummary, suggestion);
 
-        return new OnboardingAnswersResponse(status, "답변을 저장했고, 바로 첫 일정 조정안을 준비했습니다.");
+        return new OnboardingAnswersResponse(status, "답변을 저장했습니다.");
     }
 
     @Transactional
@@ -281,8 +281,8 @@ public class OnboardingService {
                 buildStatus(user, profile, googleConnected, importSummary, suggestion),
                 appliedSuggestion,
                 appliedSuggestion == null
-                        ? "온보딩을 마쳤습니다. 이후에도 대시보드에서 제안을 다시 받을 수 있습니다."
-                        : "첫 조정안을 반영하고 온보딩을 마쳤습니다."
+                        ? "온보딩을 마쳤습니다."
+                        : "선택한 시간을 넣고 온보딩을 마쳤습니다."
         );
     }
 
@@ -322,11 +322,11 @@ public class OnboardingService {
         long scheduleBlockCount = scheduleBlockRepository.countByUserId(userId);
         long goalCount = goalRepository.existsByUserId(userId) ? goalRepository.findByUserId(userId).size() : 0;
 
-        String workspaceSummary = "일정 %d건, 할 일 %d건, 루틴 블록 %d건을 기준으로 첫 제안을 맞춥니다."
+        String workspaceSummary = "일정 %d건, 할 일 %d건이 있습니다."
                 .formatted(eventCount, taskCount, scheduleBlockCount);
         String sourceLabel = googleConnected
-                ? "Google 연결 데이터와 현재 워크스페이스를 함께 봅니다."
-                : "Google 연결이 확인되지 않아 현재 워크스페이스 데이터만 먼저 반영합니다.";
+                ? "최근 일정을 불러왔습니다."
+                : "현재 저장된 일정으로 시작합니다.";
 
         return new ImportedWorkspaceSummaryResponse(
                 eventCount,
@@ -480,14 +480,14 @@ public class OnboardingService {
 
         if (applicableBlocks.isEmpty()) {
             batch = new StructuredAiCommandBatch(
-                    "온보딩 루틴 후보를 검토했습니다.",
-                    "이미 저장된 루틴과 겹치지 않는 새 블록이 거의 없어, 기존 캘린더 일정을 우선 유지하도록 두었습니다.",
+                    "답변을 저장했습니다.",
+                    "지금은 새로 넣을 시간이 없습니다.",
                     List.of(new StructuredAiCommand(
                             AgentCommandActionType.EXPLAIN_ONLY.wireValue(),
                             AgentCommandTargetType.NONE.wireValue(),
                             null,
                             Map.of(
-                                    "summary", "현재 저장된 일정과 답변을 확인했고, 이후 대시보드에서 조정안을 이어서 제공합니다."
+                                    "summary", "현재 저장된 일정과 답변을 확인했습니다."
                             ),
                             "onboarding profile captured",
                             false
@@ -498,16 +498,16 @@ public class OnboardingService {
                     .map(this::toCreateEventCommand)
                     .toList();
             batch = new StructuredAiCommandBatch(
-                    "답변과 현재 일정 패턴을 바탕으로 첫 루틴 블록을 제안합니다.",
-                    "캘린더에 잘 안 남는 수면, 출근 준비, 저녁, 주말 패턴을 먼저 고정해 이후 일정 조정의 기준점으로 삼습니다.",
+                    "처음 넣을 시간을 골랐습니다.",
+                    "자주 반복되는 시간을 먼저 넣습니다.",
                     commands
             );
         }
 
         return rescheduleSuggestionService.createSuggestionFromBatch(
                 RescheduleSuggestionTriggerType.ONBOARDING_BOOTSTRAP,
-                "첫 일정 조정안을 만들었습니다.",
-                "사용자가 답한 고정 패턴을 기준으로 첫 주간 운영 루틴을 제안합니다.",
+                "처음 넣을 시간을 골랐습니다.",
+                "이번 주에 넣을 시간을 골랐습니다.",
                 batch.explanation(),
                 batch
         );
@@ -529,9 +529,9 @@ public class OnboardingService {
                     day,
                     sleepTime,
                     wakeTime,
-                    "수면 보호",
+                    "수면",
                     ScheduleCategory.SLEEP,
-                    "수면 시간이 흔들리지 않도록 매일 기본 보호 구간으로 잡습니다."
+                    "잠자는 시간으로 둡니다."
             ));
         }
 
@@ -542,9 +542,9 @@ public class OnboardingService {
                         day,
                         transitStart,
                         workStartTime,
-                        "출근 준비 / 이동",
+                        "출근 준비",
                         ScheduleCategory.TRANSIT,
-                        "출근 직전 준비와 이동 시간을 캘린더 밖 고정 패턴으로 보호합니다."
+                        "출근 전에 필요한 시간으로 둡니다."
                 ));
             }
         }
@@ -554,9 +554,9 @@ public class OnboardingService {
                     day,
                     dinnerTime,
                     dinnerTime.plusMinutes(60),
-                    "저녁 / 회복",
+                    "저녁",
                     ScheduleCategory.LIFE,
-                    "퇴근 후 회복 시간을 기본 블록으로 남겨 조정안이 과하게 침범하지 않게 합니다."
+                    "저녁 먹는 시간으로 둡니다."
             ));
         }
 
@@ -570,25 +570,25 @@ public class OnboardingService {
                     DayOfWeek.SATURDAY,
                     LocalTime.of(10, 0),
                     LocalTime.of(12, 0),
-                    "회복 / 리셋 시간",
+                    "쉬는 시간",
                     ScheduleCategory.LIFE,
-                    "주말 한 칸은 비워 두고 회복 시간을 지키도록 제안합니다."
+                    "주말에 쉬는 시간으로 둡니다."
             );
             case "productive" -> new PlannedRoutineBlock(
                     DayOfWeek.SATURDAY,
                     LocalTime.of(9, 0),
                     LocalTime.of(12, 0),
-                    "주말 집중 블록",
+                    "주말 작업 시간",
                     ScheduleCategory.GROWTH,
-                    "주말에도 확실히 몰입할 수 있는 긴 블록을 먼저 확보합니다."
+                    "주말에 공부나 개인 작업을 할 시간으로 둡니다."
             );
             default -> new PlannedRoutineBlock(
                     DayOfWeek.SATURDAY,
                     LocalTime.of(10, 0),
                     LocalTime.of(12, 0),
-                    "개인 프로젝트 / 정리",
+                    "개인 작업",
                     ScheduleCategory.GROWTH,
-                    "쉬는 시간을 해치지 않으면서도 가볍게 진도를 낼 수 있게 제안합니다."
+                    "주말에 가볍게 할 일을 할 시간으로 둡니다."
             );
         };
     }
@@ -645,8 +645,7 @@ public class OnboardingService {
                         "startTime", plan.startTime().toString(),
                         "endTime", plan.endTime().toString(),
                         "activity", plan.activity(),
-                        "category", plan.category().name(),
-                        "note", plan.reason()
+                        "category", plan.category().name()
                 ),
                 plan.reason(),
                 true
@@ -705,9 +704,9 @@ public class OnboardingService {
                 .count();
 
         if (executableCount == 0) {
-            return "답변은 저장됐고, 현재는 기존 일정을 우선 유지하도록 했습니다.";
+            return "답변은 저장됐고, 지금은 새로 넣을 시간이 없습니다.";
         }
-        return "지금 당장 반영할 수 있는 고정 루틴 %d개를 먼저 골랐습니다.".formatted(executableCount);
+        return "지금 넣을 수 있는 시간 %d개를 골랐습니다.".formatted(executableCount);
     }
 
     private String daysLabel(List<DayOfWeek> days) {

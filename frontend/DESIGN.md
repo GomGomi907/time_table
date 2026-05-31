@@ -41,6 +41,8 @@
 - Focus/execution mode: the main execution content is an immersive center-axis surface. Title, description, timer, and primary actions should be centered inside the main focus card.
 - Weekly schedule: do not use a fixed time-axis table as the primary desktop view. Short events become too hard to scan. Use a day-by-day stack where each day shows morning-to-night schedule cards in order, with start/end time as card metadata.
 - Onboarding: first impression matters even if onboarding conversion is not the top product metric. The onboarding start and completion screens must look polished, calm, and trustworthy.
+- Onboarding quick-start contract: frame onboarding as "choose close-enough repeated times → see today schedule", never as settings storage. The question stage must not expose a dominant percentage progress bar, provider state, AI rationale, or internal criteria.
+- Onboarding responsive contract: desktop uses a purposeful left rail with outcome copy and answer readiness; mobile uses compressed choices and a sticky completion CTA once all answers are present. Mobile option helper copy stays hidden by default to keep time choices scan-friendly.
 - Login/onboarding hero titles: these are not marketing billboards. They should be smaller than generic page heroes and should not dominate the card.
 - Do not reintroduce oversized demo typography, heavy heading weight, excessive negative tracking, or disconnected wide gutters.
 

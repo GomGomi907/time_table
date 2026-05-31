@@ -174,6 +174,8 @@ class OnboardingControllerTest {
                 .andExpect(jsonPath("$.appliedSuggestion.status").value("applied"));
 
         assertThat(scheduleBlockRepository.countByUserId(user.getId())).isGreaterThan(0);
+        assertThat(scheduleBlockRepository.findByUserId(user.getId()))
+                .allSatisfy(block -> assertThat(block.getNote()).isNull());
         assertThat(userPreferencesRepository.findByUserId(user.getId()))
                 .get()
                 .satisfies(preferences -> {

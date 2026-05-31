@@ -18,6 +18,13 @@ export const DAY_LABELS: Record<string, string> = {
   Friday: "금",
   Saturday: "토",
   Sunday: "일",
+  MONDAY: "월",
+  TUESDAY: "화",
+  WEDNESDAY: "수",
+  THURSDAY: "목",
+  FRIDAY: "금",
+  SATURDAY: "토",
+  SUNDAY: "일",
 };
 
 export const DAY_FULL_LABELS: Record<string, string> = {
@@ -28,6 +35,13 @@ export const DAY_FULL_LABELS: Record<string, string> = {
   Friday: "금요일",
   Saturday: "토요일",
   Sunday: "일요일",
+  MONDAY: "월요일",
+  TUESDAY: "화요일",
+  WEDNESDAY: "수요일",
+  THURSDAY: "목요일",
+  FRIDAY: "금요일",
+  SATURDAY: "토요일",
+  SUNDAY: "일요일",
 };
 
 export const CATEGORY_LABELS: Record<string, string> = {

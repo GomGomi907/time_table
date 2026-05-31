@@ -1,3 +1,7 @@
+param(
+  [string[]]$PlaywrightArgs = @()
+)
+
 $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -116,7 +120,7 @@ try {
 
   Push-Location $frontendDir
   try {
-    npx playwright test
+    npx playwright test @PlaywrightArgs
     if ($LASTEXITCODE -ne 0) {
       exit $LASTEXITCODE
     }

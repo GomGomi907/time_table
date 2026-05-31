@@ -117,10 +117,10 @@ export async function completeOnboardingIfPresent(page: Page) {
   }
 
   await expect(
-    page.getByRole("button", { name: /저장하고 계속|둘러보기|적용하고 시작/ }).first(),
+    page.getByRole("button", { name: /오늘 일정표 보기|오늘 화면으로 이동|바로 시작하기|저장하고 계속|둘러보기|적용하고 시작/ }).first(),
   ).toBeVisible({ timeout: 45_000 });
 
-  const browseButton = page.getByRole("button", { name: "둘러보기" });
+  const browseButton = page.getByRole("button", { name: /둘러보기|오늘 화면으로 이동/ }).first();
   if (await browseButton.isVisible({ timeout: 500 }).catch(() => false)) {
     await browseButton.click();
     await expect(page).toHaveURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });
@@ -133,7 +133,10 @@ export async function completeOnboardingIfPresent(page: Page) {
   await clickOptionalButton(page, /^23:30/);
   await clickOptionalButton(page, /균형 있게/);
 
-  const saveButton = page.getByRole("button", { name: /저장하고 계속/ });
+  const stickySaveButton = page.getByTestId("onboarding-sticky-continue-button");
+  const saveButton = await stickySaveButton.isVisible({ timeout: 500 }).catch(() => false)
+    ? stickySaveButton
+    : page.getByTestId("onboarding-continue-button");
   await expect(saveButton).toBeEnabled({ timeout: 30_000 });
   await saveButton.click();
 

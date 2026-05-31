@@ -246,7 +246,7 @@ test("dashboard shows clarification as a question instead of an approval task", 
 
   await expect(page.getByRole("heading", { name: "확인이 필요합니다." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("어느 날짜로 옮길까요?")).toBeVisible();
-  await expect(page.getByText("일정 정리 입력에 답변을 적어 다시 보내세요.")).toBeVisible();
+  await expect(page.getByText("일정 정리 입력에 답변을 적어 다시 보내세요.")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "적용할 변경 없음" })).toBeDisabled();
   await assertNoInternalUserCopy(page);

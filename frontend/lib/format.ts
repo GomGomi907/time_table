@@ -202,7 +202,7 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
         question || suggestion.explanation,
         "바꾸고 싶은 내용을 한 문장으로 더 알려주세요.",
       ),
-      guidance: "일정 정리 입력에 답변을 적어 다시 보내세요.",
+      guidance: null,
       canApply: false,
       applyLabel: "적용할 변경 없음",
     };

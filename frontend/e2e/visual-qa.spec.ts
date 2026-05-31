@@ -13,7 +13,6 @@ import {
   createScheduleBlockViaApi,
   escapeRegExp,
   getCurrentBackendDay,
-  loginAsUniqueMockUser,
 } from "./helpers";
 
 const VIEWPORTS = [
@@ -124,6 +123,8 @@ async function assertScheduleRightRailContract(page: Page) {
     }
     expect(appRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
     expect(scheduleRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
+    expect(Math.abs(scheduleRailBox.y - boardBox.y)).toBeLessThanOrEqual(18);
+    expect(Math.abs(scheduleRailBox.height - boardBox.height)).toBeLessThanOrEqual(18);
     expect(scheduleRailBox.width).toBeLessThanOrEqual(380);
     return;
   }
@@ -151,6 +152,29 @@ async function captureResponsiveSurface(
   }
 }
 
+async function loginThroughDevVisualPath(page: Page, testInfo: TestInfo) {
+  const slug = testInfo.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 34);
+  const uniqueId = `${slug || "visual"}-${Date.now()}-${testInfo.workerIndex}`;
+  const params = new URLSearchParams({
+    email: `visual-${uniqueId}@time-table.test`,
+    name: `Visual QA ${uniqueId}`,
+    connectGoogle: "false",
+    writeCapable: "false",
+  });
+
+  await page.goto(`/dev/visual-login?${params.toString()}`);
+  await expect(page).toHaveURL(/\/(auth\/callback|onboarding|dashboard)(?:$|\?)/, {
+    timeout: 30_000,
+  });
+  await expect(page).toHaveURL(/\/(onboarding|dashboard)(?:$|\?)/, {
+    timeout: 30_000,
+  });
+}
+
 test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   await page.goto("/auth/callback?status=error&reason=e2e");
   await expect(page.getByRole("heading", { name: /로그인을 다시 시도해 주세요/ })).toBeVisible({ timeout: 30_000 });
@@ -166,18 +190,38 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
     await expect(page.getByRole("button", { name: /Google로 시작|로그인 준비 중/ })).toBeVisible();
   });
 
-  await loginAsUniqueMockUser(page, testInfo, { connectGoogle: false, writeCapable: false });
+  await loginThroughDevVisualPath(page, testInfo);
   if (new URL(page.url()).pathname.includes("/onboarding")) {
     const onboardingPrimary = preferredAction(
       page,
       "onboarding-continue-button",
-      /저장하고 계속|둘러보기|적용하고 시작/,
+      /오늘 일정표 보기|오늘 화면으로 이동|바로 시작하기|저장하고 계속|둘러보기|적용하고 시작/,
     );
     await expect(onboardingPrimary).toBeVisible({ timeout: 45_000 });
     await captureResponsiveSurface(page, testInfo, "onboarding", async () => {
       await expect(onboardingPrimary).toBeVisible();
+      await expect(page.locator(".onboarding-progress-track")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: /^저장하고 계속$/ })).toHaveCount(0);
       await assertSingleVisibleByTestId(page, "onboarding-answer-count");
       await assertSingleLineBySelector(page, "[data-testid='onboarding-answer-count']");
+
+      const viewport = page.viewportSize();
+      if (viewport && viewport.width <= 820) {
+        await expect(page.getByTestId("onboarding-sticky-cta")).toHaveCount(0);
+        await expect(page.getByTestId("onboarding-sticky-continue-button")).toHaveCount(0);
+        await expect
+          .poll(async () =>
+            page.evaluate(() => {
+              const helpers = Array.from(document.querySelectorAll<HTMLElement>("[data-testid='onboarding-option-helper']"));
+              return helpers.filter((helper) => {
+                const style = window.getComputedStyle(helper);
+                const rect = helper.getBoundingClientRect();
+                return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+              }).length;
+            }),
+          )
+          .toBe(0);
+      }
     });
   }
 

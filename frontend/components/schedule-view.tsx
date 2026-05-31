@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
-import { formatClockValue, formatServiceCopy, getSuggestionDisplayState } from "@/lib/format";
+import { formatClockValue, formatServiceCopy, formatUserMemo, getSuggestionDisplayState } from "@/lib/format";
 import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
@@ -101,6 +101,10 @@ function formatDurationLabel(totalMinutes: number) {
   return minutes === 0 ? `${hours}시간` : `${hours}시간 ${minutes}분`;
 }
 
+function visibleScheduleNote(note: string | null | undefined) {
+  return formatUserMemo(note);
+}
+
 function WeeklyStack({
   week,
   onBlockSelect,
@@ -167,23 +171,28 @@ function WeeklyStack({
               {blocks.length ? (
                 <div className="mobile-day-blocks">
                   {previewBlocks.map((block) => (
-                    <button
-                      key={block.id}
-                      type="button"
-                      className={`mobile-schedule-block ${categoryTone(block.category)}`}
-                      onClick={() =>
-                        onBlockSelect({
-                          ...block,
-                          dayOfWeek: day,
-                        })
-                      }
-                    >
-                      <span className="event-time">
-                        {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
-                      </span>
-                      <strong>{formatServiceCopy(block.activity)}</strong>
-                      {block.note ? <span>{formatServiceCopy(block.note)}</span> : null}
-                    </button>
+                    (() => {
+                      const note = visibleScheduleNote(block.note);
+                      return (
+                        <button
+                          key={block.id}
+                          type="button"
+                          className={`mobile-schedule-block ${categoryTone(block.category)}`}
+                          onClick={() =>
+                            onBlockSelect({
+                              ...block,
+                              dayOfWeek: day,
+                            })
+                          }
+                        >
+                          <span className="event-time">
+                            {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
+                          </span>
+                          <strong>{formatServiceCopy(block.activity)}</strong>
+                          {note ? <span>{note}</span> : null}
+                        </button>
+                      );
+                    })()
                   ))}
                   {blocks.length > previewBlocks.length ? (
                     <p className="mobile-empty-day">
@@ -248,23 +257,28 @@ function WeeklyStack({
           </div>
         </div>
         {focusScheduleBlock ? (
-          <button
-            className={`current-schedule-card ${categoryTone(focusScheduleBlock.category)}`}
-            type="button"
-            onClick={() =>
-              onBlockSelect({
-                ...focusScheduleBlock,
-                dayOfWeek: currentDay,
-              })
-            }
-          >
-            <span className="current-schedule-kicker">{focusScheduleLabel}</span>
-            <strong>{formatServiceCopy(focusScheduleBlock.activity)}</strong>
-            <span className="current-schedule-time">
-              {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
-            </span>
-            {focusScheduleBlock.note ? <span className="current-schedule-note">{formatServiceCopy(focusScheduleBlock.note)}</span> : null}
-          </button>
+          (() => {
+            const note = visibleScheduleNote(focusScheduleBlock.note);
+            return (
+              <button
+                className={`current-schedule-card ${categoryTone(focusScheduleBlock.category)}`}
+                type="button"
+                onClick={() =>
+                  onBlockSelect({
+                    ...focusScheduleBlock,
+                    dayOfWeek: currentDay,
+                  })
+                }
+              >
+                <span className="current-schedule-kicker">{focusScheduleLabel}</span>
+                <strong>{formatServiceCopy(focusScheduleBlock.activity)}</strong>
+                <span className="current-schedule-time">
+                  {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
+                </span>
+                {note ? <span className="current-schedule-note">{note}</span> : null}
+              </button>
+            );
+          })()
         ) : (
           <div className="current-schedule-card empty" aria-label="현재 또는 다음 일정 없음">
             <span className="current-schedule-kicker">지금 일정</span>
@@ -288,6 +302,7 @@ function WeeklyStack({
                   <div className="week-stack-list">
                     {blocks.map((block) => {
                       const isCurrentBlock = day === currentDay && isBlockActive(block, currentMinutes);
+                      const note = visibleScheduleNote(block.note);
                       return (
                         <button
                           key={block.id}
@@ -306,7 +321,7 @@ function WeeklyStack({
                           </span>
                           <strong>{formatServiceCopy(block.activity)}</strong>
                           {isCurrentBlock ? <span className="current-event-chip">지금 일정</span> : null}
-                          {block.note ? <p className="event-note">{formatServiceCopy(block.note)}</p> : null}
+                          {note ? <p className="event-note">{note}</p> : null}
                         </button>
                       );
                     })}

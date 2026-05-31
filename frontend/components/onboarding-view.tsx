@@ -15,26 +15,26 @@ type AsyncPhase = "idle" | "loading" | "ready" | "error";
 const QUESTION_GROUPS = [
   {
     id: "morning",
-    title: "평일 시작",
-    description: "하루의 시작과 업무 시작 기준을 맞춥니다.",
+    title: "아침",
+    description: "",
     questionIds: ["wakeTime", "workStartTime"],
   },
   {
     id: "evening",
-    title: "저녁과 마감",
-    description: "저녁 이후 회복 시간과 수면 구간을 보호합니다.",
+    title: "저녁",
+    description: "",
     questionIds: ["dinnerTime", "sleepTime"],
   },
   {
     id: "weekend",
-    title: "주말 사용 방식",
-    description: "주말을 쉬는 날로 볼지, 정리하는 날로 볼지 정합니다.",
+    title: "주말",
+    description: "",
     questionIds: ["weekendStyle"],
   },
   {
     id: "focus",
-    title: "집중 실행",
-    description: "지금 할 일과 집중 블록의 현실적인 단위를 정합니다.",
+    title: "집중 시간",
+    description: "",
     questionIds: ["focusSessionMinutes", "focusBreakMinutes", "focusInterventionStyle"],
   },
 ] as const;
@@ -192,8 +192,14 @@ export function OnboardingView() {
   );
 
   const answeredCount = questions.filter((question) => Boolean(answers[question.id])).length;
-  const canSubmitAnswers = questions.every((question) => Boolean(answers[question.id]));
-  const answeredPercent = questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0;
+  const canSubmitAnswers = questions.length > 0 && questions.every((question) => Boolean(answers[question.id]));
+  const answerReadyLabel = canSubmitAnswers
+    ? `${answeredCount}/${questions.length} 답변 완료`
+    : `${answeredCount}/${questions.length} 답변`;
+  const primaryActionLabel = submitPhase === "loading" ? "오늘 화면 준비 중..." : "오늘 일정표 보기";
+  const readinessStateCopy = canSubmitAnswers
+    ? "오늘 일정표를 바로 열 수 있습니다."
+    : "모두 고르면 오늘 일정표로 넘어갑니다.";
 
   async function handleBootstrapRetry() {
     try {
@@ -336,36 +342,29 @@ export function OnboardingView() {
 
   if (isQuestionStage) {
     return (
-      <div className="status-screen onboarding-shell">
+      <div className={`status-screen onboarding-shell ${canSubmitAnswers ? "onboarding-shell-ready" : ""}`}>
         <div className="onboarding-panel onboarding-panel-wide">
-          <section className="onboarding-sidebar onboarding-sidebar-compact">
+          <section className="onboarding-sidebar onboarding-sidebar-compact onboarding-quickstart-rail">
             <div className="onboarding-sidebar-body">
               <p className="eyebrow">처음 설정</p>
-              <h1>오늘과 지금의 기준을 설정합니다.</h1>
-              <p>
-                Time Table은 캘린더만으로 알기 어려운 생활 리듬을 먼저 확인한 뒤,
-                오늘 화면과 주간 일정표의 기본 기준으로 사용합니다.
-              </p>
+              <h1>평소 시간을 몇 개만 고르세요.</h1>
+              <p>오늘 일정표를 바로 볼 수 있습니다. 나중에 언제든 바꿀 수 있습니다.</p>
             </div>
 
-            <div className="onboarding-sidebar-meta" aria-label="처음 설정 진행률">
-              <div className="onboarding-progress-head">
-                <span>진행률</span>
-                <strong>{answeredPercent}%</strong>
+            <div className="onboarding-sidebar-meta onboarding-readiness-card" aria-label="처음 설정 답변 상태">
+              <div className="onboarding-readiness-head">
+                <span>시작 준비</span>
+                <strong>{answerReadyLabel}</strong>
               </div>
-              <div
-                className="onboarding-progress-track"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={questions.length}
-                aria-valuenow={answeredCount}
-                aria-label={`${questions.length}개 중 ${answeredCount}개 답변 완료`}
-              >
-                <span style={{ width: `${answeredPercent}%` }} />
+              <p>{readinessStateCopy}</p>
+              <div className="onboarding-readiness-summary" aria-label="오늘 화면에 반영되는 항목">
+                {QUESTION_GROUPS.map((group) => (
+                  <span key={group.id}>{group.title}</span>
+                ))}
               </div>
               <ul className="onboarding-helper-list">
-                <li>모든 항목은 나중에 다시 수정할 수 있습니다.</li>
-                <li>외부 연결 상태나 내부 기준은 이 화면에 노출하지 않습니다.</li>
+                <li>정확하지 않아도 됩니다.</li>
+                <li>나중에 바꿀 수 있습니다.</li>
               </ul>
             </div>
           </section>
@@ -374,14 +373,11 @@ export function OnboardingView() {
             <article className="surface-card onboarding-card onboarding-question-card">
               <div className="onboarding-stage-head">
                 <div>
-                  <p className="eyebrow">생활 리듬</p>
-                  <h2>8개의 선택지만 고르면 바로 시작할 수 있습니다.</h2>
-                  <p className="onboarding-card-intro">
-                    가장 가까운 값을 고르면 충분합니다. 정확한 기록보다 평소에 가까운 기준이 더 중요합니다.
-                  </p>
+                  <p className="eyebrow">시간 선택</p>
+                  <h2>대략 맞는 시간으로 충분합니다.</h2>
                 </div>
                 <span className="accent-pill onboarding-answer-count" data-testid="onboarding-answer-count">
-                  {answeredCount}/{questions.length}&nbsp;답변
+                  {answerReadyLabel}
                 </span>
               </div>
 
@@ -391,7 +387,7 @@ export function OnboardingView() {
                     <div className="onboarding-group-head">
                       <div>
                         <strong>{group.title}</strong>
-                        <p>{group.description}</p>
+                        {group.description ? <p>{group.description}</p> : null}
                       </div>
                       <span>
                         {group.questions.filter((question) => Boolean(answers[question.id])).length}/{group.questions.length}
@@ -402,7 +398,7 @@ export function OnboardingView() {
                       <section key={question.id} className="onboarding-question-block">
                         <div className="onboarding-question-head">
                           <strong>{question.title}</strong>
-                          <p>{question.description}</p>
+                          {question.description ? <p>{question.description}</p> : null}
                         </div>
                         <div className="onboarding-option-grid">
                           {question.options.map((option) => {
@@ -422,7 +418,7 @@ export function OnboardingView() {
                                 <span className="onboarding-option-indicator" aria-hidden="true" />
                                 <span className="onboarding-option-copy">
                                   <strong>{option.label}</strong>
-                                  <span>{option.helper}</span>
+                                  {option.helper ? <span data-testid="onboarding-option-helper">{option.helper}</span> : null}
                                 </span>
                               </button>
                             );
@@ -442,7 +438,7 @@ export function OnboardingView() {
                   onClick={() => void handleSubmitAnswers()}
                   type="button"
                 >
-                  {submitPhase === "loading" ? "저장 중..." : "저장하고 계속"}
+                  {primaryActionLabel}
                 </button>
               </div>
 
@@ -450,6 +446,7 @@ export function OnboardingView() {
             </article>
           </section>
         </div>
+
       </div>
     );
   }
@@ -459,8 +456,8 @@ export function OnboardingView() {
       <div className="onboarding-panel onboarding-panel-wide onboarding-panel-simple">
         <section className="onboarding-sidebar onboarding-sidebar-compact">
           <p className="eyebrow">처음 설정</p>
-          <h1>오늘 화면을 열 준비가 끝났습니다.</h1>
-          <p>선택한 기준은 오늘 일정, 지금 할 일, 주간 일정표의 기본값으로 사용됩니다.</p>
+          <h1>오늘 일정표를 볼 준비가 끝났습니다.</h1>
+          <p>선택한 시간으로 오늘 일정과 지금 할 일을 바로 확인할 수 있습니다.</p>
           <div className="onboarding-answer-summary">
             {answerSummary.map((item) => (
               <div key={item.id} className="onboarding-answer-chip">
@@ -476,9 +473,9 @@ export function OnboardingView() {
             <div className="onboarding-stage-head">
               <div>
                 <p className="eyebrow">완료</p>
-                <h2>이제 오늘 일정과 지금 할 일을 확인할 수 있습니다.</h2>
+                <h2>오늘 일정표를 바로 열 수 있습니다.</h2>
                 <p className="onboarding-card-intro">
-                  먼저 둘러보거나, 준비된 첫 조정안이 있으면 적용한 뒤 시작할 수 있습니다.
+                  나중에 다시 바꿀 수 있습니다.
                 </p>
               </div>
             </div>
@@ -501,7 +498,7 @@ export function OnboardingView() {
                   onClick={() => void handleComplete(false)}
                   type="button"
                 >
-                  둘러보기
+                  오늘 화면으로 이동
                 </button>
                 {suggestionId ? (
                   <button
@@ -511,7 +508,7 @@ export function OnboardingView() {
                     onClick={() => void handleComplete(true)}
                     type="button"
                   >
-                    {completionPhase === "loading" ? "적용 중..." : "적용하고 시작"}
+                    {completionPhase === "loading" ? "오늘 화면 준비 중..." : "오늘 일정표 보기"}
                   </button>
                 ) : null}
               </div>

@@ -1,6 +1,6 @@
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
-import { formatClockValue, formatRelativeMinutes, formatServiceCopy } from "@/lib/format";
+import { formatClockValue, formatRelativeMinutes, formatServiceCopy, formatUserMemo } from "@/lib/format";
 import { DAY_FULL_LABELS, UpcomingScheduleBlock } from "@/lib/schedule";
 import {
   FocusCurrentItem,
@@ -42,16 +42,7 @@ function uniqueRecommendedTasks(tasks: RecommendedTask[], limit: number) {
 }
 
 function visibleScheduleNote(note: string | null | undefined) {
-  const value = note?.trim();
-  if (!value) {
-    return null;
-  }
-
-  if (/(e2e|playwright|qa seed|service improvement|mock)/i.test(value)) {
-    return null;
-  }
-
-  return formatServiceCopy(value);
+  return formatUserMemo(note);
 }
 
 export function FocusRailCard({
