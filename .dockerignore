@@ -27,3 +27,5 @@ client_secret_*.json
 *.db
 *.pyc
 __pycache__
+**/.env
+**/.env.*

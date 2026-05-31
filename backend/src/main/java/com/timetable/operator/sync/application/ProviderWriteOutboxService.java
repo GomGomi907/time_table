@@ -17,6 +17,7 @@ import com.timetable.operator.sync.infrastructure.SyncMappingRepository;
 import com.timetable.operator.tasks.domain.Task;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,11 @@ public class ProviderWriteOutboxService {
     private static final String GOOGLE_PROVIDER = "google";
     private static final String CALENDAR_EXTERNAL_PREFIX = "google_calendar:";
     private static final String TASK_EXTERNAL_PREFIX = "google_tasks:";
+    private static final List<ProviderWriteState> COALESCIBLE_STATES = List.of(
+            ProviderWriteState.DIRTY_PENDING_WRITE,
+            ProviderWriteState.WRITE_FAILED_RETRYABLE,
+            ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT
+    );
 
     private final CalendarConnectionRepository calendarConnectionRepository;
     private final SyncMappingRepository syncMappingRepository;
@@ -54,7 +60,7 @@ public class ProviderWriteOutboxService {
         }
 
         event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
-        providerWriteOutboxRepository.save(outbox(
+        coalesceOrSave(
                 event.getUserId(),
                 SyncMappingLocalType.EVENT,
                 event.getId(),
@@ -65,7 +71,7 @@ public class ProviderWriteOutboxService {
                         ? ProviderWriteState.DIRTY_PENDING_WRITE
                         : ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
                 snapshotEvent(event)
-        ));
+        );
     }
 
     public void enqueueTaskWrite(Task task, ProviderWriteOperation requestedOperation) {
@@ -87,7 +93,7 @@ public class ProviderWriteOutboxService {
         }
 
         task.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
-        providerWriteOutboxRepository.save(outbox(
+        coalesceOrSave(
                 task.getUserId(),
                 SyncMappingLocalType.TASK,
                 task.getId(),
@@ -98,7 +104,80 @@ public class ProviderWriteOutboxService {
                         ? ProviderWriteState.DIRTY_PENDING_WRITE
                         : ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
                 snapshotTask(task)
-        ));
+        );
+    }
+
+    private void coalesceOrSave(
+            java.util.UUID userId,
+            SyncMappingLocalType localType,
+            java.util.UUID localId,
+            java.util.UUID mappingId,
+            SyncProvider provider,
+            ProviderWriteOperation requestedOperation,
+            ProviderWriteState state,
+            String payloadSnapshot
+    ) {
+        Optional<ProviderWriteOutbox> existing = providerWriteOutboxRepository
+                .findFirstByUserIdAndLocalTypeAndLocalIdAndProviderAndStateInOrderByCreatedAtAsc(
+                        userId,
+                        localType,
+                        localId,
+                        provider,
+                        COALESCIBLE_STATES
+                );
+
+        if (existing.isEmpty()) {
+            providerWriteOutboxRepository.save(outbox(
+                    userId,
+                    localType,
+                    localId,
+                    mappingId,
+                    provider,
+                    requestedOperation,
+                    state,
+                    payloadSnapshot
+            ));
+            return;
+        }
+
+        ProviderWriteOutbox current = existing.get();
+        ProviderWriteOperation mergedOperation = mergeOperation(current.getOperation(), requestedOperation);
+        if (mergedOperation == null) {
+            providerWriteOutboxRepository.delete(current);
+            return;
+        }
+
+        current.setMappingId(mappingId == null ? current.getMappingId() : mappingId);
+        current.setOperation(mergedOperation);
+        current.setState(state);
+        current.setPayloadSnapshot(payloadSnapshot);
+        current.setLastErrorCode(state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT ? "reconnect_required" : null);
+        current.setLastErrorMessage(state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT
+                ? "Google OAuth token does not include the required write scope."
+                : null);
+        current.setNextRetryAt(null);
+        current.setInFlightAt(null);
+        current.setAppliedAt(null);
+        providerWriteOutboxRepository.save(current);
+    }
+
+    private ProviderWriteOperation mergeOperation(
+            ProviderWriteOperation existingOperation,
+            ProviderWriteOperation requestedOperation
+    ) {
+        if (existingOperation == ProviderWriteOperation.CREATE && requestedOperation == ProviderWriteOperation.DELETE) {
+            return null;
+        }
+        if (existingOperation == ProviderWriteOperation.CREATE) {
+            return ProviderWriteOperation.CREATE;
+        }
+        if (existingOperation == ProviderWriteOperation.DELETE) {
+            return ProviderWriteOperation.DELETE;
+        }
+        if (requestedOperation == ProviderWriteOperation.DELETE) {
+            return ProviderWriteOperation.DELETE;
+        }
+        return requestedOperation;
     }
 
     private Optional<SyncMapping> findMapping(

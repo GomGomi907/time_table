@@ -11,7 +11,7 @@ Do not invite beta users until every P0 gate in
 
 Hard no-go conditions:
 
-- beta runtime uses H2
+- beta runtime uses H2 or omits `APP_RELEASE_MODE=beta`
 - mock login or mock Google sync is enabled
 - OAuth/Gemini/DB secrets are in source, screenshots, logs, or build context
 - Google OAuth/Calendar/Tasks live smoke tests have not passed
@@ -43,6 +43,7 @@ Do not paste values into reports. Record only secret names, versions, and deploy
 
 | Area | Variable | Source |
 |---|---|---|
+| Runtime mode | `APP_RELEASE_MODE=beta` | explicit beta fail-closed guard |
 | Frontend origin | `APP_FRONTEND_URL` | Cloud Run service URL/custom domain |
 | Backend DB | `APP_DB_URL` | Cloud SQL PostgreSQL JDBC URL |
 | Backend DB | `APP_DB_USERNAME` | Secret Manager pinned version |
@@ -73,10 +74,12 @@ Pass conditions:
 Accept one of:
 
 ```powershell
-docker build -t timetable-beta:local .
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -Full -RequireDocker
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-deployed-release.ps1 -BaseUrl https://timetable-608682434352.asia-northeast2.run.app/
 ```
 
-or Cloud Build/CI evidence from a clean checkout.
+`-Full -RequireDocker` is intentionally fail-closed: if Docker/Testcontainers cannot run, the report must say BLOCKED and beta promotion waits for Cloud Build/CI evidence from a clean checkout.
 
 After deploy, record:
 
@@ -99,6 +102,7 @@ The backend health path must fail or show controlled unavailable behavior if Spr
 
 Release CI must treat these as required gates, not optional local checks:
 
+- `scripts/verify-release.ps1 -Full -RequireDocker` report from a clean checkout;
 - root Docker image build from clean checkout;
 - container smoke for `/login` and `/actuator/health`;
 - backend-death supervision check for the combined container;

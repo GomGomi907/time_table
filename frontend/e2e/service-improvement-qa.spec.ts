@@ -96,7 +96,7 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
   await completeOnboardingIfPresent(page);
   const today = getCurrentBackendDay();
   await clearScheduleBlocksForDay(page, today);
-  const activeBlock = buildActiveScheduleBlock(`지금 해야 하는 일 ${Date.now()}`);
+  const activeBlock = buildActiveScheduleBlock("집중 업무 정리");
   await createScheduleBlockViaApi(page, activeBlock);
 
   await page.goto("/dashboard");
@@ -105,6 +105,7 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
   });
   await expect(page.locator("body")).toContainText(/지금\/다음|지금 진행 중|실행 모드 시작/);
   await assertNoInternalUserCopy(page);
+  await expect(page.locator("body")).not.toContainText(/지금 해야 하는 일 \d{8,}/);
   screenshots.push(await capture(page, "desktop-dashboard", { width: 1440, height: 1000 }));
   screenshots.push(await capture(page, "mobile-dashboard", { width: 390, height: 1000 }));
 
@@ -126,12 +127,14 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
   await assertNoHorizontalOverflow(page);
   await expect(page.locator("body")).toContainText(/오늘 일정|이번 주|주간 일정/);
   await assertNoInternalUserCopy(page);
+  await expect(page.locator("body")).not.toContainText(/지금 해야 하는 일 \d{8,}/);
   screenshots.push(await capture(page, "desktop-schedule", { width: 1440, height: 1000 }));
   screenshots.push(await capture(page, "mobile-schedule", { width: 390, height: 1000 }));
 
   await page.goto("/focus");
   await expect(page.getByText(/지금 실행|지금 할 일/).first()).toBeVisible({ timeout: 30_000 });
   await assertNoInternalUserCopy(page);
+  await expect(page.locator("body")).not.toContainText(/지금 해야 하는 일 \d{8,}/);
   screenshots.push(await capture(page, "desktop-focus", { width: 1440, height: 1000 }));
   screenshots.push(await capture(page, "mobile-focus", { width: 390, height: 1000 }));
 

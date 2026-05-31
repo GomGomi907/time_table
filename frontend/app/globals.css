@@ -649,7 +649,7 @@ summary,
 
 .today-flow-card {
   display: grid;
-  min-height: clamp(460px, calc(100vh - (var(--page-pad) * 2) - 150px), 640px);
+  min-height: clamp(360px, calc(100vh - (var(--page-pad) * 2) - 230px), 520px);
   align-content: center;
   background:
     radial-gradient(circle at top right, rgba(91, 110, 225, 0.16), transparent 42%),
@@ -664,7 +664,7 @@ summary,
 
 .today-flow-copy h2 {
   max-width: 720px;
-  font-size: clamp(1.9rem, 4vw, 4.15rem);
+  font-size: clamp(1.8rem, 3.2vw, 3.25rem);
   font-weight: 500;
   line-height: 1.12;
 }
@@ -1217,7 +1217,7 @@ summary,
   box-shadow: var(--shadow-sm);
 }
 
-@media (min-width: 1181px) {
+@media (min-width: 1321px) {
   .app-frame.with-right-rail {
     align-items: stretch;
   }
@@ -1476,6 +1476,14 @@ button.current-schedule-card:hover {
 .current-schedule-note {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+
+.schedule-mobile-action-strip {
+  display: none;
+  min-width: 0;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .week-stack-board {
@@ -1828,7 +1836,7 @@ button.current-schedule-card:hover {
   border-color: rgba(91, 110, 225, 0.2);
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1320px) {
   :root {
     --content-max: 100%;
   }
@@ -1909,6 +1917,11 @@ button.current-schedule-card:hover {
   }
 
   .ai-compose-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-mobile-action-strip {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

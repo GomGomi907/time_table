@@ -469,25 +469,31 @@ public class RescheduleSuggestionService {
     }
 
     private AppliedCommandSnapshot moveEvent(Event event, StructuredAiCommand command) {
-        Long shiftMinutes = readLong(command.payload(), "suggestedShiftMinutes", "suggested_shift_minutes");
-        Instant explicitStartAt = readInstant(command.payload(), "startAt", "start_at");
-        Instant explicitEndAt = readInstant(command.payload(), "endAt", "end_at");
-        if (shiftMinutes != null) {
-            event.setStartAt(event.getStartAt().plusSeconds(shiftMinutes * 60L));
-            event.setEndAt(event.getEndAt().plusSeconds(shiftMinutes * 60L));
+        EventRollbackState beforeState = snapshotEventRollback(event);
+        try {
+            Long shiftMinutes = readLong(command.payload(), "suggestedShiftMinutes", "suggested_shift_minutes");
+            Instant explicitStartAt = readInstant(command.payload(), "startAt", "start_at");
+            Instant explicitEndAt = readInstant(command.payload(), "endAt", "end_at");
+            if (shiftMinutes != null) {
+                event.setStartAt(event.getStartAt().plusSeconds(shiftMinutes * 60L));
+                event.setEndAt(event.getEndAt().plusSeconds(shiftMinutes * 60L));
+            }
+            if (explicitStartAt != null) {
+                event.setStartAt(explicitStartAt);
+            }
+            if (explicitEndAt != null) {
+                event.setEndAt(explicitEndAt);
+            }
+            if (shiftMinutes == null && explicitStartAt == null && explicitEndAt == null) {
+                return noExecutableTarget(command, "이동할 시간 정보가 payload에 없습니다.");
+            }
+            validateEventRange(event);
+            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+            eventRepository.save(event);
+        } catch (RuntimeException exception) {
+            restoreEventFields(event, beforeState);
+            throw exception;
         }
-        if (explicitStartAt != null) {
-            event.setStartAt(explicitStartAt);
-        }
-        if (explicitEndAt != null) {
-            event.setEndAt(explicitEndAt);
-        }
-        if (shiftMinutes == null && explicitStartAt == null && explicitEndAt == null) {
-            return noExecutableTarget(command, "이동할 시간 정보가 payload에 없습니다.");
-        }
-        validateEventRange(event);
-        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
-        eventRepository.save(event);
         return new AppliedCommandSnapshot(
                 command.actionType(),
                 event.getId().toString(),
@@ -499,10 +505,16 @@ public class RescheduleSuggestionService {
     }
 
     private AppliedCommandSnapshot updateEvent(Event event, StructuredAiCommand command) {
-        applyEventPayload(event, command.payload(), false);
-        validateEventRange(event);
-        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
-        eventRepository.save(event);
+        EventRollbackState beforeState = snapshotEventRollback(event);
+        try {
+            applyEventPayload(event, command.payload(), false);
+            validateEventRange(event);
+            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+            eventRepository.save(event);
+        } catch (RuntimeException exception) {
+            restoreEventFields(event, beforeState);
+            throw exception;
+        }
         return new AppliedCommandSnapshot(
                 command.actionType(),
                 event.getId().toString(),
@@ -514,9 +526,15 @@ public class RescheduleSuggestionService {
     }
 
     private AppliedCommandSnapshot deleteEvent(Event event, StructuredAiCommand command) {
-        event.setStatus(EventStatus.CANCELLED);
-        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.DELETE);
-        eventRepository.save(event);
+        EventRollbackState beforeState = snapshotEventRollback(event);
+        try {
+            event.setStatus(EventStatus.CANCELLED);
+            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.DELETE);
+            eventRepository.save(event);
+        } catch (RuntimeException exception) {
+            restoreEventFields(event, beforeState);
+            throw exception;
+        }
         return new AppliedCommandSnapshot(
                 command.actionType(),
                 event.getId().toString(),
@@ -549,15 +567,21 @@ public class RescheduleSuggestionService {
         Task task = getOwnedTask(userId, command);
         Long shiftMinutes = readLong(command.payload(), "suggestedShiftMinutes", "suggested_shift_minutes");
         Instant dueDate = readInstant(command.payload(), "dueDate", "due_date");
-        if (dueDate != null) {
-            task.setDueDate(dueDate);
-        } else if (shiftMinutes != null && task.getDueDate() != null) {
-            task.setDueDate(task.getDueDate().plusSeconds(shiftMinutes * 60L));
-        } else {
-            return noExecutableTarget(command, "할 일 이동을 위한 dueDate 또는 기존 dueDate와 이동 시간이 필요합니다.");
+        TaskRollbackState beforeState = snapshotTaskRollback(task);
+        try {
+            if (dueDate != null) {
+                task.setDueDate(dueDate);
+            } else if (shiftMinutes != null && task.getDueDate() != null) {
+                task.setDueDate(task.getDueDate().plusSeconds(shiftMinutes * 60L));
+            } else {
+                return noExecutableTarget(command, "할 일 이동을 위한 dueDate 또는 기존 dueDate와 이동 시간이 필요합니다.");
+            }
+            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
+            taskRepository.save(task);
+        } catch (RuntimeException exception) {
+            restoreTaskFields(task, beforeState);
+            throw exception;
         }
-        providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
-        taskRepository.save(task);
         return new AppliedCommandSnapshot(
                 command.actionType(),
                 task.getId().toString(),
@@ -570,9 +594,15 @@ public class RescheduleSuggestionService {
 
     private AppliedCommandSnapshot updateTask(UUID userId, StructuredAiCommand command) {
         Task task = getOwnedTask(userId, command);
-        applyTaskPayload(task, command.payload(), false);
-        providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
-        taskRepository.save(task);
+        TaskRollbackState beforeState = snapshotTaskRollback(task);
+        try {
+            applyTaskPayload(task, command.payload(), false);
+            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
+            taskRepository.save(task);
+        } catch (RuntimeException exception) {
+            restoreTaskFields(task, beforeState);
+            throw exception;
+        }
         return new AppliedCommandSnapshot(
                 command.actionType(),
                 task.getId().toString(),
@@ -585,9 +615,15 @@ public class RescheduleSuggestionService {
 
     private AppliedCommandSnapshot deleteTask(UUID userId, StructuredAiCommand command) {
         Task task = getOwnedTask(userId, command);
-        task.setStatus(TaskStatus.CANCELLED);
-        providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.DELETE);
-        taskRepository.save(task);
+        TaskRollbackState beforeState = snapshotTaskRollback(task);
+        try {
+            task.setStatus(TaskStatus.CANCELLED);
+            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.DELETE);
+            taskRepository.save(task);
+        } catch (RuntimeException exception) {
+            restoreTaskFields(task, beforeState);
+            throw exception;
+        }
         return new AppliedCommandSnapshot(
                 command.actionType(),
                 task.getId().toString(),
@@ -734,6 +770,11 @@ public class RescheduleSuggestionService {
     }
 
     private void revertSnapshot(UUID userId, AppliedCommandSnapshot snapshot) {
+        if ("applied".equals(snapshot.outcome())
+                && snapshot.beforeState() == null
+                && snapshot.afterState() == null) {
+            throw new UserActionRequiredException("이 변경은 자동 되돌리기를 지원하지 않습니다. 일정 화면에서 직접 확인해 주세요.");
+        }
         AgentCommandActionType actionType = AgentCommandActionType.from(snapshot.actionType());
         switch (actionType) {
             case CREATE_EVENT -> {
@@ -912,6 +953,81 @@ public class RescheduleSuggestionService {
         if (task.getStatus() == null) {
             task.setStatus(TaskStatus.TODO);
         }
+    }
+
+
+    private EventRollbackState snapshotEventRollback(Event event) {
+        return new EventRollbackState(
+                event.getTitle(),
+                event.getDescription(),
+                event.getStartAt(),
+                event.getEndAt(),
+                event.getPriority(),
+                event.getCategory(),
+                event.getGoalId(),
+                event.getStatus(),
+                event.getSourceType(),
+                event.getSyncState(),
+                event.getExternalSourceId(),
+                event.getExternalEtag(),
+                event.getLastSyncedAt()
+        );
+    }
+
+    private void restoreEventFields(Event event, EventRollbackState snapshot) {
+        event.setTitle(snapshot.title());
+        event.setDescription(snapshot.description());
+        event.setStartAt(snapshot.startAt());
+        event.setEndAt(snapshot.endAt());
+        event.setPriority(snapshot.priority());
+        event.setCategory(snapshot.category());
+        event.setGoalId(snapshot.goalId());
+        event.setStatus(snapshot.status());
+        event.setSourceType(snapshot.sourceType());
+        event.setSyncState(snapshot.syncState());
+        event.setExternalSourceId(snapshot.externalSourceId());
+        event.setExternalEtag(snapshot.externalEtag());
+        event.setLastSyncedAt(snapshot.lastSyncedAt());
+    }
+
+    private TaskRollbackState snapshotTaskRollback(Task task) {
+        return new TaskRollbackState(
+                task.getTitle(),
+                task.getDescription(),
+                task.getDueDate(),
+                task.getEstimatedMinutes(),
+                task.getPriority(),
+                task.getGoalId(),
+                task.getCategory(),
+                task.getStatus(),
+                task.getSourceType(),
+                task.getSyncState(),
+                task.getEventId(),
+                task.getExternalSourceId(),
+                task.getExternalEtag(),
+                task.getLastSyncedAt(),
+                task.getCompletedAt(),
+                task.getActualMinutes()
+        );
+    }
+
+    private void restoreTaskFields(Task task, TaskRollbackState snapshot) {
+        task.setTitle(snapshot.title());
+        task.setDescription(snapshot.description());
+        task.setDueDate(snapshot.dueDate());
+        task.setEstimatedMinutes(snapshot.estimatedMinutes());
+        task.setPriority(snapshot.priority());
+        task.setGoalId(snapshot.goalId());
+        task.setCategory(snapshot.category());
+        task.setStatus(snapshot.status());
+        task.setSourceType(snapshot.sourceType());
+        task.setSyncState(snapshot.syncState());
+        task.setEventId(snapshot.eventId());
+        task.setExternalSourceId(snapshot.externalSourceId());
+        task.setExternalEtag(snapshot.externalEtag());
+        task.setLastSyncedAt(snapshot.lastSyncedAt());
+        task.setCompletedAt(snapshot.completedAt());
+        task.setActualMinutes(snapshot.actualMinutes());
     }
 
     private AiRescheduleClient.RescheduleAiContext buildAiContext(AppUser user, ManualRescheduleRequest request) {
@@ -1104,6 +1220,43 @@ public class RescheduleSuggestionService {
             String note,
             String sourceType,
             String sourceRef
+    ) {
+    }
+
+    private record EventRollbackState(
+            String title,
+            String description,
+            Instant startAt,
+            Instant endAt,
+            short priority,
+            ScheduleCategory category,
+            UUID goalId,
+            EventStatus status,
+            EventSourceType sourceType,
+            com.timetable.operator.common.domain.PlannerSyncState syncState,
+            String externalSourceId,
+            String externalEtag,
+            Instant lastSyncedAt
+    ) {
+    }
+
+    private record TaskRollbackState(
+            String title,
+            String description,
+            Instant dueDate,
+            int estimatedMinutes,
+            short priority,
+            UUID goalId,
+            String category,
+            TaskStatus status,
+            TaskSourceType sourceType,
+            com.timetable.operator.common.domain.PlannerSyncState syncState,
+            UUID eventId,
+            String externalSourceId,
+            String externalEtag,
+            Instant lastSyncedAt,
+            Instant completedAt,
+            Integer actualMinutes
     ) {
     }
 }

@@ -107,8 +107,7 @@ public class ProviderWriteProcessor {
             return;
         }
 
-        GoogleOutboundSyncClient.ProviderWriteResult result = outbox.getOperation() == ProviderWriteOperation.CREATE
-                || providerEventId == null
+        GoogleOutboundSyncClient.ProviderWriteResult result = providerEventId == null
                 ? googleOutboundSyncClient.createCalendarEvent(connection, event)
                 : googleOutboundSyncClient.updateCalendarEvent(connection, providerEventId, event);
         String externalId = result.providerId() == null ? providerEventId : result.providerId();
@@ -144,8 +143,7 @@ public class ProviderWriteProcessor {
             return;
         }
 
-        GoogleOutboundSyncClient.ProviderWriteResult result = outbox.getOperation() == ProviderWriteOperation.CREATE
-                || externalRef.taskId() == null
+        GoogleOutboundSyncClient.ProviderWriteResult result = externalRef.taskId() == null
                 ? googleOutboundSyncClient.createTask(connection, externalRef.taskListId(), task)
                 : googleOutboundSyncClient.updateTask(connection, externalRef.taskListId(), externalRef.taskId(), task);
         String providerTaskId = result.providerId() == null ? externalRef.taskId() : result.providerId();

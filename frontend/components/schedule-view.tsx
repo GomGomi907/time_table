@@ -353,6 +353,7 @@ export function ScheduleView() {
   const [editingBlock, setEditingBlock] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
+  const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   async function loadSchedulePage() {
     if (!session?.authenticated) {
@@ -410,6 +411,11 @@ export function ScheduleView() {
     setEditingBlock(null);
     setForm(DEFAULT_FORM);
     setCreateModalOpen(true);
+  }
+
+  function focusChangeRequest() {
+    requestInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    requestInputRef.current?.focus();
   }
 
   function openEditModal(block: EditableScheduleBlock) {
@@ -591,10 +597,10 @@ export function ScheduleView() {
   const pendingSuggestions = data.suggestions.filter((suggestion) => suggestion.status === "pending");
   const conversationSuggestions = data.suggestions.slice(0, 8);
   const aiRequestRail = (
-    <section className="ai-compose-card ai-chat-card" data-testid="schedule-ai-right-rail" aria-label="AI 변경 요청 대화">
+    <section className="ai-compose-card ai-chat-card" data-testid="schedule-ai-right-rail" aria-label="일정 변경 요청 대화">
       <div className="ai-chat-head">
         <div>
-          <p className="panel-kicker">AI 변경 요청</p>
+          <p className="panel-kicker">일정 변경 요청</p>
           <h2>변경 요청</h2>
         </div>
         <span className="accent-pill" data-testid="schedule-pending-count">
@@ -638,6 +644,7 @@ export function ScheduleView() {
 
       <form className="ai-compose-form ai-chat-input" onSubmit={(event) => void handleRequestSuggestion(event)}>
         <textarea
+          ref={requestInputRef}
           className="ai-compose-textarea"
           data-testid="schedule-ai-request-input"
           value={requestReason}
@@ -715,6 +722,27 @@ export function ScheduleView() {
                 </div>
               }
             />
+
+            <div className="schedule-mobile-action-strip" aria-label="주간 일정 빠른 작업">
+              <button
+                className="ghost-btn"
+                data-testid="schedule-mobile-add-button"
+                disabled={isMutating}
+                type="button"
+                onClick={openCreateModal}
+              >
+                일정 직접 추가
+              </button>
+              <button
+                className="solid-btn"
+                data-testid="schedule-mobile-change-request"
+                disabled={isMutating}
+                type="button"
+                onClick={focusChangeRequest}
+              >
+                변경 요청
+              </button>
+            </div>
 
             <div className="schedule-device-layout">
               <section className="schedule-calendar-panel" aria-label="반응형 주간 일정">

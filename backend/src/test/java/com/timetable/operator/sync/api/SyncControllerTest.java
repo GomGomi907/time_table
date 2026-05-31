@@ -2,6 +2,8 @@ package com.timetable.operator.sync.api;
 
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -22,6 +24,7 @@ import com.timetable.operator.events.domain.EventStatus;
 import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.sync.application.GoogleInboundSyncClient;
+import com.timetable.operator.sync.application.ProviderWriteOutboxService;
 import com.timetable.operator.sync.application.GoogleOutboundSyncClient;
 import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.sync.domain.ProviderWriteOutbox;
@@ -65,6 +68,9 @@ class SyncControllerTest {
 
     @Autowired
     private ProviderWriteOutboxRepository providerWriteOutboxRepository;
+
+    @Autowired
+    private ProviderWriteOutboxService providerWriteOutboxService;
 
     @MockitoBean
     private GoogleInboundSyncClient googleInboundSyncClient;
@@ -235,6 +241,94 @@ class SyncControllerTest {
         Event synced = eventRepository.findById(event.getId()).orElseThrow();
         org.assertj.core.api.Assertions.assertThat(synced.getSyncState()).isEqualTo(PlannerSyncState.SYNCED);
         org.assertj.core.api.Assertions.assertThat(synced.getExternalSourceId()).isEqualTo("google_calendar:mock-api-event");
+    }
+
+
+    @Test
+    void providerWriteOutboxCoalescesLocalCreateThenUpdateBeforeFlush() {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Initial local meeting");
+        event.setDescription("Coalescing test");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(3, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(4, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.LOCAL_ONLY);
+        event = eventRepository.save(event);
+
+        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.CREATE);
+        event.setTitle("Updated local meeting");
+        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+        java.util.UUID eventId = event.getId();
+
+        java.util.List<ProviderWriteOutbox> rows = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .toList();
+        org.assertj.core.api.Assertions.assertThat(rows).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(rows.get(0).getOperation()).isEqualTo(ProviderWriteOperation.CREATE);
+        org.assertj.core.api.Assertions.assertThat(rows.get(0).getPayloadSnapshot()).contains("Updated local meeting");
+    }
+
+    @Test
+    void staleCreateOutboxUsesUpdateWhenProviderIdExistsAtFlushTime() throws Exception {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Already mapped local meeting");
+        event.setDescription("Stale create guard test");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(5, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(6, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        event.setExternalSourceId("google_calendar:already-created-event");
+        event = eventRepository.save(event);
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.EVENT);
+        outbox.setLocalId(event.getId());
+        outbox.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.DIRTY_PENDING_WRITE);
+        providerWriteOutboxRepository.save(outbox);
+
+        when(googleOutboundSyncClient.updateCalendarEvent(any(CalendarConnection.class), any(String.class), any(Event.class)))
+                .thenReturn(new GoogleOutboundSyncClient.ProviderWriteResult("already-created-event", "etag-update", "{}"));
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(googleOutboundSyncClient, never()).createCalendarEvent(any(CalendarConnection.class), any(Event.class));
+        verify(googleOutboundSyncClient).updateCalendarEvent(any(CalendarConnection.class), any(String.class), any(Event.class));
     }
 
     @Test

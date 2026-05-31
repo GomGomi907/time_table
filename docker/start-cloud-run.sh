@@ -9,6 +9,30 @@ export PORT="${PORT:-8080}"
 # value here.
 export HOSTNAME="0.0.0.0"
 
+if [ "${APP_RELEASE_MODE:-}" = "beta" ] || [ "${APP_RELEASE_MODE:-}" = "production" ]; then
+  case "${APP_DB_URL:-}" in
+    ""|jdbc:h2:*|*":h2:"*)
+      echo "Unsafe release runtime: APP_DB_URL must point to PostgreSQL/Cloud SQL." >&2
+      exit 1
+      ;;
+  esac
+
+  if [ "${APP_AUTH_MOCK_LOGIN_ENABLED:-false}" = "true" ]; then
+    echo "Unsafe release runtime: mock login must be disabled." >&2
+    exit 1
+  fi
+
+  if [ "${APP_SYNC_GOOGLE_MOCK_ENABLED:-false}" = "true" ]; then
+    echo "Unsafe release runtime: mock Google sync must be disabled." >&2
+    exit 1
+  fi
+
+  if [ "${APP_AI_ENABLED:-false}" = "true" ] && [ -z "${APP_GEMINI_API_KEY:-}" ]; then
+    echo "Unsafe release runtime: APP_GEMINI_API_KEY is required when AI is enabled." >&2
+    exit 1
+  fi
+fi
+
 java -jar /app/backend/app.jar &
 backend_pid="$!"
 frontend_pid=""

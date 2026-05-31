@@ -17,4 +17,12 @@ public interface ProviderWriteOutboxRepository extends JpaRepository<ProviderWri
             SyncProvider provider,
             Collection<ProviderWriteState> states
     );
+
+    java.util.Optional<ProviderWriteOutbox> findFirstByUserIdAndLocalTypeAndLocalIdAndProviderAndStateInOrderByCreatedAtAsc(
+            UUID userId,
+            com.timetable.operator.sync.domain.SyncMappingLocalType localType,
+            UUID localId,
+            SyncProvider provider,
+            Collection<ProviderWriteState> states
+    );
 }

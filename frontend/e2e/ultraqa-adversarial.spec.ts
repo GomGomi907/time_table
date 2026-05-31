@@ -108,7 +108,7 @@ async function assertRightRailLayout(page: Page, width: number, height: number) 
     throw new Error(`Missing geometry at ${width}px`);
   }
 
-  if (width > 1180) {
+  if (width > 1320) {
     expect(appRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
     expect(scheduleRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
     return;

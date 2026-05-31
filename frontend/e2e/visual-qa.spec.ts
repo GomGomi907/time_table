@@ -18,6 +18,7 @@ import {
 const VIEWPORTS = [
   { name: "desktop-1440", width: 1440, height: 1000 },
   { name: "desktop-1280", width: 1280, height: 1000 },
+  { name: "desktop-boundary-1320", width: 1320, height: 1000 },
   { name: "tablet-boundary-1180", width: 1180, height: 1000 },
   { name: "tablet-768", width: 768, height: 1024 },
   { name: "mobile-375", width: 375, height: 812 },
@@ -114,7 +115,7 @@ async function assertScheduleRightRailContract(page: Page) {
   const board = page.locator(".schedule-main-board").first();
   await expect(board).toBeVisible({ timeout: 30_000 });
 
-  if (viewport && viewport.width > 1180) {
+  if (viewport && viewport.width > 1320) {
     const boardBox = await board.boundingBox();
     const appRailBox = await appRail.boundingBox();
     const scheduleRailBox = await scheduleRail.boundingBox();
@@ -272,6 +273,21 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
         .evaluate((block) => (block as HTMLElement).offsetTop),
     )
     .toBeLessThan(760);
+  await page.setViewportSize({ width: 390, height: 1000 });
+  const mobileActionStrip = page.locator(".schedule-mobile-action-strip");
+  await expect(mobileActionStrip).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("schedule-mobile-add-button")).toBeVisible();
+  await expect(page.getByTestId("schedule-mobile-change-request")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const stripBox = await mobileActionStrip.boundingBox();
+      const agendaBox = await page.locator(".mobile-week-agenda").boundingBox();
+      return Boolean(stripBox && agendaBox && stripBox.y < agendaBox.y);
+    })
+    .toBe(true);
+  await page.getByTestId("schedule-mobile-change-request").click();
+  await expect(page.getByTestId("schedule-ai-request-input")).toBeFocused();
+
   await page.setViewportSize({ width: 960, height: 1000 });
   await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
   await assertNoHorizontalOverflow(page);
