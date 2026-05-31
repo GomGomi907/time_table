@@ -1,6 +1,11 @@
 import { expect, Locator, Page, TestInfo, test } from "@playwright/test";
 
 import {
+  assertNoHorizontalOverflow,
+  assertNoInternalUserCopy,
+  assertSelectorTextDoesNotOverflow,
+  assertSingleLineBySelector,
+  assertSingleVisibleByTestId,
   backendFetch,
   buildActiveScheduleBlock,
   clearScheduleBlocksForDay,
@@ -11,11 +16,10 @@ import {
   loginAsUniqueMockUser,
 } from "./helpers";
 
-const BANNED_USER_COPY =
-  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어|confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields/;
-
 const VIEWPORTS = [
   { name: "desktop-1440", width: 1440, height: 1000 },
+  { name: "desktop-1280", width: 1280, height: 1000 },
+  { name: "tablet-boundary-1180", width: 1180, height: 1000 },
   { name: "tablet-768", width: 768, height: 1024 },
   { name: "mobile-375", width: 375, height: 812 },
 ] as const;
@@ -73,17 +77,9 @@ function preferredAction(
     .first();
 }
 
-async function assertNoHorizontalOverflow(page: Page) {
-  await expect
-    .poll(async () =>
-      page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
-    )
-    .toBe(true);
-}
-
 async function assertReleaseVisualDiscipline(page: Page) {
   await assertNoHorizontalOverflow(page);
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
 
   await expect
     .poll(async () =>
@@ -108,11 +104,36 @@ async function assertReleaseVisualDiscipline(page: Page) {
     .toBe(true);
 }
 
-async function assertElementDoesNotOverflow(page: Page, selector: string) {
+async function assertScheduleRightRailContract(page: Page) {
+  const appRail = await assertSingleVisibleByTestId(page, "app-right-rail");
+  const scheduleRail = await assertSingleVisibleByTestId(page, "schedule-ai-right-rail");
+  await assertSingleVisibleByTestId(page, "schedule-ai-request-input");
+  await assertSingleVisibleByTestId(page, "schedule-ai-request-submit");
+  await assertSingleLineBySelector(page, "[data-testid='schedule-pending-count']");
+
+  const viewport = page.viewportSize();
+  const board = page.locator(".schedule-main-board").first();
+  await expect(board).toBeVisible({ timeout: 30_000 });
+
+  if (viewport && viewport.width > 1180) {
+    const boardBox = await board.boundingBox();
+    const appRailBox = await appRail.boundingBox();
+    const scheduleRailBox = await scheduleRail.boundingBox();
+    if (!boardBox || !appRailBox || !scheduleRailBox) {
+      throw new Error("Schedule board and AI right rail must have visible geometry.");
+    }
+    expect(appRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
+    expect(scheduleRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
+    expect(scheduleRailBox.width).toBeLessThanOrEqual(380);
+    return;
+  }
+
   await expect
-    .poll(async () =>
-      page.locator(selector).evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
-    )
+    .poll(async () => {
+      const boardBox = await board.boundingBox();
+      const railBox = await scheduleRail.boundingBox();
+      return Boolean(boardBox && railBox && railBox.y >= boardBox.y + boardBox.height - 2);
+    })
     .toBe(true);
 }
 
@@ -155,6 +176,8 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
     await expect(onboardingPrimary).toBeVisible({ timeout: 45_000 });
     await captureResponsiveSurface(page, testInfo, "onboarding", async () => {
       await expect(onboardingPrimary).toBeVisible();
+      await assertSingleVisibleByTestId(page, "onboarding-answer-count");
+      await assertSingleLineBySelector(page, "[data-testid='onboarding-answer-count']");
     });
   }
 
@@ -176,7 +199,7 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   await expect(page.getByRole("heading", { name: /오늘 일정은|오늘 예정된 일정이 없습니다/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
   await captureResponsiveSurface(page, testInfo, "dashboard", async () => {
     const dashboardPrimary = preferredAction(page, "dashboard-primary-action", /주간 일정 보기|오늘 일정 보기|일정 보러가기|다시 불러오기/);
     await expect(dashboardPrimary).toBeVisible();
@@ -186,7 +209,8 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const scheduleAddButton = preferredAction(page, "schedule-add-button", "일정 직접 추가");
   await expect(scheduleAddButton).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
+  await assertScheduleRightRailContract(page);
   await expect(page.getByRole("button", { name: new RegExp(escapeRegExp(activeScheduleTitle)) }).first()).toBeVisible({
     timeout: 30_000,
   });
@@ -195,7 +219,7 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   });
   await expect(page.locator(".current-schedule-card").getByText("지금 일정")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
-  await assertElementDoesNotOverflow(page, ".week-stack-board");
+  await assertSelectorTextDoesNotOverflow(page, ".week-stack-board");
   await expect
     .poll(async () =>
       page
@@ -207,9 +231,10 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 960, height: 1000 });
   await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
   await assertNoHorizontalOverflow(page);
-  await assertElementDoesNotOverflow(page, ".week-stack-board");
+  await assertSelectorTextDoesNotOverflow(page, ".week-stack-board");
   await captureResponsiveSurface(page, testInfo, "schedule", async () => {
     await expect(scheduleAddButton).toBeVisible();
+    await assertScheduleRightRailContract(page);
   });
 
   await scheduleAddButton.click();
@@ -223,7 +248,7 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
 
   await page.goto("/focus");
   await expect(page.getByText(/지금 실행|지금 할 일/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
   await captureResponsiveSurface(page, testInfo, "focus", async () => {
     const focusPrimary = preferredAction(page, "focus-primary-action", /완료|삭제|일정 보기|오늘 일정 보기/);
     await expect(focusPrimary).toBeVisible();

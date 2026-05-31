@@ -1,9 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { backendFetch, completeOnboardingIfPresent, loginAsUniqueMockUser } from "./helpers";
-
-const BANNED_USER_COPY =
-  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|권한 상태|확인한 내용/;
+import { assertNoInternalUserCopy, backendFetch, completeOnboardingIfPresent, loginAsUniqueMockUser } from "./helpers";
 
 interface ApiEnvelope<T> {
   data: T;
@@ -72,7 +69,7 @@ test("Google write-back flush updates provider state without dashboard sync clut
   await expect(page.getByRole("heading", { name: /오늘 일정은|오늘 예정된 일정이 없습니다/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
   await page.screenshot({
     path: testInfo.outputPath("google-writeback-pending-dashboard-silent.png"),
     fullPage: true,
@@ -100,7 +97,7 @@ test("Google write-back flush updates provider state without dashboard sync clut
   await expect(page.getByRole("heading", { name: /오늘 일정은|오늘 예정된 일정이 없습니다/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
   await page.screenshot({
     path: testInfo.outputPath("google-writeback-ready-dashboard-silent.png"),
     fullPage: true,

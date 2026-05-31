@@ -20,6 +20,8 @@ interface AppShellProps {
   title: string;
   description?: string;
   actions?: ReactNode;
+  /** Page-owned secondary surface. Desktop renders it as a right rail; tablet/mobile stack it below content. */
+  rightRail?: ReactNode;
   children: ReactNode;
   immersive?: boolean;
 }
@@ -29,6 +31,7 @@ export function AppShell({
   title,
   description,
   actions,
+  rightRail,
   children,
   immersive = false,
 }: AppShellProps) {
@@ -163,7 +166,7 @@ export function AppShell({
   }
 
   return (
-    <div className="app-frame">
+    <div className={`app-frame ${rightRail ? "with-right-rail" : ""}`}>
       <aside className="side-nav">
         <div className="brand-block">
           <span className="brand-mark">TT</span>
@@ -222,6 +225,12 @@ export function AppShell({
 
         <div className="page-stack">{children}</div>
       </main>
+
+      {rightRail ? (
+        <aside className="app-right-rail" data-testid="app-right-rail" aria-label="보조 작업 패널">
+          {rightRail}
+        </aside>
+      ) : null}
     </div>
   );
 }

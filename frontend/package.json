@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "verify:hygiene": "node ./scripts/verify-hygiene.mjs",
     "e2e": "playwright test",
     "e2e:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/e2e-local.ps1",
     "e2e:headed": "playwright test --headed",

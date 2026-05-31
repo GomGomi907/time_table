@@ -276,6 +276,19 @@ export function DashboardView() {
                   <h2>{dayHeadline}</h2>
                   <p>{nextShiftDescription}</p>
                 </div>
+                <div className="today-action-strip" aria-label="지금 할 일 요약">
+                  <span>지금 할 일</span>
+                  <strong>
+                    {currentItem
+                      ? formatServiceCopy(currentItem.title)
+                      : recommendedTask
+                        ? formatServiceCopy(recommendedTask.title)
+                        : liveOrNextBlock
+                          ? formatServiceCopy(liveOrNextBlock.activity)
+                          : "주간 일정 정리"}
+                  </strong>
+                  <p>{primaryAction.detail}</p>
+                </div>
                 <Link className="solid-btn link-btn today-primary-action" data-testid="dashboard-primary-action" href={primaryAction.href}>
                   {primaryAction.label}
                 </Link>

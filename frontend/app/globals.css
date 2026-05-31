@@ -308,6 +308,7 @@ summary,
   font-weight: 850;
   line-height: 1;
   padding: 8px 11px;
+  white-space: nowrap;
 }
 
 .inline-message,
@@ -431,7 +432,14 @@ summary,
   padding: var(--page-pad);
 }
 
+.app-frame.with-right-rail {
+  width: min(100%, calc(var(--content-max) + 252px + 360px + (var(--shell-gap) * 2)));
+  grid-template-columns: 252px minmax(0, 1fr) minmax(320px, 360px);
+}
+
 .side-nav {
+  grid-column: 1;
+  grid-row: 1;
   position: sticky;
   top: var(--page-pad);
   display: flex;
@@ -503,9 +511,23 @@ summary,
 }
 
 .content-shell {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   width: min(100%, var(--content-max));
   justify-self: stretch;
+}
+
+.app-right-rail {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: start;
+  position: sticky;
+  top: var(--page-pad);
+  width: 100%;
+  min-width: 0;
+  max-height: calc(100vh - (var(--page-pad) * 2));
+  z-index: 2;
 }
 
 .top-bar {
@@ -588,7 +610,7 @@ summary,
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
   gap: clamp(16px, 3vw, 24px);
-  align-items: stretch;
+  align-items: start;
 }
 
 .today-briefing-shell.has-pending-approval {
@@ -625,6 +647,34 @@ summary,
 
 .today-primary-action {
   width: fit-content;
+}
+
+.today-action-strip {
+  display: grid;
+  max-width: 560px;
+  gap: 6px;
+  border: 1px solid rgba(91, 110, 225, 0.18);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 16px;
+}
+
+.today-action-strip span {
+  color: var(--muted-2);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.today-action-strip strong {
+  color: var(--ink-strong);
+  font-size: 1.08rem;
+}
+
+.today-action-strip p {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
 .today-schedule-panel {
@@ -670,7 +720,7 @@ summary,
   display: flex;
   flex-direction: column;
   gap: 16px;
-  justify-content: space-between;
+  justify-content: flex-start;
   background: linear-gradient(180deg, #fff, #f8f9ff);
 }
 
@@ -863,6 +913,7 @@ summary,
   font-size: 0.78rem;
   font-weight: 850;
   padding: 7px 10px;
+  white-space: nowrap;
 }
 
 .onboarding-question-block {
@@ -986,31 +1037,24 @@ summary,
 
 .schedule-device-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
   align-items: start;
   min-width: 0;
 }
 
-.schedule-command-panel,
 .schedule-calendar-panel {
   min-width: 0;
-}
-
-.schedule-ai-rail {
-  align-self: start;
 }
 
 .ai-compose-card {
   display: grid;
   gap: 18px;
   padding: 20px;
-  position: sticky;
-  top: 24px;
 }
 
 .ai-chat-card {
-  max-height: calc(100vh - 48px);
+  max-height: calc(100vh - (var(--page-pad) * 2));
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   border-color: rgba(17, 24, 39, 0.14);
@@ -1036,7 +1080,7 @@ summary,
 .ai-chat-thread {
   display: grid;
   min-height: 260px;
-  max-height: min(56vh, 620px);
+  max-height: none;
   align-content: start;
   gap: 16px;
   overflow: auto;
@@ -1069,6 +1113,7 @@ summary,
   color: var(--ink);
   font-size: 0.92rem;
   line-height: 1.55;
+  overflow-wrap: anywhere;
   padding: 11px 13px;
 }
 
@@ -1589,7 +1634,25 @@ button.current-schedule-card:hover {
     grid-template-columns: 1fr;
   }
 
+  .app-frame.with-right-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .content-shell {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .app-right-rail {
+    grid-column: auto;
+    grid-row: auto;
+    position: static;
+    max-height: none;
+  }
+
   .side-nav {
+    grid-column: auto;
+    grid-row: auto;
     position: static;
     height: auto;
     min-height: 0;
@@ -1618,6 +1681,10 @@ button.current-schedule-card:hover {
 
   .ai-compose-card {
     position: static;
+  }
+
+  .ai-chat-card {
+    max-height: none;
   }
 
   .ai-compose-actions {

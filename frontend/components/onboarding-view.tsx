@@ -380,8 +380,8 @@ export function OnboardingView() {
                     가장 가까운 값을 고르면 충분합니다. 정확한 기록보다 평소에 가까운 기준이 더 중요합니다.
                   </p>
                 </div>
-                <span className="accent-pill">
-                  {answeredCount} / {questions.length} 답변
+                <span className="accent-pill onboarding-answer-count" data-testid="onboarding-answer-count">
+                  {answeredCount}/{questions.length}&nbsp;답변
                 </span>
               </div>
 
@@ -394,8 +394,7 @@ export function OnboardingView() {
                         <p>{group.description}</p>
                       </div>
                       <span>
-                        {group.questions.filter((question) => Boolean(answers[question.id])).length}/
-                        {group.questions.length}
+                        {group.questions.filter((question) => Boolean(answers[question.id])).length}/{group.questions.length}
                       </span>
                     </div>
 

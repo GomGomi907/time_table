@@ -77,16 +77,16 @@ test.describe("핵심 사용자 시나리오", () => {
     await clearPendingSuggestions(page);
 
     await page.goto("/schedule");
-    await expect(page.getByRole("button", { name: "요청 보내기" })).toBeVisible({
+    await expect(page.getByTestId("schedule-ai-request-submit")).toBeVisible({
       timeout: 30_000,
     });
 
-    await page.getByRole("button", { name: "요청 보내기" }).click();
+    await page.getByTestId("schedule-ai-request-submit").click();
     await expect(page.getByRole("status")).toContainText("요청 내용이 필요합니다.");
 
     const reason = `E2E 일정 조정 요청 ${Date.now()}`;
-    await page.getByPlaceholder(/내일 오전 회의 준비/).fill(reason);
-    await page.getByRole("button", { name: "요청 보내기" }).click();
+    await page.getByTestId("schedule-ai-request-input").fill(reason);
+    await page.getByTestId("schedule-ai-request-submit").click();
 
     await expect(page.getByRole("status")).toContainText("변경 요청을 만들었습니다.", {
       timeout: 30_000,

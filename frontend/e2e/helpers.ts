@@ -2,6 +2,8 @@ import { expect, Page, TestInfo } from "@playwright/test";
 
 const API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8080";
 const KOREA_TIME_ZONE = "Asia/Seoul";
+export const BANNED_USER_COPY =
+  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어|confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|["']reason["']\s*:|missingFields|ambiguousFields|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
 
 const BACKEND_DAY_BY_WEEKDAY: Record<string, string> = {
   Monday: "MONDAY",
@@ -208,6 +210,58 @@ export function buildActiveScheduleBlock(activity: string): ScheduleBlockInput {
 
 export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export async function assertNoInternalUserCopy(page: Page) {
+  const leakedInternalCopy = await page.evaluate(
+    ({ source, flags }) => {
+      const bodyClone = document.body.cloneNode(true) as HTMLElement;
+      bodyClone
+        .querySelectorAll("input, textarea, [data-user-content='true']")
+        .forEach((element) => element.remove());
+
+      return (bodyClone.innerText ?? bodyClone.textContent ?? "").match(new RegExp(source, flags))?.[0] ?? null;
+    },
+    { source: BANNED_USER_COPY.source, flags: BANNED_USER_COPY.flags },
+  );
+
+  expect(leakedInternalCopy, `Internal implementation copy leaked to app-authored UI: ${leakedInternalCopy}`).toBeNull();
+}
+
+export async function assertNoHorizontalOverflow(page: Page) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth),
+    )
+    .toBe(true);
+}
+
+export async function assertSelectorTextDoesNotOverflow(page: Page, selector: string) {
+  await expect
+    .poll(async () =>
+      page.locator(selector).first().evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+    )
+    .toBe(true);
+}
+
+export async function assertSingleLineBySelector(page: Page, selector: string) {
+  await expect
+    .poll(async () =>
+      page.locator(selector).first().evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        const lineHeight = Number.parseFloat(style.lineHeight);
+        return rect.height <= Math.max(36, lineHeight * 1.75);
+      }),
+    )
+    .toBe(true);
+}
+
+export async function assertSingleVisibleByTestId(page: Page, testId: string) {
+  const locator = page.getByTestId(testId);
+  await expect(locator).toHaveCount(1);
+  await expect(locator).toBeVisible();
+  return locator;
 }
 
 async function clickOptionalButton(page: Page, name: string | RegExp) {

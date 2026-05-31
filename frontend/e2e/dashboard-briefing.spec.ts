@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
+  assertNoInternalUserCopy,
   backendFetch,
   clearScheduleBlocksForDay,
   completeOnboardingIfPresent,
@@ -20,11 +21,6 @@ interface SuggestionResponse {
   summary: string;
   executable: boolean;
 }
-
-const BANNED_USER_COPY =
-  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어/;
-const BANNED_AI_METADATA =
-  /confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
 
 async function clearPendingSuggestions(page: Page) {
   const suggestions = await backendFetch<ApiEnvelope<SuggestionResponse[]>>(page, "/api/agent/suggestions");
@@ -235,7 +231,7 @@ test("dashboard answers today's schedule before operational details", async ({ p
   expect(scheduleCardText).toMatch(/아침 계획 정리|제품 리뷰 회의|개발 집중 블록|오늘 할 일 정리|성장 과제|저녁 운동/);
   await expect(page.locator(".today-schedule-card").getByText(/나머지 \d+개 일정/)).toBeVisible();
   await expect(page.getByText(/승인 전에는|승인할 조정안은 없습니다|승인 전 안전/).first()).toHaveCount(0);
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
 });
 
 test("dashboard shows clarification as a question instead of an approval task", async ({ page }, testInfo) => {
@@ -253,7 +249,7 @@ test("dashboard shows clarification as a question instead of an approval task", 
   await expect(page.getByText("일정 정리 입력에 답변을 적어 다시 보내세요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "적용할 변경 없음" })).toBeDisabled();
-  await expect(page.locator("body")).not.toContainText(BANNED_AI_METADATA);
+  await assertNoInternalUserCopy(page);
 
   await page.getByRole("button", { name: "보류" }).click();
   await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", { timeout: 30_000 });
@@ -274,7 +270,7 @@ test("dashboard shows provider-unavailable as retry guidance without AI internal
   await expect(page.getByText("잠시 후 다시 시도하세요.")).toBeVisible();
   await expect(page.getByRole("button", { name: "보류" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "다시 요청 필요" })).toBeDisabled();
-  await expect(page.locator("body")).not.toContainText(BANNED_AI_METADATA);
+  await assertNoInternalUserCopy(page);
 });
 
 test("stacked today view keeps today's schedule first when no approval is pending", async ({
@@ -302,7 +298,7 @@ test("stacked today view keeps today's schedule first when no approval is pendin
   });
   await expect(page.getByRole("heading", { name: "오늘 일정 핵심", exact: true })).toBeVisible();
   await expect(page.locator(".ai-approval-card")).toHaveCount(0);
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
   await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card"]);
 });
 
@@ -333,6 +329,6 @@ test("stacked today view keeps today's schedule before pending change actions", 
   await expect(page.getByRole("heading", { name: /최적화 제안|확인이 필요합니다\.|지금은 적용할 수 없습니다./ })).toBeVisible();
   await expectPendingSuggestionAction(page, pendingSuggestion);
   await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
   await expectVerticalOrder(page, [".today-flow-card", ".today-schedule-card", ".ai-approval-card"]);
 });

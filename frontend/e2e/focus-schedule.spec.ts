@@ -1,14 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  assertNoInternalUserCopy,
   backendFetch,
   buildActiveScheduleBlock,
   clearAllScheduleBlocks,
   completeOnboardingIfPresent,
   loginAsUniqueMockUser,
 } from "./helpers";
-
-const BANNED_USER_COPY = /추천 집중|실제 집중 상태|AI 비서 메모|근거|예상 영향|확인한 내용/;
 
 test("focus view renders schedule-only current context", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo);
@@ -28,7 +27,7 @@ test("focus view renders schedule-only current context", async ({ page }, testIn
   await expect(page.getByRole("button", { name: "미루기" })).toBeVisible();
   await expect(page.getByText("계산 중")).toHaveCount(0);
   await expect(page.getByText(/남은 시간|지금 시작|다음 일정/).first()).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(BANNED_USER_COPY);
+  await assertNoInternalUserCopy(page);
 
   await page.getByRole("button", { name: "미루기" }).click();
   await expect(page.getByRole("status")).toContainText("일정 블록을 30분 미루고 변경 요청을 만들었습니다.", {

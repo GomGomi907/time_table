@@ -574,12 +574,83 @@ export function ScheduleView() {
 
 
   const pendingSuggestions = data.suggestions.filter((suggestion) => suggestion.status === "pending");
+  const aiRequestRail = (
+    <section className="ai-compose-card ai-chat-card" data-testid="schedule-ai-right-rail" aria-label="AI 변경 요청 대화">
+      <div className="ai-chat-head">
+        <div>
+          <p className="panel-kicker">AI 변경 요청</p>
+          <h2>요청과 답변</h2>
+        </div>
+        <span className="accent-pill" data-testid="schedule-pending-count">
+          {pendingSuggestions.length ? `${pendingSuggestions.length}건 대기` : "대기 없음"}
+        </span>
+      </div>
+
+      <div className="ai-chat-thread" aria-live="polite">
+        {pendingSuggestions.length ? (
+          pendingSuggestions.map((suggestion) => {
+            const display = getSuggestionDisplayState(suggestion);
+            return (
+              <div className="ai-chat-turn" key={suggestion.id}>
+                <div className="chat-bubble user">
+                  <span>요청</span>
+                  <p data-user-content="true">{formatServiceCopy(suggestion.reason || suggestion.summary)}</p>
+                </div>
+                <div className={`chat-bubble assistant ${display.kind}`}>
+                  <span>답변</span>
+                  <SuggestionReviewCard
+                    className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
+                    isPending={isMutating}
+                    suggestion={suggestion}
+                    kicker="검토"
+                    onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
+                    onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
+                  />
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="chat-empty-state">
+            <strong>아직 대화가 없습니다.</strong>
+            <p>아래 입력창에 “내일 오전 회의 준비 시간을 비워줘”처럼 요청하면 답변이 이어집니다.</p>
+          </div>
+        )}
+      </div>
+
+      <form className="ai-compose-form ai-chat-input" onSubmit={(event) => void handleRequestSuggestion(event)}>
+        <textarea
+          className="ai-compose-textarea"
+          data-testid="schedule-ai-request-input"
+          value={requestReason}
+          onChange={(event) => setRequestReason(event.target.value)}
+          placeholder="예: 내일 오전 회의 준비 시간을 비워줘"
+          rows={3}
+        />
+        <div className="ai-compose-actions">
+          <button
+            className="ghost-btn"
+            data-testid="schedule-add-button"
+            disabled={isMutating}
+            type="button"
+            onClick={openCreateModal}
+          >
+            일정 직접 추가
+          </button>
+          <button className="solid-btn" data-testid="schedule-ai-request-submit" disabled={isMutating} type="submit">
+            요청 보내기
+          </button>
+        </div>
+      </form>
+    </section>
+  );
 
   return (
     <AppShell
       eyebrow="이번 주"
       title="주간 일정"
       description="이번 주 시간을 한 화면에 보여주고 바로 조정할 수 있게 합니다."
+      rightRail={aiRequestRail}
       actions={
         <button className="ghost-btn" disabled={status === "loading"} onClick={() => void loadSchedulePage()}>
           {status === "loading" ? "새로고침 중..." : "새로고침"}
@@ -635,74 +706,6 @@ export function ScheduleView() {
                   timeZone={session?.timezone}
                 />
               </section>
-
-              <aside className="schedule-command-panel schedule-ai-rail" aria-label="AI 변경 요청 대화">
-                <section className="ai-compose-card ai-chat-card">
-                  <div className="ai-chat-head">
-                    <div>
-                      <p className="panel-kicker">AI 변경 요청</p>
-                      <h2>요청과 답변</h2>
-                    </div>
-                    <span className="accent-pill">{pendingSuggestions.length ? `${pendingSuggestions.length}건 대기` : "대기 없음"}</span>
-                  </div>
-
-                  <div className="ai-chat-thread" aria-live="polite">
-                    {pendingSuggestions.length ? (
-                      pendingSuggestions.map((suggestion) => {
-                        const display = getSuggestionDisplayState(suggestion);
-                        return (
-                          <div className="ai-chat-turn" key={suggestion.id}>
-                            <div className="chat-bubble user">
-                              <span>요청</span>
-                              <p>{formatServiceCopy(suggestion.reason || suggestion.summary)}</p>
-                            </div>
-                            <div className={`chat-bubble assistant ${display.kind}`}>
-                              <span>답변</span>
-                              <SuggestionReviewCard
-                                className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
-                                isPending={isMutating}
-                                suggestion={suggestion}
-                                kicker="검토"
-                                onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
-                                onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="chat-empty-state">
-                        <strong>아직 대화가 없습니다.</strong>
-                        <p>아래 입력창에 “내일 오전 회의 준비 시간을 비워줘”처럼 요청하면 답변이 이어집니다.</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <form className="ai-compose-form ai-chat-input" onSubmit={(event) => void handleRequestSuggestion(event)}>
-                    <textarea
-                      className="ai-compose-textarea"
-                      value={requestReason}
-                      onChange={(event) => setRequestReason(event.target.value)}
-                      placeholder="예: 내일 오전 회의 준비 시간을 비워줘"
-                      rows={3}
-                    />
-                    <div className="ai-compose-actions">
-                      <button
-                        className="ghost-btn"
-                        data-testid="schedule-add-button"
-                        disabled={isMutating}
-                        type="button"
-                        onClick={openCreateModal}
-                      >
-                        일정 직접 추가
-                      </button>
-                      <button className="solid-btn" disabled={isMutating} type="submit">
-                        요청 보내기
-                      </button>
-                    </div>
-                  </form>
-                </section>
-              </aside>
             </div>
           </article>
         </section>
