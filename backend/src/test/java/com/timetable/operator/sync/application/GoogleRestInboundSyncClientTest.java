@@ -44,7 +44,11 @@ class GoogleRestInboundSyncClientTest {
 
         when(eventRepository.findByUserIdAndExternalSourceId(userId, "google_calendar:event-1"))
                 .thenReturn(Optional.of(existing));
-        when(syncMappingRepository.findByProviderAndExternalId(SyncProvider.GOOGLE_CALENDAR, "event-1"))
+        when(syncMappingRepository.findByUserIdAndProviderAndExternalId(
+                userId,
+                SyncProvider.GOOGLE_CALENDAR,
+                "event-1"
+        ))
                 .thenReturn(Optional.empty());
         when(googleAccessTokenService.validAccessToken(any(CalendarConnection.class))).thenReturn("access-token");
 
@@ -90,7 +94,11 @@ class GoogleRestInboundSyncClientTest {
 
         when(taskRepository.findByUserIdAndExternalSourceId(userId, "google_tasks:list-1:task-1"))
                 .thenReturn(Optional.of(existing));
-        when(syncMappingRepository.findByProviderAndExternalId(SyncProvider.GOOGLE_TASKS, "list-1:task-1"))
+        when(syncMappingRepository.findByUserIdAndProviderAndExternalId(
+                userId,
+                SyncProvider.GOOGLE_TASKS,
+                "list-1:task-1"
+        ))
                 .thenReturn(Optional.empty());
         when(googleAccessTokenService.validAccessToken(any(CalendarConnection.class))).thenReturn("access-token");
 

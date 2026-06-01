@@ -49,6 +49,7 @@ public class ProviderWriteOutboxService {
         Optional<CalendarConnection> connection =
                 calendarConnectionRepository.findByUserIdAndProvider(event.getUserId(), GOOGLE_PROVIDER);
         Optional<SyncMapping> mapping = findMapping(
+                event.getUserId(),
                 SyncMappingLocalType.EVENT,
                 event.getId(),
                 SyncProvider.GOOGLE_CALENDAR,
@@ -92,6 +93,7 @@ public class ProviderWriteOutboxService {
         Optional<CalendarConnection> connection =
                 calendarConnectionRepository.findByUserIdAndProvider(task.getUserId(), GOOGLE_PROVIDER);
         Optional<SyncMapping> mapping = findMapping(
+                task.getUserId(),
                 SyncMappingLocalType.TASK,
                 task.getId(),
                 SyncProvider.GOOGLE_TASKS,
@@ -221,16 +223,18 @@ public class ProviderWriteOutboxService {
     }
 
     private Optional<SyncMapping> findMapping(
+            UUID userId,
             SyncMappingLocalType localType,
             UUID localId,
             SyncProvider provider,
             String providerExternalId
     ) {
-        Optional<SyncMapping> byLocal = syncMappingRepository.findByLocalTypeAndLocalIdAndProvider(localType, localId, provider);
+        Optional<SyncMapping> byLocal = syncMappingRepository
+                .findByUserIdAndLocalTypeAndLocalIdAndProvider(userId, localType, localId, provider);
         if (byLocal.isPresent() || isBlank(providerExternalId)) {
             return byLocal;
         }
-        return syncMappingRepository.findByProviderAndExternalId(provider, providerExternalId);
+        return syncMappingRepository.findByUserIdAndProviderAndExternalId(userId, provider, providerExternalId);
     }
 
     private ProviderWriteOperation operationFor(

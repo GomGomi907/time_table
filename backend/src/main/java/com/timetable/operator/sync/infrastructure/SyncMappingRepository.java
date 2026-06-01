@@ -12,9 +12,14 @@ public interface SyncMappingRepository extends JpaRepository<SyncMapping, UUID> 
 
     List<SyncMapping> findByUserIdOrderByUpdatedAtDesc(UUID userId);
 
-    Optional<SyncMapping> findByProviderAndExternalId(SyncProvider provider, String externalId);
+    Optional<SyncMapping> findByUserIdAndProviderAndExternalId(
+            UUID userId,
+            SyncProvider provider,
+            String externalId
+    );
 
-    Optional<SyncMapping> findByLocalTypeAndLocalIdAndProvider(
+    Optional<SyncMapping> findByUserIdAndLocalTypeAndLocalIdAndProvider(
+            UUID userId,
             SyncMappingLocalType localType,
             UUID localId,
             SyncProvider provider

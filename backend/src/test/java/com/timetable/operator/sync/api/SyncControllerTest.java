@@ -32,9 +32,11 @@ import com.timetable.operator.sync.application.SyncOrchestrationService;
 import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.sync.domain.ProviderWriteOutbox;
 import com.timetable.operator.sync.domain.ProviderWriteState;
+import com.timetable.operator.sync.domain.SyncMapping;
 import com.timetable.operator.sync.domain.SyncMappingLocalType;
 import com.timetable.operator.sync.domain.SyncProvider;
 import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
+import com.timetable.operator.sync.infrastructure.SyncMappingRepository;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskSourceType;
 import com.timetable.operator.tasks.domain.TaskStatus;
@@ -81,6 +83,9 @@ class SyncControllerTest {
 
     @Autowired
     private ProviderWriteOutboxRepository providerWriteOutboxRepository;
+
+    @Autowired
+    private SyncMappingRepository syncMappingRepository;
 
     @Autowired
     private ProviderWriteOutboxService providerWriteOutboxService;
@@ -666,6 +671,54 @@ class SyncControllerTest {
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).getOperation()).isEqualTo(ProviderWriteOperation.CREATE);
         assertThat(rows.get(0).getPayloadSnapshot()).contains("Updated local meeting");
+    }
+
+    @Test
+    void providerWriteOutboxDoesNotAttachAnotherUsersExternalMapping() {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        AppUser otherUser = new AppUser();
+        otherUser.setEmail("mapping-owner@example.com");
+        otherUser.setDisplayName("Mapping Owner");
+        otherUser.setProvider("google");
+        otherUser.setDemoUser(false);
+        otherUser.setTimezone("Asia/Seoul");
+        otherUser.setAutoRescheduleEnabled(false);
+        otherUser.setFocusAutoEnterEnabled(false);
+        otherUser = appUserRepository.save(otherUser);
+
+        SyncMapping otherMapping = new SyncMapping();
+        otherMapping.setUserId(otherUser.getId());
+        otherMapping.setLocalType(SyncMappingLocalType.EVENT);
+        otherMapping.setLocalId(UUID.randomUUID());
+        otherMapping.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        otherMapping.setExternalId("shared-google-event");
+        otherMapping = syncMappingRepository.saveAndFlush(otherMapping);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("User-owned imported meeting");
+        event.setDescription("Mapping isolation regression");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(3, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(4, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.GOOGLE_CALENDAR);
+        event.setSyncState(PlannerSyncState.IMPORTED);
+        event.setExternalSourceId("google_calendar:shared-google-event");
+        event = eventRepository.save(event);
+
+        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+
+        UUID eventId = event.getId();
+        List<ProviderWriteOutbox> rows = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .toList();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getMappingId()).isNull();
+        assertThat(rows.get(0).getUserId()).isEqualTo(user.getId());
+        assertThat(rows.get(0).getOperation()).isEqualTo(ProviderWriteOperation.UPDATE);
+        assertThat(rows.get(0).getMappingId()).isNotEqualTo(otherMapping.getId());
     }
 
     @Test

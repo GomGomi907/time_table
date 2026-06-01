@@ -135,7 +135,7 @@ public class ProviderWriteProcessor {
     }
 
     private void processEvent(CalendarConnection connection, ProviderWriteOutbox outbox) {
-        Event event = eventRepository.findById(outbox.getLocalId())
+        Event event = eventRepository.findByIdAndUserId(outbox.getLocalId(), outbox.getUserId())
                 .orElseThrow(() -> new IllegalStateException("Provider write 대상 이벤트를 찾을 수 없습니다."));
         Optional<SyncMapping> mapping = findMapping(outbox, SyncProvider.GOOGLE_CALENDAR);
         String providerEventId = mapping.map(SyncMapping::getExternalId)
@@ -171,7 +171,7 @@ public class ProviderWriteProcessor {
     }
 
     private void processTask(CalendarConnection connection, ProviderWriteOutbox outbox) {
-        Task task = taskRepository.findById(outbox.getLocalId())
+        Task task = taskRepository.findByIdAndUserId(outbox.getLocalId(), outbox.getUserId())
                 .orElseThrow(() -> new IllegalStateException("Provider write 대상 태스크를 찾을 수 없습니다."));
         Optional<SyncMapping> mapping = findMapping(outbox, SyncProvider.GOOGLE_TASKS);
         TaskExternalRef externalRef = TaskExternalRef.from(mapping.map(SyncMapping::getExternalId)
@@ -235,12 +235,21 @@ public class ProviderWriteProcessor {
 
     private Optional<SyncMapping> findMapping(ProviderWriteOutbox outbox, SyncProvider provider) {
         if (outbox.getMappingId() != null) {
-            Optional<SyncMapping> byId = syncMappingRepository.findById(outbox.getMappingId());
+            Optional<SyncMapping> byId = syncMappingRepository.findById(outbox.getMappingId())
+                    .filter(mapping -> mapping.getUserId().equals(outbox.getUserId()))
+                    .filter(mapping -> mapping.getProvider() == provider)
+                    .filter(mapping -> mapping.getLocalType() == outbox.getLocalType())
+                    .filter(mapping -> mapping.getLocalId().equals(outbox.getLocalId()));
             if (byId.isPresent()) {
                 return byId;
             }
         }
-        return syncMappingRepository.findByLocalTypeAndLocalIdAndProvider(outbox.getLocalType(), outbox.getLocalId(), provider);
+        return syncMappingRepository.findByUserIdAndLocalTypeAndLocalIdAndProvider(
+                outbox.getUserId(),
+                outbox.getLocalType(),
+                outbox.getLocalId(),
+                provider
+        );
     }
 
     private void markEventDeleted(Event event, SyncMapping mapping, ProviderWriteOutbox outbox) {

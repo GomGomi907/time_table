@@ -335,17 +335,23 @@ class GoogleRestInboundSyncClient implements GoogleInboundSyncClient {
     }
 
     private Optional<Event> findMappedEvent(CalendarConnection connection, String providerId) {
-        return syncMappingRepository.findByProviderAndExternalId(SyncProvider.GOOGLE_CALENDAR, providerId)
+        return syncMappingRepository
+                .findByUserIdAndProviderAndExternalId(connection.getUserId(), SyncProvider.GOOGLE_CALENDAR, providerId)
                 .filter(mapping -> mapping.getUserId().equals(connection.getUserId()))
                 .filter(mapping -> mapping.getLocalType() == SyncMappingLocalType.EVENT)
-                .flatMap(mapping -> eventRepository.findById(mapping.getLocalId()));
+                .flatMap(mapping -> eventRepository.findByIdAndUserId(mapping.getLocalId(), connection.getUserId()));
     }
 
     private Optional<Task> findMappedTask(CalendarConnection connection, String providerExternalId) {
-        return syncMappingRepository.findByProviderAndExternalId(SyncProvider.GOOGLE_TASKS, providerExternalId)
+        return syncMappingRepository
+                .findByUserIdAndProviderAndExternalId(
+                        connection.getUserId(),
+                        SyncProvider.GOOGLE_TASKS,
+                        providerExternalId
+                )
                 .filter(mapping -> mapping.getUserId().equals(connection.getUserId()))
                 .filter(mapping -> mapping.getLocalType() == SyncMappingLocalType.TASK)
-                .flatMap(mapping -> taskRepository.findById(mapping.getLocalId()));
+                .flatMap(mapping -> taskRepository.findByIdAndUserId(mapping.getLocalId(), connection.getUserId()));
     }
 
     private void upsertMapping(
@@ -359,7 +365,8 @@ class GoogleRestInboundSyncClient implements GoogleInboundSyncClient {
             TombstoneState tombstoneState,
             String metadata
     ) {
-        SyncMapping mapping = syncMappingRepository.findByProviderAndExternalId(provider, externalId)
+        SyncMapping mapping = syncMappingRepository
+                .findByUserIdAndProviderAndExternalId(connection.getUserId(), provider, externalId)
                 .orElseGet(SyncMapping::new);
         mapping.setUserId(connection.getUserId());
         mapping.setLocalType(localType);
