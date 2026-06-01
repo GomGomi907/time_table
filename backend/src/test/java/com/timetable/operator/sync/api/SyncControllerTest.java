@@ -1,5 +1,6 @@
 package com.timetable.operator.sync.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -24,8 +25,10 @@ import com.timetable.operator.events.domain.EventStatus;
 import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.sync.application.GoogleInboundSyncClient;
-import com.timetable.operator.sync.application.ProviderWriteOutboxService;
 import com.timetable.operator.sync.application.GoogleOutboundSyncClient;
+import com.timetable.operator.sync.application.ProviderWriteOutboxService;
+import com.timetable.operator.sync.application.ProviderWriteProcessor;
+import com.timetable.operator.sync.application.SyncOrchestrationService;
 import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.sync.domain.ProviderWriteOutbox;
 import com.timetable.operator.sync.domain.ProviderWriteState;
@@ -34,6 +37,8 @@ import com.timetable.operator.sync.domain.SyncProvider;
 import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +46,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -72,6 +78,12 @@ class SyncControllerTest {
     @Autowired
     private ProviderWriteOutboxService providerWriteOutboxService;
 
+    @Autowired
+    private ProviderWriteProcessor providerWriteProcessor;
+
+    @Autowired
+    private SyncOrchestrationService syncOrchestrationService;
+
     @MockitoBean
     private GoogleInboundSyncClient googleInboundSyncClient;
 
@@ -80,6 +92,10 @@ class SyncControllerTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(providerWriteProcessor, "googleWriteEnabled", true);
+        ReflectionTestUtils.setField(syncOrchestrationService, "googleWriteEnabled", true);
+        providerWriteOutboxRepository.deleteAll();
+
         when(googleInboundSyncClient.importCalendar(any(CalendarConnection.class), any(Instant.class), any(Instant.class)))
                 .thenReturn(new GoogleInboundSyncClient.InboundSyncResult(2, "Mock Calendar inbound read applied."));
         when(googleInboundSyncClient.importTasks(any(CalendarConnection.class), any(Instant.class), any(Instant.class)))
@@ -239,10 +255,216 @@ class SyncControllerTest {
                 .andExpect(jsonPath("$.data.affectedCount").value(1));
 
         Event synced = eventRepository.findById(event.getId()).orElseThrow();
-        org.assertj.core.api.Assertions.assertThat(synced.getSyncState()).isEqualTo(PlannerSyncState.SYNCED);
-        org.assertj.core.api.Assertions.assertThat(synced.getExternalSourceId()).isEqualTo("google_calendar:mock-api-event");
+        assertThat(synced.getSyncState()).isEqualTo(PlannerSyncState.SYNCED);
+        assertThat(synced.getExternalSourceId()).isEqualTo("google_calendar:mock-api-event");
     }
 
+    @Test
+    void outboundCalendarWriteFailureMarksOutboxRetryableAndDoesNotReportSuccess() throws Exception {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Provider failure meeting");
+        event.setDescription("Provider write failure regression");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(2, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        event = eventRepository.save(event);
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.EVENT);
+        outbox.setLocalId(event.getId());
+        outbox.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.DIRTY_PENDING_WRITE);
+        providerWriteOutboxRepository.save(outbox);
+
+        UUID eventId = event.getId();
+
+        when(googleOutboundSyncClient.createCalendarEvent(any(CalendarConnection.class), any(Event.class)))
+                .thenThrow(new RuntimeException("provider down"));
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("failed"))
+                .andExpect(jsonPath("$.data.affectedCount").value(1))
+                .andExpect(jsonPath("$.data.detail").value("Provider write flush completed: 0 applied, 1 failed."));
+
+        ProviderWriteOutbox failed = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(failed.getState()).isEqualTo(ProviderWriteState.WRITE_FAILED_RETRYABLE);
+        assertThat(failed.getAttemptCount()).isEqualTo(1);
+        assertThat(failed.getLastErrorCode()).isEqualTo("RuntimeException");
+        assertThat(failed.getLastErrorMessage()).isEqualTo("provider down");
+        assertThat(failed.getNextRetryAt()).isNotNull();
+
+        Event unsynced = eventRepository.findById(event.getId()).orElseThrow();
+        assertThat(unsynced.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
+        assertThat(unsynced.getExternalSourceId()).isNull();
+    }
+
+    @Test
+    void outboundGoogleWriteKillSwitchSkipsProviderClientAndDoesNotDrainOutbox() throws Exception {
+        ReflectionTestUtils.setField(providerWriteProcessor, "googleWriteEnabled", false);
+        ReflectionTestUtils.setField(syncOrchestrationService, "googleWriteEnabled", false);
+
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Paused writeback meeting");
+        event.setDescription("Global write kill switch regression");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(2, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        event = eventRepository.save(event);
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.EVENT);
+        outbox.setLocalId(event.getId());
+        outbox.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.DIRTY_PENDING_WRITE);
+        providerWriteOutboxRepository.save(outbox);
+        UUID eventId = event.getId();
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("failed"))
+                .andExpect(jsonPath("$.data.affectedCount").value(0))
+                .andExpect(jsonPath("$.data.detail")
+                        .value("Provider writes are disabled by APP_SYNC_GOOGLE_WRITE_ENABLED=false; no Google writes attempted."));
+
+        verify(googleOutboundSyncClient, never()).createCalendarEvent(any(CalendarConnection.class), any(Event.class));
+
+        ProviderWriteOutbox pending = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(pending.getState()).isEqualTo(ProviderWriteState.DIRTY_PENDING_WRITE);
+        assertThat(pending.getAttemptCount()).isZero();
+
+        mockMvc.perform(get("/api/sync/status").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.googleWriteEnabled").value(false))
+                .andExpect(jsonPath("$.meta.externalWriteEnabled").value(false))
+                .andExpect(jsonPath("$.meta.pendingProviderWriteCount").value(1));
+    }
+
+    @Test
+    void outboundCalendarRetryBackoffDoesNotReportSuccessOrClearConnectionError() throws Exception {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        connection.setStatus(CalendarConnectionStatus.DEGRADED);
+        connection.setLastSyncError("provider down");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Backoff waiting meeting");
+        event.setDescription("Retry backoff overclaim regression");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(2, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        event = eventRepository.save(event);
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.EVENT);
+        outbox.setLocalId(event.getId());
+        outbox.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.WRITE_FAILED_RETRYABLE);
+        outbox.setAttemptCount(1);
+        outbox.setLastErrorCode("RuntimeException");
+        outbox.setLastErrorMessage("provider down");
+        outbox.setNextRetryAt(Instant.now().plus(5, ChronoUnit.MINUTES));
+        providerWriteOutboxRepository.save(outbox);
+        UUID eventId = event.getId();
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("failed"))
+                .andExpect(jsonPath("$.data.affectedCount").value(1))
+                .andExpect(jsonPath("$.data.detail")
+                        .value("Provider write flush completed: 0 applied, 0 failed, 1 waiting for retry."));
+
+        verify(googleOutboundSyncClient, never()).createCalendarEvent(any(CalendarConnection.class), any(Event.class));
+
+        ProviderWriteOutbox waiting = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(waiting.getState()).isEqualTo(ProviderWriteState.WRITE_FAILED_RETRYABLE);
+        assertThat(waiting.getAttemptCount()).isEqualTo(1);
+        assertThat(waiting.getNextRetryAt()).isNotNull();
+
+        CalendarConnection degraded = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        assertThat(degraded.getStatus()).isEqualTo(CalendarConnectionStatus.DEGRADED);
+        assertThat(degraded.getLastSyncError())
+                .isEqualTo("Provider write flush completed: 0 applied, 0 failed, 1 waiting for retry.");
+    }
 
     @Test
     void providerWriteOutboxCoalescesLocalCreateThenUpdateBeforeFlush() {
@@ -269,14 +491,14 @@ class SyncControllerTest {
         providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.CREATE);
         event.setTitle("Updated local meeting");
         providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
-        java.util.UUID eventId = event.getId();
+        UUID eventId = event.getId();
 
-        java.util.List<ProviderWriteOutbox> rows = providerWriteOutboxRepository.findAll().stream()
+        List<ProviderWriteOutbox> rows = providerWriteOutboxRepository.findAll().stream()
                 .filter(row -> row.getLocalId().equals(eventId))
                 .toList();
-        org.assertj.core.api.Assertions.assertThat(rows).hasSize(1);
-        org.assertj.core.api.Assertions.assertThat(rows.get(0).getOperation()).isEqualTo(ProviderWriteOperation.CREATE);
-        org.assertj.core.api.Assertions.assertThat(rows.get(0).getPayloadSnapshot()).contains("Updated local meeting");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getOperation()).isEqualTo(ProviderWriteOperation.CREATE);
+        assertThat(rows.get(0).getPayloadSnapshot()).contains("Updated local meeting");
     }
 
     @Test

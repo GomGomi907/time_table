@@ -10,6 +10,7 @@ import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.sync.domain.ProviderWriteOutbox;
 import com.timetable.operator.sync.domain.ProviderWriteState;
+import com.timetable.operator.sync.domain.SyncExecutionStatus;
 import com.timetable.operator.sync.domain.SyncMapping;
 import com.timetable.operator.sync.domain.SyncMappingLocalType;
 import com.timetable.operator.sync.domain.SyncMappingStatus;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -37,6 +39,8 @@ public class ProviderWriteProcessor {
     private static final String GOOGLE_PROVIDER = "google";
     private static final String CALENDAR_EXTERNAL_PREFIX = "google_calendar:";
     private static final String TASK_EXTERNAL_PREFIX = "google_tasks:";
+    private static final String PROVIDER_WRITES_DISABLED_DETAIL =
+            "Provider writes are disabled by APP_SYNC_GOOGLE_WRITE_ENABLED=false; no Google writes attempted.";
     private static final List<ProviderWriteState> READY_STATES = List.of(
             ProviderWriteState.DIRTY_PENDING_WRITE,
             ProviderWriteState.WRITE_FAILED_RETRYABLE
@@ -49,8 +53,22 @@ public class ProviderWriteProcessor {
     private final TaskRepository taskRepository;
     private final GoogleOutboundSyncClient googleOutboundSyncClient;
 
+    @Value("${app.sync.google.write-enabled:true}")
+    private boolean googleWriteEnabled;
+
     @Transactional
     public WriteFlushResult flushPendingWrites(UUID userId, SyncTargetSystem targetSystem) {
+        if (!googleWriteEnabled) {
+            return new WriteFlushResult(
+                    0,
+                    0,
+                    0,
+                    0,
+                    SyncExecutionStatus.FAILED,
+                    PROVIDER_WRITES_DISABLED_DETAIL
+            );
+        }
+
         SyncProvider provider = targetSystem == SyncTargetSystem.GOOGLE_CALENDAR
                 ? SyncProvider.GOOGLE_CALENDAR
                 : SyncProvider.GOOGLE_TASKS;
@@ -59,8 +77,10 @@ public class ProviderWriteProcessor {
 
         int successCount = 0;
         int failureCount = 0;
+        int skippedRetryCount = 0;
         for (ProviderWriteOutbox outbox : pending) {
             if (outbox.getNextRetryAt() != null && outbox.getNextRetryAt().isAfter(Instant.now())) {
+                skippedRetryCount++;
                 continue;
             }
             try {
@@ -71,8 +91,27 @@ public class ProviderWriteProcessor {
                 markFailure(userId, outbox, exception);
             }
         }
-        String detail = "Provider write flush completed: %d applied, %d failed.".formatted(successCount, failureCount);
-        return new WriteFlushResult(successCount + failureCount, successCount, failureCount, detail);
+        SyncExecutionStatus status = statusFor(successCount, failureCount, skippedRetryCount);
+        String detail = skippedRetryCount == 0
+                ? "Provider write flush completed: %d applied, %d failed.".formatted(successCount, failureCount)
+                : "Provider write flush completed: %d applied, %d failed, %d waiting for retry."
+                        .formatted(successCount, failureCount, skippedRetryCount);
+        return new WriteFlushResult(
+                successCount + failureCount + skippedRetryCount,
+                successCount,
+                failureCount,
+                skippedRetryCount,
+                status,
+                detail
+        );
+    }
+
+    private static SyncExecutionStatus statusFor(int successCount, int failureCount, int skippedRetryCount) {
+        int unresolvedCount = failureCount + skippedRetryCount;
+        if (unresolvedCount == 0) {
+            return SyncExecutionStatus.SUCCESS;
+        }
+        return successCount == 0 ? SyncExecutionStatus.FAILED : SyncExecutionStatus.PARTIAL_FAILURE;
     }
 
     private void processOne(UUID userId, ProviderWriteOutbox outbox) {
@@ -289,6 +328,8 @@ public class ProviderWriteProcessor {
             int affectedCount,
             int successCount,
             int failureCount,
+            int skippedRetryCount,
+            SyncExecutionStatus status,
             String detail
     ) {
     }

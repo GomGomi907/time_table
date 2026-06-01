@@ -7,19 +7,19 @@ import com.timetable.operator.calendar.infrastructure.CalendarConnectionReposito
 import com.timetable.operator.common.api.UserActionRequiredException;
 import com.timetable.operator.common.config.AppProperties;
 import com.timetable.operator.common.security.CurrentUserProvider;
+import com.timetable.operator.sync.domain.ProviderWriteState;
 import com.timetable.operator.sync.domain.SyncConflict;
 import com.timetable.operator.sync.domain.SyncConflictResolution;
 import com.timetable.operator.sync.domain.SyncConflictStatus;
 import com.timetable.operator.sync.domain.SyncDirection;
 import com.timetable.operator.sync.domain.SyncExecutionStatus;
 import com.timetable.operator.sync.domain.SyncLogEntry;
-import com.timetable.operator.sync.domain.ProviderWriteState;
 import com.timetable.operator.sync.domain.SyncResolvePolicy;
 import com.timetable.operator.sync.domain.SyncTargetSystem;
 import com.timetable.operator.sync.domain.SyncTriggerSource;
+import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
 import com.timetable.operator.sync.infrastructure.SyncConflictRepository;
 import com.timetable.operator.sync.infrastructure.SyncLogEntryRepository;
-import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
 import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -55,6 +55,9 @@ public class SyncOrchestrationService {
     @Value("${app.sync.polling.enabled:true}")
     private boolean pollingEnabled;
 
+    @Value("${app.sync.google.write-enabled:true}")
+    private boolean googleWriteEnabled;
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ManualSyncResponse requestManualSync(SyncTargetSystem targetSystem, ManualSyncRequest request) {
         AppUser user = currentUserProvider.getCurrentUser();
@@ -77,12 +80,15 @@ public class SyncOrchestrationService {
         meta.put("webhookTarget", SyncTargetSystem.GOOGLE_CALENDAR.wireValue());
         meta.put("pollingTarget", SyncTargetSystem.GOOGLE_TASKS.wireValue());
         meta.put("pollingEnabled", pollingEnabled);
-        boolean calendarWriteEnabled = googleConnection.map(CalendarConnection::isCalendarWriteEnabled).orElse(false);
-        boolean tasksWriteEnabled = googleConnection.map(CalendarConnection::isTasksWriteEnabled).orElse(false);
+        boolean calendarWriteEnabled = googleWriteEnabled
+                && googleConnection.map(CalendarConnection::isCalendarWriteEnabled).orElse(false);
+        boolean tasksWriteEnabled = googleWriteEnabled
+                && googleConnection.map(CalendarConnection::isTasksWriteEnabled).orElse(false);
         boolean externalWriteEnabled = calendarWriteEnabled || tasksWriteEnabled;
         meta.put("adapterMode", externalWriteEnabled ? "read_write" : "read_only");
         meta.put("externalReadEnabled", true);
         meta.put("externalWriteEnabled", externalWriteEnabled);
+        meta.put("googleWriteEnabled", googleWriteEnabled);
         meta.put("calendarWriteEnabled", calendarWriteEnabled);
         meta.put("tasksWriteEnabled", tasksWriteEnabled);
         meta.put("capabilityStatus", googleConnection.map(this::capabilityStatus).orElse("not_connected"));
@@ -93,19 +99,19 @@ public class SyncOrchestrationService {
         ));
         long providerWritePendingCount = providerWriteOutboxRepository.countByUserIdAndStateIn(
                 user.getId(),
-                java.util.List.of(ProviderWriteState.DIRTY_PENDING_WRITE, ProviderWriteState.WRITE_IN_FLIGHT)
+                List.of(ProviderWriteState.DIRTY_PENDING_WRITE, ProviderWriteState.WRITE_IN_FLIGHT)
         );
         long providerWriteRetryableFailureCount = providerWriteOutboxRepository.countByUserIdAndStateIn(
                 user.getId(),
-                java.util.List.of(ProviderWriteState.WRITE_FAILED_RETRYABLE)
+                List.of(ProviderWriteState.WRITE_FAILED_RETRYABLE)
         );
         long providerWriteReconnectRequiredCount = providerWriteOutboxRepository.countByUserIdAndStateIn(
                 user.getId(),
-                java.util.List.of(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT)
+                List.of(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT)
         );
         long providerWriteConflictCount = providerWriteOutboxRepository.countByUserIdAndStateIn(
                 user.getId(),
-                java.util.List.of(ProviderWriteState.CONFLICT_PENDING)
+                List.of(ProviderWriteState.CONFLICT_PENDING)
         );
         meta.put("providerWritePendingCount", providerWritePendingCount);
         meta.put("providerWriteRetryableFailureCount", providerWriteRetryableFailureCount);
@@ -245,15 +251,20 @@ public class SyncOrchestrationService {
                     ? executeOutboundSync(userId, targetSystem)
                     : executeInboundProviderSync(connection, targetSystem, options);
 
-            syncLogEntry.setStatus(SyncExecutionStatus.SUCCESS);
+            syncLogEntry.setStatus(result.status());
             syncLogEntry.setAffectedCount(result.affectedCount());
             syncLogEntry.setDetail(result.detail());
             syncLogEntry.setFinishedAt(Instant.now());
             syncLogEntry = syncLogEntryRepository.save(syncLogEntry);
 
-            connection.setStatus(CalendarConnectionStatus.CONNECTED);
-            connection.setLastSuccessfulSyncAt(syncLogEntry.getFinishedAt());
-            connection.setLastSyncError(null);
+            if (result.status() == SyncExecutionStatus.SUCCESS) {
+                connection.setStatus(CalendarConnectionStatus.CONNECTED);
+                connection.setLastSuccessfulSyncAt(syncLogEntry.getFinishedAt());
+                connection.setLastSyncError(null);
+            } else {
+                connection.setStatus(CalendarConnectionStatus.DEGRADED);
+                connection.setLastSyncError(result.detail());
+            }
             calendarConnectionRepository.save(connection);
         } catch (RuntimeException exception) {
             syncLogEntry.setStatus(SyncExecutionStatus.FAILED);
@@ -287,12 +298,12 @@ public class SyncOrchestrationService {
                     options.rangeEnd()
             );
         };
-        return new SyncRunResult(result.affectedCount(), result.detail());
+        return new SyncRunResult(result.affectedCount(), SyncExecutionStatus.SUCCESS, result.detail());
     }
 
     private SyncRunResult executeOutboundSync(UUID userId, SyncTargetSystem targetSystem) {
         ProviderWriteProcessor.WriteFlushResult result = providerWriteProcessor.flushPendingWrites(userId, targetSystem);
-        return new SyncRunResult(result.affectedCount(), result.detail());
+        return new SyncRunResult(result.affectedCount(), result.status(), result.detail());
     }
 
     private SyncStatusTarget toTargetStatus(
@@ -400,7 +411,7 @@ public class SyncOrchestrationService {
     ) {
     }
 
-    private record SyncRunResult(int affectedCount, String detail) {
+    private record SyncRunResult(int affectedCount, SyncExecutionStatus status, String detail) {
     }
 
     public record ManualSyncRequest(
