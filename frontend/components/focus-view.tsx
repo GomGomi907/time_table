@@ -7,7 +7,13 @@ import { AppShell } from "@/components/app-shell";
 import { FocusActionBar } from "@/components/focus-action-bar";
 import { FocusRailCard } from "@/components/focus-rail-card";
 import { api } from "@/lib/api";
-import { formatClockValue, formatRelativeMinutes, formatServiceCopy, getSuggestionDisplayState } from "@/lib/format";
+import {
+  formatClockValue,
+  formatRelativeMinutes,
+  formatServiceCopy,
+  getSuggestionDisplayState,
+  getSuggestionNoticeDetail,
+} from "@/lib/format";
 import {
   DAY_FULL_LABELS,
   DAY_ORDER,
@@ -230,6 +236,7 @@ export function FocusView() {
       showNotice({
         tone: "success",
         title,
+        detail: getSuggestionNoticeDetail(response),
       });
       await Promise.all([loadFocusPage(), refreshSession({ silent: true })]);
     } catch (mutationError) {

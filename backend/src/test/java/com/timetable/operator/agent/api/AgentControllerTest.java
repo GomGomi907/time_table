@@ -1,6 +1,7 @@
 package com.timetable.operator.agent.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -27,6 +28,7 @@ import com.timetable.operator.schedule.domain.ScheduleBlock;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.schedule.domain.ScheduleSourceType;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
+import com.timetable.operator.sync.domain.ProviderWriteState;
 import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskSourceType;
@@ -113,22 +115,24 @@ class AgentControllerTest {
             savedBlock = scheduleBlockRepository.findByUserId(user.getId()).getFirst();
         }
 
-        calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
                 .orElseGet(() -> {
-                    CalendarConnection connection = new CalendarConnection();
-                    connection.setUserId(user.getId());
-                    connection.setProvider("google");
-                    connection.setStatus(CalendarConnectionStatus.CONNECTED);
-                    connection.setAccessToken("test-access-token");
-                    connection.setRefreshToken("test-refresh-token");
-                    connection.setCalendarWriteEnabled(true);
-                    connection.setTasksWriteEnabled(true);
-                    connection.setCalendarReadEnabled(true);
-                    connection.setTasksReadEnabled(true);
-                    connection.setGrantedScopes("https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks");
-                    connection.setCapabilityStatus("write_enabled");
-                    return calendarConnectionRepository.save(connection);
+                    CalendarConnection newConnection = new CalendarConnection();
+                    newConnection.setUserId(user.getId());
+                    newConnection.setProvider("google");
+                    newConnection.setAccessToken("test-access-token");
+                    newConnection.setRefreshToken("test-refresh-token");
+                    return newConnection;
                 });
+        connection.setStatus(CalendarConnectionStatus.CONNECTED);
+        connection.setCalendarWriteEnabled(true);
+        connection.setTasksWriteEnabled(true);
+        connection.setCalendarReadEnabled(true);
+        connection.setTasksReadEnabled(true);
+        connection.setGrantedScopes("https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/tasks");
+        connection.setCapabilityStatus("write_enabled");
+        connection.setCapabilityError(null);
+        calendarConnectionRepository.save(connection);
     }
 
     @Test
@@ -517,6 +521,135 @@ class AgentControllerTest {
     }
 
     @Test
+    void applyGoogleBackedEventWithReadOnlyTokenWarnsProviderWriteIsBlocked() throws Exception {
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(false);
+        connection.setTasksWriteEnabled(true);
+        connection.setCapabilityStatus("read_only_token");
+        connection.setGrantedScopes("https://www.googleapis.com/auth/tasks");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(savedUser.getId());
+        event.setTitle("읽기 전용 Google 회의");
+        event.setStartAt(Instant.parse("2026-05-15T01:00:00Z"));
+        event.setEndAt(Instant.parse("2026-05-15T02:00:00Z"));
+        event.setCategory(ScheduleCategory.WORK);
+        event.setPriority((short) 2);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.GOOGLE_CALENDAR);
+        event.setSyncState(PlannerSyncState.IMPORTED);
+        event.setExternalSourceId("google_calendar:event-read-only");
+        Event savedEvent = eventRepository.save(event);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "읽기 전용 Google 회의 이동",
+                  "explanation": "로컬 변경은 가능하지만 Google write는 재연동이 필요하다.",
+                  "commands": [
+                    {
+                      "action_type": "move_event",
+                      "target_type": "event",
+                      "target_id": "%s",
+                      "payload": {"suggestedShiftMinutes": 30},
+                      "reason": "30분 이동",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedEvent.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "provider write blocked warning"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"))
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 쓰기 보류 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 쓰기 보류 1개")));
+
+        Event moved = eventRepository.findById(savedEvent.getId()).orElseThrow();
+        assertThat(moved.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:30:00Z"));
+        assertThat(moved.getEndAt()).isEqualTo(Instant.parse("2026-05-15T02:30:00Z"));
+        assertThat(moved.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
+
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore + 1);
+        var outbox = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(savedEvent.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(outbox.getState()).isEqualTo(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT);
+        assertThat(outbox.getLastErrorCode()).isEqualTo("reconnect_required");
+        assertThat(outbox.getLastErrorMessage()).contains("write scope");
+    }
+
+    @Test
+    void applyCanonicalEventWithoutGoogleConnectionDoesNotClaimProviderWriteWasQueued() throws Exception {
+        calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .ifPresent(calendarConnectionRepository::delete);
+        long eventCountBefore = eventRepository.count();
+        long outboxCountBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "Google 미연동 상태 일정 추가",
+                  "explanation": "로컬 일정은 생성하지만 Google 쓰기는 예약할 수 없다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "title": "미연동 로컬 회의",
+                        "startAt": "2026-05-16T19:10:00+09:00",
+                        "endAt": "2026-05-16T20:10:00+09:00",
+                        "category": "WORK"
+                      },
+                      "reason": "사용자가 새 일정을 요청했다.",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "Google 미연동 상태 적용"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"))
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 쓰기 보류 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 쓰기 보류 1개")));
+
+        assertThat(eventRepository.count()).isEqualTo(eventCountBefore + 1);
+        Event created = eventRepository.findByUserIdOrderByStartAtAsc(savedUser.getId()).stream()
+                .filter(event -> "미연동 로컬 회의".equals(event.getTitle()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(created.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxCountBefore + 1);
+        var outbox = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(created.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(outbox.getState()).isEqualTo(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT);
+        assertThat(outbox.getLastErrorCode()).isEqualTo("reconnect_required");
+    }
+
+    @Test
     void chatSuggestionApplyMutatesCanonicalTaskAndQueuesProviderWrite() throws Exception {
         Task task = new Task();
         task.setUserId(savedUser.getId());
@@ -565,6 +698,75 @@ class AgentControllerTest {
         assertThat(shifted.getDueDate()).isEqualTo(Instant.parse("2026-05-15T03:30:00Z"));
         assertThat(shifted.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
         assertThat(providerWriteOutboxRepository.count()).isGreaterThan(outboxBefore);
+    }
+
+    @Test
+    void applyGoogleBackedTaskWithReadOnlyTokenWarnsProviderWriteIsBlocked() throws Exception {
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setTasksWriteEnabled(false);
+        connection.setCapabilityStatus("read_only_token");
+        connection.setGrantedScopes("https://www.googleapis.com/auth/calendar.events");
+        calendarConnectionRepository.save(connection);
+
+        Task task = new Task();
+        task.setUserId(savedUser.getId());
+        task.setTitle("읽기 전용 Google 할 일");
+        task.setDueDate(Instant.parse("2026-05-15T03:00:00Z"));
+        task.setEstimatedMinutes(30);
+        task.setActualMinutes(0);
+        task.setPriority((short) 3);
+        task.setStatus(TaskStatus.TODO);
+        task.setSourceType(TaskSourceType.GOOGLE_TASKS);
+        task.setSyncState(PlannerSyncState.IMPORTED);
+        task.setExternalSourceId("google_tasks:@default:task-read-only");
+        Task savedTask = taskRepository.save(task);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "읽기 전용 Google 할 일 수정",
+                  "explanation": "로컬 변경은 가능하지만 Google Tasks 쓰기는 재연동이 필요하다.",
+                  "commands": [
+                    {
+                      "action_type": "update_event",
+                      "target_type": "task",
+                      "target_id": "%s",
+                      "payload": {"title": "읽기 전용 Google 할 일 - 수정"},
+                      "reason": "할 일 제목 수정",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedTask.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "tasks provider write blocked warning"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"))
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 쓰기 보류 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 쓰기 보류 1개")));
+
+        Task updated = taskRepository.findById(savedTask.getId()).orElseThrow();
+        assertThat(updated.getTitle()).isEqualTo("읽기 전용 Google 할 일 - 수정");
+        assertThat(updated.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore + 1);
+
+        var outbox = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(savedTask.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(outbox.getState()).isEqualTo(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT);
+        assertThat(outbox.getLastErrorCode()).isEqualTo("reconnect_required");
+        assertThat(outbox.getLastErrorMessage()).contains("write scope");
     }
 
     @Test

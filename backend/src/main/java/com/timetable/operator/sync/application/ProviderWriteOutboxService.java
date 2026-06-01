@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +31,9 @@ public class ProviderWriteOutboxService {
     private static final String GOOGLE_PROVIDER = "google";
     private static final String CALENDAR_EXTERNAL_PREFIX = "google_calendar:";
     private static final String TASK_EXTERNAL_PREFIX = "google_tasks:";
+    private static final String RECONNECT_REQUIRED_ERROR_CODE = "reconnect_required";
+    private static final String RECONNECT_REQUIRED_ERROR_MESSAGE =
+            "Google OAuth token does not include the required write scope.";
     private static final List<ProviderWriteState> COALESCIBLE_STATES = List.of(
             ProviderWriteState.DIRTY_PENDING_WRITE,
             ProviderWriteState.WRITE_FAILED_RETRYABLE,
@@ -41,13 +45,9 @@ public class ProviderWriteOutboxService {
     private final ProviderWriteOutboxRepository providerWriteOutboxRepository;
     private final ObjectMapper objectMapper;
 
-    public void enqueueEventWrite(Event event, ProviderWriteOperation requestedOperation) {
+    public EnqueueResult enqueueEventWrite(Event event, ProviderWriteOperation requestedOperation) {
         Optional<CalendarConnection> connection =
                 calendarConnectionRepository.findByUserIdAndProvider(event.getUserId(), GOOGLE_PROVIDER);
-        if (connection.isEmpty()) {
-            return;
-        }
-
         Optional<SyncMapping> mapping = findMapping(
                 SyncMappingLocalType.EVENT,
                 event.getId(),
@@ -56,10 +56,25 @@ public class ProviderWriteOutboxService {
         );
         ProviderWriteOperation operation = operationFor(requestedOperation, mapping, event.getExternalSourceId());
         if (operation == ProviderWriteOperation.DELETE && mapping.isEmpty() && isBlank(event.getExternalSourceId())) {
-            return;
+            return EnqueueResult.NOOP;
         }
 
         event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        if (connection.isEmpty()) {
+            coalesceOrSave(
+                    event.getUserId(),
+                    SyncMappingLocalType.EVENT,
+                    event.getId(),
+                    mapping.map(SyncMapping::getId).orElse(null),
+                    SyncProvider.GOOGLE_CALENDAR,
+                    operation,
+                    ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
+                    snapshotEvent(event)
+            );
+            return EnqueueResult.NO_CONNECTION;
+        }
+
+        EnqueueResult result = eventWriteResult(connection.get());
         coalesceOrSave(
                 event.getUserId(),
                 SyncMappingLocalType.EVENT,
@@ -67,20 +82,15 @@ public class ProviderWriteOutboxService {
                 mapping.map(SyncMapping::getId).orElse(null),
                 SyncProvider.GOOGLE_CALENDAR,
                 operation,
-                connection.get().isCalendarWriteEnabled()
-                        ? ProviderWriteState.DIRTY_PENDING_WRITE
-                        : ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
+                providerWriteState(result),
                 snapshotEvent(event)
         );
+        return result;
     }
 
-    public void enqueueTaskWrite(Task task, ProviderWriteOperation requestedOperation) {
+    public EnqueueResult enqueueTaskWrite(Task task, ProviderWriteOperation requestedOperation) {
         Optional<CalendarConnection> connection =
                 calendarConnectionRepository.findByUserIdAndProvider(task.getUserId(), GOOGLE_PROVIDER);
-        if (connection.isEmpty()) {
-            return;
-        }
-
         Optional<SyncMapping> mapping = findMapping(
                 SyncMappingLocalType.TASK,
                 task.getId(),
@@ -89,10 +99,25 @@ public class ProviderWriteOutboxService {
         );
         ProviderWriteOperation operation = operationFor(requestedOperation, mapping, task.getExternalSourceId());
         if (operation == ProviderWriteOperation.DELETE && mapping.isEmpty() && isBlank(task.getExternalSourceId())) {
-            return;
+            return EnqueueResult.NOOP;
         }
 
         task.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        if (connection.isEmpty()) {
+            coalesceOrSave(
+                    task.getUserId(),
+                    SyncMappingLocalType.TASK,
+                    task.getId(),
+                    mapping.map(SyncMapping::getId).orElse(null),
+                    SyncProvider.GOOGLE_TASKS,
+                    operation,
+                    ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
+                    snapshotTask(task)
+            );
+            return EnqueueResult.NO_CONNECTION;
+        }
+
+        EnqueueResult result = taskWriteResult(connection.get());
         coalesceOrSave(
                 task.getUserId(),
                 SyncMappingLocalType.TASK,
@@ -100,18 +125,35 @@ public class ProviderWriteOutboxService {
                 mapping.map(SyncMapping::getId).orElse(null),
                 SyncProvider.GOOGLE_TASKS,
                 operation,
-                connection.get().isTasksWriteEnabled()
-                        ? ProviderWriteState.DIRTY_PENDING_WRITE
-                        : ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
+                providerWriteState(result),
                 snapshotTask(task)
         );
+        return result;
+    }
+
+    private EnqueueResult eventWriteResult(CalendarConnection connection) {
+        return connection.isCalendarWriteEnabled()
+                ? EnqueueResult.ENQUEUED
+                : EnqueueResult.WRITE_SCOPE_REQUIRED;
+    }
+
+    private EnqueueResult taskWriteResult(CalendarConnection connection) {
+        return connection.isTasksWriteEnabled()
+                ? EnqueueResult.ENQUEUED
+                : EnqueueResult.WRITE_SCOPE_REQUIRED;
+    }
+
+    private ProviderWriteState providerWriteState(EnqueueResult result) {
+        return result == EnqueueResult.ENQUEUED
+                ? ProviderWriteState.DIRTY_PENDING_WRITE
+                : ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT;
     }
 
     private void coalesceOrSave(
-            java.util.UUID userId,
+            UUID userId,
             SyncMappingLocalType localType,
-            java.util.UUID localId,
-            java.util.UUID mappingId,
+            UUID localId,
+            UUID mappingId,
             SyncProvider provider,
             ProviderWriteOperation requestedOperation,
             ProviderWriteState state,
@@ -151,10 +193,8 @@ public class ProviderWriteOutboxService {
         current.setOperation(mergedOperation);
         current.setState(state);
         current.setPayloadSnapshot(payloadSnapshot);
-        current.setLastErrorCode(state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT ? "reconnect_required" : null);
-        current.setLastErrorMessage(state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT
-                ? "Google OAuth token does not include the required write scope."
-                : null);
+        current.setLastErrorCode(needsReconnect(state) ? RECONNECT_REQUIRED_ERROR_CODE : null);
+        current.setLastErrorMessage(needsReconnect(state) ? RECONNECT_REQUIRED_ERROR_MESSAGE : null);
         current.setNextRetryAt(null);
         current.setInFlightAt(null);
         current.setAppliedAt(null);
@@ -182,7 +222,7 @@ public class ProviderWriteOutboxService {
 
     private Optional<SyncMapping> findMapping(
             SyncMappingLocalType localType,
-            java.util.UUID localId,
+            UUID localId,
             SyncProvider provider,
             String providerExternalId
     ) {
@@ -207,10 +247,10 @@ public class ProviderWriteOutboxService {
     }
 
     private ProviderWriteOutbox outbox(
-            java.util.UUID userId,
+            UUID userId,
             SyncMappingLocalType localType,
-            java.util.UUID localId,
-            java.util.UUID mappingId,
+            UUID localId,
+            UUID mappingId,
             SyncProvider provider,
             ProviderWriteOperation operation,
             ProviderWriteState state,
@@ -226,11 +266,15 @@ public class ProviderWriteOutboxService {
         outbox.setState(state);
         outbox.setPayloadSnapshot(payloadSnapshot);
         outbox.setAttemptCount(0);
-        if (state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT) {
-            outbox.setLastErrorCode("reconnect_required");
-            outbox.setLastErrorMessage("Google OAuth token does not include the required write scope.");
+        if (needsReconnect(state)) {
+            outbox.setLastErrorCode(RECONNECT_REQUIRED_ERROR_CODE);
+            outbox.setLastErrorMessage(RECONNECT_REQUIRED_ERROR_MESSAGE);
         }
         return outbox;
+    }
+
+    private boolean needsReconnect(ProviderWriteState state) {
+        return state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT;
     }
 
     private String snapshotEvent(Event event) {
@@ -275,5 +319,12 @@ public class ProviderWriteOutboxService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    public enum EnqueueResult {
+        ENQUEUED,
+        WRITE_SCOPE_REQUIRED,
+        NO_CONNECTION,
+        NOOP
     }
 }

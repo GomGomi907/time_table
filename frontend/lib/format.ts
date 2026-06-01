@@ -229,3 +229,26 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
     applyLabel: "적용할 변경 없음",
   };
 }
+
+export function getSuggestionResultDetail(suggestion: RescheduleSuggestion | null | undefined) {
+  if (!suggestion) {
+    return undefined;
+  }
+
+  const detail = suggestion.executionSummary?.detail || suggestion.statusDetail;
+  const normalized = toSafeSuggestionText(detail, "");
+  return normalized || undefined;
+}
+
+export function getSuggestionNoticeDetail(response: unknown) {
+  if (!response || typeof response !== "object" || !("data" in response)) {
+    return undefined;
+  }
+
+  const data = (response as { data?: unknown }).data;
+  if (!data || typeof data !== "object" || !("statusDetail" in data)) {
+    return undefined;
+  }
+
+  return getSuggestionResultDetail(data as RescheduleSuggestion);
+}

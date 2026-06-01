@@ -3,6 +3,7 @@ import {
   formatAiPreviewDetail,
   formatServiceCopy,
   getSuggestionDisplayState,
+  getSuggestionResultDetail,
 } from "@/lib/format";
 import type { RescheduleSuggestion } from "@/lib/types";
 
@@ -31,6 +32,7 @@ export function SuggestionReviewCard({
   const executablePreviewItems = (suggestion.previewItems ?? []).filter((item) => item.executable);
   const previewItems = executablePreviewItems.slice(0, 3);
   const hiddenPreviewCount = Math.max(executablePreviewItems.length - previewItems.length, 0);
+  const resultDetail = getSuggestionResultDetail(suggestion);
   const title =
     titleElement === "h2"
       ? <h2>{display.title}</h2>
@@ -60,7 +62,7 @@ export function SuggestionReviewCard({
         </ul>
       ) : null}
       {readOnly ? (
-        <p className="suggestion-status-note">{suggestion.statusLabel}</p>
+        <p className="suggestion-status-note">{resultDetail ?? suggestion.statusLabel}</p>
       ) : (
         <div className="suggestion-actions approval-actions">
           <button className="ghost-btn" disabled={isPending} onClick={onReject} type="button">

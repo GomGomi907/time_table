@@ -6,7 +6,13 @@ import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
-import { formatClockValue, formatServiceCopy, formatUserMemo, getSuggestionDisplayState } from "@/lib/format";
+import {
+  formatClockValue,
+  formatServiceCopy,
+  formatUserMemo,
+  getSuggestionDisplayState,
+  getSuggestionNoticeDetail,
+} from "@/lib/format";
 import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
@@ -568,15 +574,14 @@ export function ScheduleView() {
 
     try {
       setIsMutating(true);
-      if (action === "apply") {
-        await api.applySuggestion(suggestionId);
-      } else {
-        await api.rejectSuggestion(suggestionId);
-      }
+      const response = action === "apply"
+        ? await api.applySuggestion(suggestionId)
+        : await api.rejectSuggestion(suggestionId);
 
       showNotice({
         tone: "success",
         title: action === "apply" ? "변경을 일정표에 반영했습니다." : "변경을 보류했습니다.",
+        detail: getSuggestionNoticeDetail(response),
       });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);
     } catch (decisionError) {

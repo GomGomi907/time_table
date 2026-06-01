@@ -35,6 +35,10 @@ import com.timetable.operator.sync.domain.ProviderWriteState;
 import com.timetable.operator.sync.domain.SyncMappingLocalType;
 import com.timetable.operator.sync.domain.SyncProvider;
 import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
+import com.timetable.operator.tasks.domain.Task;
+import com.timetable.operator.tasks.domain.TaskSourceType;
+import com.timetable.operator.tasks.domain.TaskStatus;
+import com.timetable.operator.tasks.infrastructure.TaskRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -71,6 +75,9 @@ class SyncControllerTest {
 
     @Autowired
     private EventRepository eventRepository;
+
+    @Autowired
+    private TaskRepository taskRepository;
 
     @Autowired
     private ProviderWriteOutboxRepository providerWriteOutboxRepository;
@@ -464,6 +471,166 @@ class SyncControllerTest {
         assertThat(degraded.getStatus()).isEqualTo(CalendarConnectionStatus.DEGRADED);
         assertThat(degraded.getLastSyncError())
                 .isEqualTo("Provider write flush completed: 0 applied, 0 failed, 1 waiting for retry.");
+    }
+
+    @Test
+    void outboundCalendarFlushesReconnectRequiredRowsAfterWriteCapabilityRestored() throws Exception {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setTasksWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        connection.setCapabilityError(null);
+        connection.setStatus(CalendarConnectionStatus.CONNECTED);
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Reconnect restored meeting");
+        event.setDescription("Reconnect-required flush regression");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(2, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        event = eventRepository.save(event);
+        UUID eventId = event.getId();
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.EVENT);
+        outbox.setLocalId(eventId);
+        outbox.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT);
+        outbox.setAttemptCount(0);
+        outbox.setLastErrorCode("reconnect_required");
+        outbox.setLastErrorMessage("Google OAuth token does not include the required write scope.");
+        providerWriteOutboxRepository.save(outbox);
+
+        when(googleOutboundSyncClient.createCalendarEvent(any(CalendarConnection.class), any(Event.class)))
+                .thenReturn(new GoogleOutboundSyncClient.ProviderWriteResult("reconnected-event", "etag-v2", "{}"));
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("success"))
+                .andExpect(jsonPath("$.data.affectedCount").value(1))
+                .andExpect(jsonPath("$.data.detail").value("Provider write flush completed: 1 applied, 0 failed."));
+
+        verify(googleOutboundSyncClient).createCalendarEvent(any(CalendarConnection.class), any(Event.class));
+
+        ProviderWriteOutbox syncedOutbox = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(syncedOutbox.getState()).isEqualTo(ProviderWriteState.SYNCED);
+        assertThat(syncedOutbox.getLastErrorCode()).isNull();
+        assertThat(syncedOutbox.getLastErrorMessage()).isNull();
+        assertThat(syncedOutbox.getAppliedAt()).isNotNull();
+
+        Event synced = eventRepository.findById(eventId).orElseThrow();
+        assertThat(synced.getSyncState()).isEqualTo(PlannerSyncState.SYNCED);
+        assertThat(synced.getSourceType()).isEqualTo(EventSourceType.GOOGLE_CALENDAR);
+        assertThat(synced.getExternalSourceId()).isEqualTo("google_calendar:reconnected-event");
+        assertThat(synced.getExternalEtag()).isEqualTo("etag-v2");
+
+        mockMvc.perform(get("/api/sync/status").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.providerWriteReconnectRequiredCount").value(0))
+                .andExpect(jsonPath("$.meta.pendingProviderWriteCount").value(0));
+    }
+
+    @Test
+    void outboundTasksFlushesReconnectRequiredRowsAfterWriteCapabilityRestored() throws Exception {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setTasksWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        connection.setCapabilityError(null);
+        connection.setStatus(CalendarConnectionStatus.CONNECTED);
+        calendarConnectionRepository.save(connection);
+
+        Task task = new Task();
+        task.setUserId(user.getId());
+        task.setTitle("Reconnect restored task");
+        task.setDescription("Reconnect-required tasks flush regression");
+        task.setDueDate(Instant.now().plus(1, ChronoUnit.HOURS));
+        task.setEstimatedMinutes(30);
+        task.setActualMinutes(0);
+        task.setPriority((short) 3);
+        task.setStatus(TaskStatus.TODO);
+        task.setSourceType(TaskSourceType.LOCAL);
+        task.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        task = taskRepository.save(task);
+        UUID taskId = task.getId();
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.TASK);
+        outbox.setLocalId(taskId);
+        outbox.setProvider(SyncProvider.GOOGLE_TASKS);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT);
+        outbox.setAttemptCount(0);
+        outbox.setLastErrorCode("reconnect_required");
+        outbox.setLastErrorMessage("Google OAuth token does not include the required write scope.");
+        providerWriteOutboxRepository.save(outbox);
+
+        when(googleOutboundSyncClient.createTask(any(CalendarConnection.class), any(String.class), any(Task.class)))
+                .thenReturn(new GoogleOutboundSyncClient.ProviderWriteResult("reconnected-task", "task-etag-v2", "{}"));
+
+        mockMvc.perform(post("/api/sync/google/tasks")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("success"))
+                .andExpect(jsonPath("$.data.affectedCount").value(1))
+                .andExpect(jsonPath("$.data.detail").value("Provider write flush completed: 1 applied, 0 failed."));
+
+        verify(googleOutboundSyncClient).createTask(any(CalendarConnection.class), any(String.class), any(Task.class));
+
+        ProviderWriteOutbox syncedOutbox = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(taskId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(syncedOutbox.getState()).isEqualTo(ProviderWriteState.SYNCED);
+        assertThat(syncedOutbox.getLastErrorCode()).isNull();
+        assertThat(syncedOutbox.getLastErrorMessage()).isNull();
+        assertThat(syncedOutbox.getAppliedAt()).isNotNull();
+
+        Task synced = taskRepository.findById(taskId).orElseThrow();
+        assertThat(synced.getSyncState()).isEqualTo(PlannerSyncState.SYNCED);
+        assertThat(synced.getSourceType()).isEqualTo(TaskSourceType.GOOGLE_TASKS);
+        assertThat(synced.getExternalSourceId()).isEqualTo("google_tasks:@default:reconnected-task");
+        assertThat(synced.getExternalEtag()).isEqualTo("task-etag-v2");
+
+        mockMvc.perform(get("/api/sync/status").with(user("tester").roles("USER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.meta.providerWriteReconnectRequiredCount").value(0))
+                .andExpect(jsonPath("$.meta.pendingProviderWriteCount").value(0));
     }
 
     @Test

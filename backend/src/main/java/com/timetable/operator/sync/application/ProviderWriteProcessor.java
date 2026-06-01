@@ -39,11 +39,14 @@ public class ProviderWriteProcessor {
     private static final String GOOGLE_PROVIDER = "google";
     private static final String CALENDAR_EXTERNAL_PREFIX = "google_calendar:";
     private static final String TASK_EXTERNAL_PREFIX = "google_tasks:";
+    private static final String RECONNECT_REQUIRED_ERROR_CODE = "reconnect_required";
+    private static final String RECONNECT_REQUIRED_ERROR_MESSAGE = "Google reconnect with write scope is required.";
     private static final String PROVIDER_WRITES_DISABLED_DETAIL =
             "Provider writes are disabled by APP_SYNC_GOOGLE_WRITE_ENABLED=false; no Google writes attempted.";
     private static final List<ProviderWriteState> READY_STATES = List.of(
             ProviderWriteState.DIRTY_PENDING_WRITE,
-            ProviderWriteState.WRITE_FAILED_RETRYABLE
+            ProviderWriteState.WRITE_FAILED_RETRYABLE,
+            ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT
     );
 
     private final ProviderWriteOutboxRepository providerWriteOutboxRepository;
@@ -278,11 +281,12 @@ public class ProviderWriteProcessor {
     }
 
     private void markFailure(UUID userId, ProviderWriteOutbox outbox, RuntimeException exception) {
-        ProviderWriteState state = isAuthFailure(exception)
+        boolean authFailure = isAuthFailure(exception);
+        ProviderWriteState state = authFailure
                 ? ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT
                 : ProviderWriteState.WRITE_FAILED_RETRYABLE;
         outbox.setState(state);
-        outbox.setLastErrorCode(isAuthFailure(exception) ? "reconnect_required" : exception.getClass().getSimpleName());
+        outbox.setLastErrorCode(authFailure ? RECONNECT_REQUIRED_ERROR_CODE : exception.getClass().getSimpleName());
         outbox.setLastErrorMessage(exception.getMessage());
         outbox.setNextRetryAt(state == ProviderWriteState.WRITE_FAILED_RETRYABLE
                 ? Instant.now().plusSeconds(Math.min(3_600L, Math.max(60L, outbox.getAttemptCount() * 60L)))
@@ -303,7 +307,7 @@ public class ProviderWriteProcessor {
                 ? connection.isCalendarWriteEnabled()
                 : connection.isTasksWriteEnabled();
         if (!enabled) {
-            throw new IllegalStateException("Google reconnect with write scope is required.");
+            throw new IllegalStateException(RECONNECT_REQUIRED_ERROR_MESSAGE);
         }
     }
 

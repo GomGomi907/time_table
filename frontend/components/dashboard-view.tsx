@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
-import { formatClockValue, formatServiceCopy } from "@/lib/format";
+import { formatClockValue, formatServiceCopy, getSuggestionNoticeDetail } from "@/lib/format";
 import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
@@ -193,10 +193,11 @@ export function DashboardView() {
 
     try {
       setIsMutating(true);
-      await action();
+      const response = await action();
       showNotice({
         tone: "success",
         title: successTitle,
+        detail: getSuggestionNoticeDetail(response),
       });
       await Promise.all([loadDashboard(), refreshSession({ silent: true })]);
     } catch (mutationError) {

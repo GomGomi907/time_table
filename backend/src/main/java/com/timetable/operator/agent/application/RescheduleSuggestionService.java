@@ -23,6 +23,7 @@ import com.timetable.operator.schedule.domain.ScheduleSourceType;
 import com.timetable.operator.schedule.application.ScheduleBlockRules;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import com.timetable.operator.sync.application.ProviderWriteOutboxService;
+import com.timetable.operator.sync.application.ProviderWriteOutboxService.EnqueueResult;
 import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskSourceType;
@@ -53,6 +54,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class RescheduleSuggestionService {
 
     private static final ZoneId DEFAULT_AI_LOCAL_DATE_TIME_ZONE = ZoneId.of("Asia/Seoul");
+    private static final String PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL = "Google 쓰기는 재연동 후 처리됩니다.";
+    private static final String PROVIDER_WRITE_NO_CONNECTION_DETAIL = "Google 연동이 없어 Google에는 반영되지 않았습니다.";
 
     private final RescheduleSuggestionRepository rescheduleSuggestionRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
@@ -267,13 +270,29 @@ public class RescheduleSuggestionService {
         int noOpCount = (int) snapshots.stream()
                 .filter(snapshot -> "no_op".equals(snapshot.outcome()))
                 .count();
+        int providerWriteBlockedCount = (int) snapshots.stream()
+                .filter(this::hasBlockedProviderWrite)
+                .count();
+        String detail = "%d개 명령 적용, %d개 명령 기록".formatted(appliedCount, noOpCount);
+        if (providerWriteBlockedCount > 0) {
+            detail += ", Google 쓰기 보류 %d개".formatted(providerWriteBlockedCount);
+        }
 
         return new SuggestionExecutionSummaryResponse(
                 snapshots.size(),
                 appliedCount,
                 noOpCount,
-                "%d개 명령 적용, %d개 명령 기록".formatted(appliedCount, noOpCount)
+                detail
         );
+    }
+
+    private boolean hasBlockedProviderWrite(AppliedCommandSnapshot snapshot) {
+        if (snapshot.providerWriteResult() != null) {
+            return blocksExternalWrite(snapshot.providerWriteResult());
+        }
+        return snapshot.detail() != null
+                && (snapshot.detail().contains(PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL)
+                || snapshot.detail().contains(PROVIDER_WRITE_NO_CONNECTION_DETAIL));
     }
 
     private String statusLabel(RescheduleSuggestionStatus status) {
@@ -456,15 +475,13 @@ public class RescheduleSuggestionService {
         event.setSourceType(EventSourceType.AGENT_GENERATED);
         applyEventPayload(event, command.payload(), true);
         Event saved = eventRepository.save(event);
-        providerWriteOutboxService.enqueueEventWrite(saved, ProviderWriteOperation.CREATE);
+        EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(saved, ProviderWriteOperation.CREATE);
         Event persisted = eventRepository.save(saved);
-        return new AppliedCommandSnapshot(
-                command.actionType(),
+        return appliedProviderWriteSnapshot(
+                command,
                 persisted.getId().toString(),
-                "applied",
-                null,
-                null,
-                "create_event 제안을 canonical event에 반영하고 provider write를 예약했습니다."
+                "create_event 제안을 canonical event에 반영했습니다.",
+                enqueueResult
         );
     }
 
@@ -488,20 +505,18 @@ public class RescheduleSuggestionService {
                 return noExecutableTarget(command, "이동할 시간 정보가 payload에 없습니다.");
             }
             validateEventRange(event);
-            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
             eventRepository.save(event);
+            return appliedProviderWriteSnapshot(
+                    command,
+                    event.getId().toString(),
+                    "move_event 제안을 canonical event에 반영했습니다.",
+                    enqueueResult
+            );
         } catch (RuntimeException exception) {
             restoreEventFields(event, beforeState);
             throw exception;
         }
-        return new AppliedCommandSnapshot(
-                command.actionType(),
-                event.getId().toString(),
-                "applied",
-                null,
-                null,
-                "move_event 제안을 canonical event에 반영하고 provider write를 예약했습니다."
-        );
     }
 
     private AppliedCommandSnapshot updateEvent(Event event, StructuredAiCommand command) {
@@ -509,40 +524,36 @@ public class RescheduleSuggestionService {
         try {
             applyEventPayload(event, command.payload(), false);
             validateEventRange(event);
-            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
             eventRepository.save(event);
+            return appliedProviderWriteSnapshot(
+                    command,
+                    event.getId().toString(),
+                    "update_event 제안을 canonical event에 반영했습니다.",
+                    enqueueResult
+            );
         } catch (RuntimeException exception) {
             restoreEventFields(event, beforeState);
             throw exception;
         }
-        return new AppliedCommandSnapshot(
-                command.actionType(),
-                event.getId().toString(),
-                "applied",
-                null,
-                null,
-                "update_event 제안을 canonical event에 반영하고 provider write를 예약했습니다."
-        );
     }
 
     private AppliedCommandSnapshot deleteEvent(Event event, StructuredAiCommand command) {
         EventRollbackState beforeState = snapshotEventRollback(event);
         try {
             event.setStatus(EventStatus.CANCELLED);
-            providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.DELETE);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.DELETE);
             eventRepository.save(event);
+            return appliedProviderWriteSnapshot(
+                    command,
+                    event.getId().toString(),
+                    "delete_event 제안을 canonical event 취소로 반영했습니다.",
+                    enqueueResult
+            );
         } catch (RuntimeException exception) {
             restoreEventFields(event, beforeState);
             throw exception;
         }
-        return new AppliedCommandSnapshot(
-                command.actionType(),
-                event.getId().toString(),
-                "applied",
-                null,
-                null,
-                "delete_event 제안을 canonical event 취소로 반영하고 provider delete를 예약했습니다."
-        );
     }
 
     private AppliedCommandSnapshot createTask(UUID userId, StructuredAiCommand command) {
@@ -551,15 +562,13 @@ public class RescheduleSuggestionService {
         task.setSourceType(TaskSourceType.AGENT_GENERATED);
         applyTaskPayload(task, command.payload(), true);
         Task saved = taskRepository.save(task);
-        providerWriteOutboxService.enqueueTaskWrite(saved, ProviderWriteOperation.CREATE);
+        EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(saved, ProviderWriteOperation.CREATE);
         Task persisted = taskRepository.save(saved);
-        return new AppliedCommandSnapshot(
-                command.actionType(),
+        return appliedProviderWriteSnapshot(
+                command,
                 persisted.getId().toString(),
-                "applied",
-                null,
-                null,
-                "할 일 제안을 canonical task에 반영하고 provider write를 예약했습니다."
+                "할 일 제안을 canonical task에 반영했습니다.",
+                enqueueResult
         );
     }
 
@@ -576,20 +585,18 @@ public class RescheduleSuggestionService {
             } else {
                 return noExecutableTarget(command, "할 일 이동을 위한 dueDate 또는 기존 dueDate와 이동 시간이 필요합니다.");
             }
-            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
             taskRepository.save(task);
+            return appliedProviderWriteSnapshot(
+                    command,
+                    task.getId().toString(),
+                    "move_event 제안을 canonical task 마감 조정으로 반영했습니다.",
+                    enqueueResult
+            );
         } catch (RuntimeException exception) {
             restoreTaskFields(task, beforeState);
             throw exception;
         }
-        return new AppliedCommandSnapshot(
-                command.actionType(),
-                task.getId().toString(),
-                "applied",
-                null,
-                null,
-                "move_event 제안을 canonical task 마감 조정으로 반영하고 provider write를 예약했습니다."
-        );
     }
 
     private AppliedCommandSnapshot updateTask(UUID userId, StructuredAiCommand command) {
@@ -597,20 +604,18 @@ public class RescheduleSuggestionService {
         TaskRollbackState beforeState = snapshotTaskRollback(task);
         try {
             applyTaskPayload(task, command.payload(), false);
-            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
             taskRepository.save(task);
+            return appliedProviderWriteSnapshot(
+                    command,
+                    task.getId().toString(),
+                    "update_event 제안을 canonical task에 반영했습니다.",
+                    enqueueResult
+            );
         } catch (RuntimeException exception) {
             restoreTaskFields(task, beforeState);
             throw exception;
         }
-        return new AppliedCommandSnapshot(
-                command.actionType(),
-                task.getId().toString(),
-                "applied",
-                null,
-                null,
-                "update_event 제안을 canonical task에 반영하고 provider write를 예약했습니다."
-        );
     }
 
     private AppliedCommandSnapshot deleteTask(UUID userId, StructuredAiCommand command) {
@@ -618,20 +623,48 @@ public class RescheduleSuggestionService {
         TaskRollbackState beforeState = snapshotTaskRollback(task);
         try {
             task.setStatus(TaskStatus.CANCELLED);
-            providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.DELETE);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.DELETE);
             taskRepository.save(task);
+            return appliedProviderWriteSnapshot(
+                    command,
+                    task.getId().toString(),
+                    "delete_event 제안을 canonical task 취소로 반영했습니다.",
+                    enqueueResult
+            );
         } catch (RuntimeException exception) {
             restoreTaskFields(task, beforeState);
             throw exception;
         }
+    }
+
+    private AppliedCommandSnapshot appliedProviderWriteSnapshot(
+            StructuredAiCommand command,
+            String targetId,
+            String canonicalDetail,
+            EnqueueResult enqueueResult
+    ) {
         return new AppliedCommandSnapshot(
                 command.actionType(),
-                task.getId().toString(),
+                targetId,
                 "applied",
                 null,
                 null,
-                "delete_event 제안을 canonical task 취소로 반영하고 provider delete를 예약했습니다."
+                canonicalDetail + " " + providerWriteDetail(enqueueResult),
+                enqueueResult
         );
+    }
+
+    private String providerWriteDetail(EnqueueResult result) {
+        return switch (result) {
+            case ENQUEUED -> "Google 쓰기를 예약했습니다.";
+            case WRITE_SCOPE_REQUIRED -> PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL;
+            case NO_CONNECTION -> PROVIDER_WRITE_NO_CONNECTION_DETAIL;
+            case NOOP -> "외부 대상이 없어 Google 쓰기는 생략했습니다.";
+        };
+    }
+
+    private boolean blocksExternalWrite(EnqueueResult result) {
+        return result == EnqueueResult.WRITE_SCOPE_REQUIRED || result == EnqueueResult.NO_CONNECTION;
     }
 
     private Task getOwnedTask(UUID userId, StructuredAiCommand command) {
@@ -1206,8 +1239,20 @@ public class RescheduleSuggestionService {
             String outcome,
             ScheduleBlockSnapshot beforeState,
             ScheduleBlockSnapshot afterState,
-            String detail
+            String detail,
+            EnqueueResult providerWriteResult
     ) {
+
+        private AppliedCommandSnapshot(
+                String actionType,
+                String targetId,
+                String outcome,
+                ScheduleBlockSnapshot beforeState,
+                ScheduleBlockSnapshot afterState,
+                String detail
+        ) {
+            this(actionType, targetId, outcome, beforeState, afterState, detail, null);
+        }
     }
 
     private record ScheduleBlockSnapshot(
