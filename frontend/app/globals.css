@@ -32,6 +32,10 @@
   --content-max: 1180px;
   --shell-gap: clamp(14px, 2vw, 22px);
   --page-pad: clamp(18px, 4vw, 48px);
+  --z-background: -1;
+  --z-raised: 2;
+  --z-modal: 40;
+  --z-notice: 60;
   --font-sans: var(--font-body), "Noto Sans KR", "Apple SD Gothic Neo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-display: "Space Grotesk", "Noto Sans KR", system-ui, sans-serif;
 }
@@ -63,7 +67,7 @@ body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: var(--z-background);
   pointer-events: none;
   background-image:
     linear-gradient(rgba(17, 24, 39, 0.035) 1px, transparent 1px),
@@ -549,7 +553,7 @@ summary,
   width: 100%;
   min-width: 0;
   max-height: none;
-  z-index: 2;
+  z-index: var(--z-raised);
 }
 
 .top-bar {
@@ -1534,7 +1538,7 @@ button.current-schedule-card:hover {
 
 .schedule-block {
   position: relative;
-  z-index: 2;
+  z-index: var(--z-raised);
   display: grid;
   width: 100%;
   min-width: 0;
@@ -1606,7 +1610,7 @@ button.current-schedule-card:hover {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-modal);
   display: grid;
   align-items: center;
   justify-items: center;
@@ -1865,7 +1869,7 @@ button.current-schedule-card:hover {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  z-index: 60;
+  z-index: var(--z-notice);
   width: min(360px, calc(100vw - 40px));
 }
 

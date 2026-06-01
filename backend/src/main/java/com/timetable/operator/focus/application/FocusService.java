@@ -652,7 +652,7 @@ public class FocusService {
             ScheduleContext scheduleContext,
             FocusPreferenceContext preferenceContext,
             List<RecommendedTask> recommendedTasks,
-            Object activeSuggestion,
+            RescheduleSuggestionService.RescheduleSuggestionResponse activeSuggestion,
             Long remainingMinutes
     ) {
     }

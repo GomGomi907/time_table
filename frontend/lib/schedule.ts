@@ -70,7 +70,7 @@ function getNowParts(timeZone?: string) {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
-    timeZone,
+    timeZone: normalizeTimeZone(timeZone),
   });
 
   const parts = formatter.formatToParts(new Date());
@@ -80,6 +80,10 @@ function getNowParts(timeZone?: string) {
     hour: Number(record.hour ?? "0"),
     minute: Number(record.minute ?? "0"),
   };
+}
+
+function normalizeTimeZone(timeZone?: string) {
+  return timeZone?.trim() || "UTC";
 }
 
 export function minutesFromClock(value: string) {

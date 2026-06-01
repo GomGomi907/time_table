@@ -35,7 +35,6 @@ import java.io.IOException;
 import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
@@ -54,7 +53,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class RescheduleSuggestionService {
 
-    private static final ZoneId DEFAULT_AI_LOCAL_DATE_TIME_ZONE = ZoneId.of("Asia/Seoul");
     private static final String PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL = "Google 쓰기는 재연동 후 처리됩니다.";
     private static final String PROVIDER_WRITE_NO_CONNECTION_DETAIL = "Google 연동이 없어 Google에는 반영되지 않았습니다.";
 
@@ -93,7 +91,7 @@ public class RescheduleSuggestionService {
     ) {
         AppUser user = currentUserProvider.getCurrentUser();
         StructuredAiCommandBatch batch = aiRequestAgentService.resolvePrebuiltCommandBatch(
-                user.getId(),
+                user,
                 normalizedChatCommand.commandBatch()
         );
         return createSuggestion(
@@ -142,15 +140,16 @@ public class RescheduleSuggestionService {
     @Transactional
     public RescheduleSuggestionResponse applySuggestion(UUID suggestionId, SuggestionDecisionRequest request) {
         AppUser user = currentUserProvider.getCurrentUser();
-        RescheduleSuggestion suggestion = getOwnedSuggestion(user.getId(), suggestionId);
+        RescheduleSuggestion suggestion = getOwnedSuggestionForUpdate(user.getId(), suggestionId);
         if (suggestion.getStatus() != RescheduleSuggestionStatus.PENDING) {
             throw new IllegalStateException("대기 중인 suggestion만 적용할 수 있습니다.");
         }
 
         StructuredAiCommandBatch batch = readBatch(suggestion.getSuggestionPayload());
+        ZoneId userZone = AiLocalDateTimeParser.resolveUserZone(user.getTimezone());
         List<AppliedCommandSnapshot> snapshots = new ArrayList<>();
         for (StructuredAiCommand command : batch.commands()) {
-            snapshots.add(applyCommandOrAbort(user.getId(), command));
+            snapshots.add(applyCommandOrAbort(user.getId(), userZone, command));
         }
         SuggestionExecutionSummaryResponse executionSummary = summarizeSnapshots(snapshots);
         if (executionSummary == null || executionSummary.appliedCount() == 0) {
@@ -169,7 +168,7 @@ public class RescheduleSuggestionService {
     @Transactional
     public RescheduleSuggestionResponse rejectSuggestion(UUID suggestionId, SuggestionDecisionRequest request) {
         AppUser user = currentUserProvider.getCurrentUser();
-        RescheduleSuggestion suggestion = getOwnedSuggestion(user.getId(), suggestionId);
+        RescheduleSuggestion suggestion = getOwnedSuggestionForUpdate(user.getId(), suggestionId);
         if (suggestion.getStatus() != RescheduleSuggestionStatus.PENDING) {
             throw new IllegalStateException("대기 중인 suggestion만 거절할 수 있습니다.");
         }
@@ -185,7 +184,7 @@ public class RescheduleSuggestionService {
     @Transactional
     public RescheduleSuggestionResponse revertSuggestion(UUID suggestionId, String revertReason) {
         AppUser user = currentUserProvider.getCurrentUser();
-        RescheduleSuggestion suggestion = getOwnedSuggestion(user.getId(), suggestionId);
+        RescheduleSuggestion suggestion = getOwnedSuggestionForUpdate(user.getId(), suggestionId);
         if (suggestion.getStatus() != RescheduleSuggestionStatus.APPLIED) {
             throw new IllegalStateException("적용된 suggestion만 되돌릴 수 있습니다.");
         }
@@ -224,6 +223,11 @@ public class RescheduleSuggestionService {
 
     private RescheduleSuggestion getOwnedSuggestion(UUID userId, UUID suggestionId) {
         return rescheduleSuggestionRepository.findByIdAndUserId(suggestionId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("해당 suggestion을 찾을 수 없습니다."));
+    }
+
+    private RescheduleSuggestion getOwnedSuggestionForUpdate(UUID userId, UUID suggestionId) {
+        return rescheduleSuggestionRepository.findByIdAndUserIdForUpdate(suggestionId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("해당 suggestion을 찾을 수 없습니다."));
     }
 
@@ -405,20 +409,20 @@ public class RescheduleSuggestionService {
         }
     }
 
-    private AppliedCommandSnapshot applyCommand(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot applyCommand(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         AgentCommandActionType actionType = AgentCommandActionType.from(command.actionType());
         AgentCommandTargetType targetType = AgentCommandTargetType.from(command.targetType());
 
         if (targetType == AgentCommandTargetType.TASK || actionType == AgentCommandActionType.RECOMMEND_TASK) {
-            return applyTaskCommand(userId, command, actionType);
+            return applyTaskCommand(userId, userZone, command, actionType);
         }
 
         if (targetType == AgentCommandTargetType.EVENT && command.targetId() != null && !command.targetId().isBlank()) {
             Optional<Event> event = eventRepository.findByIdAndUserId(UUID.fromString(command.targetId()), userId);
             if (event.isPresent()) {
                 return switch (actionType) {
-                    case MOVE_EVENT -> moveEvent(event.get(), command);
-                    case UPDATE_EVENT -> updateEvent(event.get(), command);
+                    case MOVE_EVENT -> moveEvent(event.get(), userZone, command);
+                    case UPDATE_EVENT -> updateEvent(event.get(), userZone, command);
                     case DELETE_EVENT -> deleteEvent(event.get(), command);
                     default -> noExecutableTarget(command, "canonical event에 적용할 수 없는 명령입니다.");
                 };
@@ -427,9 +431,9 @@ public class RescheduleSuggestionService {
 
         if (targetType == AgentCommandTargetType.EVENT
                 && actionType == AgentCommandActionType.CREATE_EVENT
-                && readInstant(command.payload(), "startAt", "start_at") != null
-                && readInstant(command.payload(), "endAt", "end_at") != null) {
-            return createEvent(userId, command);
+                && readInstant(userZone, command.payload(), "startAt", "start_at") != null
+                && readInstant(userZone, command.payload(), "endAt", "end_at") != null) {
+            return createEvent(userId, userZone, command);
         }
 
         return switch (actionType) {
@@ -448,35 +452,39 @@ public class RescheduleSuggestionService {
         };
     }
 
-    private AppliedCommandSnapshot applyCommandOrAbort(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot applyCommandOrAbort(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         try {
-            return applyCommand(userId, command);
+            return applyCommand(userId, userZone, command);
         } catch (DateTimeException | IllegalArgumentException | IllegalStateException exception) {
+            String detail = exception instanceof DateTimeParseException
+                    ? "AI가 돌려준 시간 형식을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z"
+                    : exception.getMessage();
             throw new UserActionRequiredException(
-                    "일부 변경을 적용할 수 없어 전체 적용을 중단했습니다: " + exception.getMessage()
+                    "일부 변경을 적용할 수 없어 전체 적용을 중단했습니다: " + detail
             );
         }
     }
 
     private AppliedCommandSnapshot applyTaskCommand(
             UUID userId,
+            ZoneId userZone,
             StructuredAiCommand command,
             AgentCommandActionType actionType
     ) {
         return switch (actionType) {
-            case CREATE_EVENT, RECOMMEND_TASK -> createTask(userId, command);
-            case MOVE_EVENT -> moveTask(userId, command);
-            case UPDATE_EVENT -> updateTask(userId, command);
+            case CREATE_EVENT, RECOMMEND_TASK -> createTask(userId, userZone, command);
+            case MOVE_EVENT -> moveTask(userId, userZone, command);
+            case UPDATE_EVENT -> updateTask(userId, userZone, command);
             case DELETE_EVENT -> deleteTask(userId, command);
             default -> noExecutableTarget(command, "canonical task에 적용할 수 없는 명령입니다.");
         };
     }
 
-    private AppliedCommandSnapshot createEvent(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot createEvent(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         Event event = new Event();
         event.setUserId(userId);
         event.setSourceType(EventSourceType.AGENT_GENERATED);
-        applyEventPayload(event, command.payload(), true);
+        applyEventPayload(event, command.payload(), true, userZone);
         Event saved = eventRepository.save(event);
         EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(saved, ProviderWriteOperation.CREATE);
         Event persisted = eventRepository.save(saved);
@@ -488,12 +496,12 @@ public class RescheduleSuggestionService {
         );
     }
 
-    private AppliedCommandSnapshot moveEvent(Event event, StructuredAiCommand command) {
+    private AppliedCommandSnapshot moveEvent(Event event, ZoneId userZone, StructuredAiCommand command) {
         EventRollbackState beforeState = snapshotEventRollback(event);
         try {
             Long shiftMinutes = readLong(command.payload(), "suggestedShiftMinutes", "suggested_shift_minutes");
-            Instant explicitStartAt = readInstant(command.payload(), "startAt", "start_at");
-            Instant explicitEndAt = readInstant(command.payload(), "endAt", "end_at");
+            Instant explicitStartAt = readInstant(userZone, command.payload(), "startAt", "start_at");
+            Instant explicitEndAt = readInstant(userZone, command.payload(), "endAt", "end_at");
             if (shiftMinutes != null) {
                 event.setStartAt(event.getStartAt().plusSeconds(shiftMinutes * 60L));
                 event.setEndAt(event.getEndAt().plusSeconds(shiftMinutes * 60L));
@@ -522,10 +530,10 @@ public class RescheduleSuggestionService {
         }
     }
 
-    private AppliedCommandSnapshot updateEvent(Event event, StructuredAiCommand command) {
+    private AppliedCommandSnapshot updateEvent(Event event, ZoneId userZone, StructuredAiCommand command) {
         EventRollbackState beforeState = snapshotEventRollback(event);
         try {
-            applyEventPayload(event, command.payload(), false);
+            applyEventPayload(event, command.payload(), false, userZone);
             validateEventRange(event);
             EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
             eventRepository.save(event);
@@ -559,11 +567,11 @@ public class RescheduleSuggestionService {
         }
     }
 
-    private AppliedCommandSnapshot createTask(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot createTask(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         Task task = new Task();
         task.setUserId(userId);
         task.setSourceType(TaskSourceType.AGENT_GENERATED);
-        applyTaskPayload(task, command.payload(), true);
+        applyTaskPayload(task, command.payload(), true, userZone);
         Task saved = taskRepository.save(task);
         EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(saved, ProviderWriteOperation.CREATE);
         Task persisted = taskRepository.save(saved);
@@ -575,10 +583,10 @@ public class RescheduleSuggestionService {
         );
     }
 
-    private AppliedCommandSnapshot moveTask(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot moveTask(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         Task task = getOwnedTask(userId, command);
         Long shiftMinutes = readLong(command.payload(), "suggestedShiftMinutes", "suggested_shift_minutes");
-        Instant dueDate = readInstant(command.payload(), "dueDate", "due_date");
+        Instant dueDate = readInstant(userZone, command.payload(), "dueDate", "due_date");
         TaskRollbackState beforeState = snapshotTaskRollback(task);
         try {
             if (dueDate != null) {
@@ -602,11 +610,11 @@ public class RescheduleSuggestionService {
         }
     }
 
-    private AppliedCommandSnapshot updateTask(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot updateTask(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         Task task = getOwnedTask(userId, command);
         TaskRollbackState beforeState = snapshotTaskRollback(task);
         try {
-            applyTaskPayload(task, command.payload(), false);
+            applyTaskPayload(task, command.payload(), false, userZone);
             EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
             taskRepository.save(task);
             return appliedProviderWriteSnapshot(
@@ -904,11 +912,11 @@ public class RescheduleSuggestionService {
         }
     }
 
-    private void applyEventPayload(Event event, Map<String, Object> payload, boolean requireTimeRange) {
+    private void applyEventPayload(Event event, Map<String, Object> payload, boolean requireTimeRange, ZoneId userZone) {
         String title = readString(payload, "title", "activity", "summary");
         String description = readString(payload, "description", "note");
-        Instant startAt = readInstant(payload, "startAt", "start_at");
-        Instant endAt = readInstant(payload, "endAt", "end_at");
+        Instant startAt = readInstant(userZone, payload, "startAt", "start_at");
+        Instant endAt = readInstant(userZone, payload, "endAt", "end_at");
         String category = readString(payload, "category");
         String priority = readString(payload, "priority");
         String goalId = readString(payload, "goalId", "goal_id");
@@ -951,10 +959,10 @@ public class RescheduleSuggestionService {
         }
     }
 
-    private void applyTaskPayload(Task task, Map<String, Object> payload, boolean requireTitle) {
+    private void applyTaskPayload(Task task, Map<String, Object> payload, boolean requireTitle, ZoneId userZone) {
         String title = readString(payload, "title", "activity", "summary");
         String description = readString(payload, "description", "note");
-        Instant dueDate = readInstant(payload, "dueDate", "due_date");
+        Instant dueDate = readInstant(userZone, payload, "dueDate", "due_date");
         String estimatedMinutes = readString(payload, "estimatedMinutes", "estimated_minutes");
         String priority = readString(payload, "priority");
         String goalId = readString(payload, "goalId", "goal_id");
@@ -1145,16 +1153,9 @@ public class RescheduleSuggestionService {
         );
     }
 
-    private Instant readInstant(Map<String, Object> payload, String... keys) {
+    private Instant readInstant(ZoneId userZone, Map<String, Object> payload, String... keys) {
         String value = readString(payload, keys);
-        if (value == null) {
-            return null;
-        }
-        try {
-            return Instant.parse(value);
-        } catch (DateTimeParseException exception) {
-            return LocalDateTime.parse(value).atZone(DEFAULT_AI_LOCAL_DATE_TIME_ZONE).toInstant();
-        }
+        return value == null ? null : AiLocalDateTimeParser.parseRequired(value, userZone);
     }
 
     private String blankToDefault(String value, String fallback) {

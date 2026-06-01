@@ -97,6 +97,8 @@ class AgentControllerTest {
                     newUser.setFocusAutoEnterEnabled(false);
                     return appUserRepository.save(newUser);
                 });
+        user.setTimezone("Asia/Seoul");
+        appUserRepository.save(user);
         savedUser = user;
 
         if (scheduleBlockRepository.findByUserId(user.getId()).isEmpty()) {
@@ -409,6 +411,55 @@ class AgentControllerTest {
                 .orElseThrow();
         assertThat(created.getStartAt()).isEqualTo(Instant.parse("2026-05-16T10:10:00Z"));
         assertThat(created.getEndAt()).isEqualTo(Instant.parse("2026-05-16T11:10:00Z"));
+    }
+
+    @Test
+    void applySuggestionParsesAiLocalDateTimeWithUserTimezone() throws Exception {
+        savedUser.setTimezone("America/New_York");
+        savedUser = appUserRepository.save(savedUser);
+        long eventCountBefore = eventRepository.count();
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "사용자 타임존 로컬 시각 AI 제안",
+                  "explanation": "timezone offset이 없는 AI 시각은 사용자 설정 timezone으로 해석해야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "title": "뉴욕 로컬 시각 회의",
+                        "startAt": "2026-05-16T19:10:00",
+                        "endAt": "2026-05-16T20:10:00",
+                        "category": "WORK"
+                      },
+                      "reason": "LLM local datetime",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "user timezone local datetime 적용"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"))
+                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1));
+
+        assertThat(eventRepository.count()).isEqualTo(eventCountBefore + 1);
+        Event created = eventRepository.findByUserIdOrderByStartAtAsc(savedUser.getId()).stream()
+                .filter(event -> "뉴욕 로컬 시각 회의".equals(event.getTitle()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(created.getStartAt()).isEqualTo(Instant.parse("2026-05-16T23:10:00Z"));
+        assertThat(created.getEndAt()).isEqualTo(Instant.parse("2026-05-17T00:10:00Z"));
     }
 
     @Test

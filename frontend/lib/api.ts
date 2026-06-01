@@ -252,8 +252,8 @@ export const api = {
     });
   },
 
-  getWeekSchedule() {
-    return requestRaw<WeekScheduleResponse>("/api/schedule/week");
+  getWeekSchedule(signal?: AbortSignal) {
+    return requestRaw<WeekScheduleResponse>("/api/schedule/week", { signal });
   },
 
   createScheduleBlock(request: CreateScheduleBlockRequest) {
@@ -293,8 +293,8 @@ export const api = {
     });
   },
 
-  getFocusCurrent() {
-    return requestEnvelope<FocusCurrentView>("/api/focus/current");
+  getFocusCurrent(signal?: AbortSignal) {
+    return requestEnvelope<FocusCurrentView>("/api/focus/current", { signal });
   },
 
   completeFocusItem(itemType: string, itemId: string) {
@@ -384,8 +384,8 @@ export const api = {
     throw new Error("삭제할 수 없는 포커스 항목입니다.");
   },
 
-  getSuggestions() {
-    return requestEnvelope<RescheduleSuggestion[]>("/api/agent/suggestions");
+  getSuggestions(signal?: AbortSignal) {
+    return requestEnvelope<RescheduleSuggestion[]>("/api/agent/suggestions", { signal });
   },
 
   applySuggestion(suggestionId: string, reason?: string) {

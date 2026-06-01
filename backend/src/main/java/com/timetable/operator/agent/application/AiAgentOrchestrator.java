@@ -64,7 +64,11 @@ public class AiAgentOrchestrator {
             AiAgentInterpretation interpretation,
             StructuredAiCommandBatch draft
     ) {
-        StructuredAiCommandBatch validated = validationService.requireExecutableOrClarification(request.user().getId(), draft);
+        StructuredAiCommandBatch validated = validationService.requireExecutableOrClarification(
+                request.user().getId(),
+                request.user().getTimezone(),
+                draft
+        );
         AiRequestProposalMatchService.MatchResult validationRepair = repairableValidationFailure(validated, draft);
         if (!validationRepair.matched()) {
             return new ResolutionAttempt(false, draft, validationRepair);

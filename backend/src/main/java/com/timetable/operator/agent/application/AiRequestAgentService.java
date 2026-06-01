@@ -3,7 +3,6 @@ package com.timetable.operator.agent.application;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
 import com.timetable.operator.auth.domain.AppUser;
 import com.timetable.operator.common.config.AppProperties;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,8 +37,8 @@ public class AiRequestAgentService {
         }
     }
 
-    public StructuredAiCommandBatch resolvePrebuiltCommandBatch(UUID userId, StructuredAiCommandBatch batch) {
-        return aiCommandValidationService.requireExecutableOrClarification(userId, batch);
+    public StructuredAiCommandBatch resolvePrebuiltCommandBatch(AppUser user, StructuredAiCommandBatch batch) {
+        return aiCommandValidationService.requireExecutableOrClarification(user.getId(), user.getTimezone(), batch);
     }
 
     private boolean aiEnabled() {

@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
   formatClockValue,
   formatServiceCopy,
@@ -41,6 +42,10 @@ const DEFAULT_FORM = {
 interface ScheduleData {
   week: WeekScheduleResponse | null;
   suggestions: RescheduleSuggestion[];
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 interface EditableScheduleBlock extends ScheduleBlock {
@@ -345,19 +350,24 @@ export function ScheduleView() {
   const [isMutating, setIsMutating] = useState(false);
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const loadSequenceRef = useRef(0);
 
-  async function loadSchedulePage() {
+  async function loadSchedulePage(signal?: AbortSignal) {
     if (!session?.authenticated) {
       return;
     }
 
     try {
+      const loadSequence = ++loadSequenceRef.current;
       setStatus("loading");
       const [week, suggestions] = await Promise.all([
-        api.getWeekSchedule(),
-        api.getSuggestions(),
+        api.getWeekSchedule(signal),
+        api.getSuggestions(signal),
       ]);
 
+      if (signal?.aborted || loadSequence !== loadSequenceRef.current) {
+        return;
+      }
       setData({
         week,
         suggestions: suggestions.data,
@@ -365,6 +375,12 @@ export function ScheduleView() {
       setStatus("ready");
       setError(null);
     } catch (loadError) {
+      if (isAbortError(loadError)) {
+        return;
+      }
+      if (signal?.aborted) {
+        return;
+      }
       setStatus("error");
       setError(loadError instanceof Error ? loadError.message : "페이지를 불러오지 못했습니다.");
     }
@@ -375,8 +391,12 @@ export function ScheduleView() {
       return;
     }
 
-    void loadSchedulePage();
+    const controller = new AbortController();
+    void loadSchedulePage(controller.signal);
+    return () => controller.abort();
   }, [session?.authenticated]);
+
+  useBodyScrollLock(isCreateModalOpen);
 
 
   useEffect(() => {

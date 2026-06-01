@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FocusActionBar } from "@/components/focus-action-bar";
 import { FocusRailCard } from "@/components/focus-rail-card";
 import { api } from "@/lib/api";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
   formatClockValue,
   formatRelativeMinutes,
@@ -39,6 +40,10 @@ interface FocusData {
   focus: FocusCurrentView | null;
   week: WeekScheduleResponse | null;
   suggestions: RescheduleSuggestion[];
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function focusTitle(view: FocusCurrentView | null, fallbackTitle: string | null) {
@@ -177,20 +182,25 @@ export function FocusView() {
     type: string;
     label: string;
   } | null>(null);
+  const loadSequenceRef = useRef(0);
 
-  async function loadFocusPage() {
+  async function loadFocusPage(signal?: AbortSignal) {
     if (!session?.authenticated) {
       return;
     }
 
     try {
+      const loadSequence = ++loadSequenceRef.current;
       setStatus("loading");
       const [focus, week, suggestions] = await Promise.all([
-        api.getFocusCurrent(),
-        api.getWeekSchedule(),
-        api.getSuggestions(),
+        api.getFocusCurrent(signal),
+        api.getWeekSchedule(signal),
+        api.getSuggestions(signal),
       ]);
 
+      if (signal?.aborted || loadSequence !== loadSequenceRef.current) {
+        return;
+      }
       setData({
         focus: focus.data,
         week,
@@ -199,6 +209,12 @@ export function FocusView() {
       setStatus("ready");
       setError(null);
     } catch (loadError) {
+      if (isAbortError(loadError)) {
+        return;
+      }
+      if (signal?.aborted) {
+        return;
+      }
       setStatus("error");
       setError(loadError instanceof Error ? loadError.message : "집중 화면을 준비하지 못했습니다.");
     }
@@ -209,8 +225,12 @@ export function FocusView() {
       return;
     }
 
-    void loadFocusPage();
+    const controller = new AbortController();
+    void loadFocusPage(controller.signal);
+    return () => controller.abort();
   }, [session?.authenticated]);
+
+  useBodyScrollLock(Boolean(deleteConfirmation));
 
   async function withFocusMutation(
     action: () => Promise<unknown>,

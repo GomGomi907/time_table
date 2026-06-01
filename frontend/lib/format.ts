@@ -4,7 +4,7 @@ function buildTimeFormatter(timeZone?: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
-    timeZone,
+    timeZone: normalizeTimeZone(timeZone),
   });
 }
 
@@ -14,8 +14,12 @@ function buildDateTimeFormatter(timeZone?: string) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone,
+    timeZone: normalizeTimeZone(timeZone),
   });
+}
+
+function normalizeTimeZone(timeZone?: string) {
+  return timeZone?.trim() || "UTC";
 }
 
 export function formatClockValue(
@@ -69,43 +73,18 @@ const SERVICE_COPY_EXACT_LABELS = new Map<string, string>([
   ["Mock Google 회의", "제품 리뷰 회의"],
 ]);
 
-const KOREAN_PARTICLE_GROUPS: Record<string, ["은" | "는", "이" | "가", "을" | "를"]> = {
-  "은": ["은", "이", "을"],
-  "는": ["은", "이", "을"],
-  "이": ["은", "이", "을"],
-  "가": ["은", "이", "을"],
-  "을": ["은", "이", "을"],
-  "를": ["은", "이", "을"],
+const LEGACY_TASK_PARTICLE: Record<string, string> = {
+  "은": "은",
+  "는": "은",
+  "이": "이",
+  "가": "이",
+  "을": "을",
+  "를": "을",
 };
-
-function hasFinalConsonant(value: string) {
-  const lastCode = value.charCodeAt(value.length - 1);
-  const hangulOffset = lastCode - 0xac00;
-  return hangulOffset >= 0 && hangulOffset <= 11171 && hangulOffset % 28 !== 0;
-}
-
-function particleFor(value: string, particle: string | undefined) {
-  if (!particle) {
-    return "";
-  }
-
-  const group = KOREAN_PARTICLE_GROUPS[particle];
-  if (!group) {
-    return particle;
-  }
-
-  if (particle === "은" || particle === "는") {
-    return hasFinalConsonant(value) ? group[0] : "는";
-  }
-  if (particle === "이" || particle === "가") {
-    return hasFinalConsonant(value) ? group[1] : "가";
-  }
-  return hasFinalConsonant(value) ? group[2] : "를";
-}
 
 function normalizeLegacyProductTerms(value: string) {
   return value.replace(/태스크([은는이가을를])?/g, (_match, particle: string | undefined) => (
-    `할 일${particleFor("할 일", particle)}`
+    `할 일${particle ? LEGACY_TASK_PARTICLE[particle] : ""}`
   ));
 }
 

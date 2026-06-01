@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 interface ConfirmDialogProps {
   title: string;
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  useBodyScrollLock(true);
 
   useEffect(() => {
     cancelButtonRef.current?.focus();

@@ -261,7 +261,7 @@ export interface FocusCurrentView {
   scheduleContext: FocusScheduleContext | null;
   preferenceContext: FocusPreferenceContext | null;
   recommendedTasks: RecommendedTask[];
-  activeSuggestion: unknown;
+  activeSuggestion: RescheduleSuggestion | null;
   remainingMinutes: number | null;
 }
 
