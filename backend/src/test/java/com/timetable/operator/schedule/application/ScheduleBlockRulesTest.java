@@ -62,6 +62,33 @@ class ScheduleBlockRulesTest {
     }
 
     @Test
+    void validateBatchRejectsExactDuplicateCandidates() {
+        UUID userId = UUID.randomUUID();
+
+        ScheduleBlock first = new ScheduleBlock();
+        first.setUserId(userId);
+        first.setDayOfWeek(DayOfWeek.MONDAY);
+        first.setStartTime(LocalTime.of(9, 0));
+        first.setEndTime(LocalTime.of(10, 0));
+        first.setActivity("중복 블록");
+        first.setCategory(ScheduleCategory.WORK);
+
+        ScheduleBlock duplicate = new ScheduleBlock();
+        duplicate.setUserId(userId);
+        duplicate.setDayOfWeek(DayOfWeek.MONDAY);
+        duplicate.setStartTime(LocalTime.of(9, 0));
+        duplicate.setEndTime(LocalTime.of(10, 0));
+        duplicate.setActivity("중복 블록");
+        duplicate.setCategory(ScheduleCategory.WORK);
+
+        when(scheduleBlockRepository.findByUserId(userId)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> scheduleBlockRules.validateBatch(userId, List.of(first, duplicate), false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("겹칩니다");
+    }
+
+    @Test
     void validateForUserRejectsBlocksShorterThanUiGranularity() {
         UUID userId = UUID.randomUUID();
         ScheduleBlock candidate = new ScheduleBlock();

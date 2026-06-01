@@ -90,6 +90,36 @@ class FlywayMigrationIntegrityTest {
         }
     }
 
+    @Test
+    void latestMigrationScopesSyncMappingsByUser() throws Exception {
+        String jdbcUrl = "jdbc:h2:file:%s;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
+                .formatted(tempDir.resolve("sync-mapping-scope").toAbsolutePath().toString().replace('\\', '/'));
+
+        Flyway.configure()
+                .dataSource(jdbcUrl, "sa", "")
+                .locations("classpath:db/migration")
+                .load()
+                .migrate();
+
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UUID localId = UUID.randomUUID();
+        String provider = "google_calendar";
+        String externalId = "shared-provider-object";
+
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, "sa", "")) {
+            insertUser(connection, userId);
+            insertUser(connection, otherUserId);
+
+            insertSyncMapping(connection, userId, localId, provider, externalId);
+            insertSyncMapping(connection, otherUserId, localId, provider, externalId);
+
+            assertEquals(2, syncMappingExternalIdCount(connection, provider, externalId));
+            assertThrows(SQLException.class, () -> insertSyncMapping(connection, userId, UUID.randomUUID(), provider, externalId));
+            assertThrows(SQLException.class, () -> insertSyncMapping(connection, userId, localId, provider, "another-provider-object"));
+        }
+    }
+
     private void insertUser(Connection connection, UUID userId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 insert into users (id, created_at, updated_at, email, display_name, provider)
@@ -192,6 +222,40 @@ class FlywayMigrationIntegrityTest {
     private int nullExternalIdCount(Connection connection, String tableName) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "select count(*) from " + tableName + " where external_source_id is null")) {
+            var resultSet = statement.executeQuery();
+            resultSet.next();
+            return resultSet.getInt(1);
+        }
+    }
+
+    private void insertSyncMapping(Connection connection, UUID userId, UUID localId, String provider, String externalId)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                insert into sync_mappings (
+                    id, created_at, updated_at, user_id, local_type, local_id, provider,
+                    external_id, sync_status, tombstone_state
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            Instant now = Instant.parse("2026-01-01T00:00:00Z");
+            statement.setObject(1, UUID.randomUUID());
+            statement.setTimestamp(2, Timestamp.from(now));
+            statement.setTimestamp(3, Timestamp.from(now));
+            statement.setObject(4, userId);
+            statement.setString(5, "EVENT");
+            statement.setObject(6, localId);
+            statement.setString(7, provider);
+            statement.setString(8, externalId);
+            statement.setString(9, "SYNCED");
+            statement.setString(10, "ACTIVE");
+            statement.executeUpdate();
+        }
+    }
+
+    private int syncMappingExternalIdCount(Connection connection, String provider, String externalId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "select count(*) from sync_mappings where provider = ? and external_id = ?")) {
+            statement.setString(1, provider);
+            statement.setString(2, externalId);
             var resultSet = statement.executeQuery();
             resultSet.next();
             return resultSet.getInt(1);

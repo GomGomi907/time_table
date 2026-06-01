@@ -21,6 +21,7 @@ import com.timetable.operator.schedule.domain.ScheduleBlock;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.schedule.domain.ScheduleSourceType;
 import com.timetable.operator.schedule.application.ScheduleBlockRules;
+import com.timetable.operator.schedule.application.ScheduleNoteSanitizer;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import com.timetable.operator.sync.application.ProviderWriteOutboxService;
 import com.timetable.operator.sync.application.ProviderWriteOutboxService.EnqueueResult;
@@ -149,7 +150,7 @@ public class RescheduleSuggestionService {
         StructuredAiCommandBatch batch = readBatch(suggestion.getSuggestionPayload());
         List<AppliedCommandSnapshot> snapshots = new ArrayList<>();
         for (StructuredAiCommand command : batch.commands()) {
-            snapshots.add(applyCommandSafely(user.getId(), command));
+            snapshots.add(applyCommandOrAbort(user.getId(), command));
         }
         SuggestionExecutionSummaryResponse executionSummary = summarizeSnapshots(snapshots);
         if (executionSummary == null || executionSummary.appliedCount() == 0) {
@@ -447,11 +448,13 @@ public class RescheduleSuggestionService {
         };
     }
 
-    private AppliedCommandSnapshot applyCommandSafely(UUID userId, StructuredAiCommand command) {
+    private AppliedCommandSnapshot applyCommandOrAbort(UUID userId, StructuredAiCommand command) {
         try {
             return applyCommand(userId, command);
         } catch (DateTimeException | IllegalArgumentException | IllegalStateException exception) {
-            return noExecutableTarget(command, "명령 적용 중 검증 오류가 발생해 건너뛰었습니다: " + exception.getMessage());
+            throw new UserActionRequiredException(
+                    "일부 변경을 적용할 수 없어 전체 적용을 중단했습니다: " + exception.getMessage()
+            );
         }
     }
 
@@ -897,7 +900,7 @@ public class RescheduleSuggestionService {
             block.setCategory(ScheduleCategory.LIFE);
         }
         if (note != null || requireAllFields) {
-            block.setNote(note == null || note.isBlank() ? null : note.trim());
+            block.setNote(ScheduleNoteSanitizer.cleanGeneratedNote(note));
         }
     }
 

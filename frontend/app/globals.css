@@ -543,7 +543,7 @@ summary,
 .app-right-rail {
   grid-column: 3;
   grid-row: 2;
-  align-self: stretch;
+  align-self: start;
   display: grid;
   position: static;
   width: 100%;
@@ -1219,21 +1219,27 @@ summary,
 
 @media (min-width: 1321px) {
   .app-frame.with-right-rail {
-    align-items: stretch;
+    align-items: start;
   }
 
   .app-frame.with-right-rail .page-stack,
-  .app-frame.with-right-rail .app-right-rail,
   .app-frame.with-right-rail .page-stack > .planner-layout,
-  .app-frame.with-right-rail .schedule-main-board,
+  .app-frame.with-right-rail .schedule-main-board {
+    min-height: 0;
+  }
+
+  .app-frame.with-right-rail .app-right-rail {
+    position: sticky;
+    top: var(--page-pad);
+    grid-template-rows: minmax(0, 1fr);
+    height: clamp(540px, calc(100vh - (var(--page-pad) * 2) - 150px), 760px);
+    max-height: calc(100vh - (var(--page-pad) * 2));
+  }
+
   .app-frame.with-right-rail .ai-chat-card {
     min-height: 0;
     height: 100%;
     max-height: 100%;
-  }
-
-  .app-frame.with-right-rail .app-right-rail {
-    grid-template-rows: minmax(0, 1fr);
   }
 }
 
@@ -1533,7 +1539,7 @@ button.current-schedule-card:hover {
   width: 100%;
   min-width: 0;
   gap: 4px;
-  overflow: visible;
+  overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--tone, var(--meeting)) 22%, transparent);
   border-radius: 14px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--tone, var(--meeting)) 13%, white), #fff);
@@ -1557,7 +1563,7 @@ button.current-schedule-card:hover {
   left: auto;
   top: auto;
   gap: 6px;
-  overflow: visible;
+  overflow: hidden;
   padding: 12px;
 }
 
@@ -1574,16 +1580,26 @@ button.current-schedule-card:hover {
   white-space: nowrap;
 }
 
+.mobile-schedule-block span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
 .week-stack-block strong {
-  overflow: visible;
-  text-overflow: clip;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .event-time,
 .event-note {
   color: var(--muted);
   font-size: 0.75rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 /* Forms/modal */
@@ -1609,6 +1625,16 @@ button.current-schedule-card:hover {
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow-strong);
   padding: clamp(18px, 3vw, 28px);
+}
+
+.confirm-dialog-panel {
+  width: min(100%, 440px);
+}
+
+.confirm-dialog-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
 }
 
 .modal-form {
@@ -1666,16 +1692,19 @@ button.current-schedule-card:hover {
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 20px;
   align-items: stretch;
+  min-width: 0;
 }
 
 .focus-primary,
 .focus-mode-card {
   position: relative;
   display: grid;
+  min-width: 0;
   gap: 22px;
   min-height: 620px;
   align-content: center;
   padding: clamp(28px, 5vw, 58px);
+  padding-top: clamp(88px, 7vw, 110px);
   background:
     radial-gradient(circle at 80% 12%, rgba(91, 110, 225, 0.14), transparent 38%),
     rgba(255, 255, 255, 0.9);
@@ -1692,6 +1721,7 @@ button.current-schedule-card:hover {
   font-size: 1.04rem;
   margin: 0 auto;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .focus-back-btn {
@@ -1701,6 +1731,12 @@ button.current-schedule-card:hover {
   width: 46px;
   min-height: 46px;
   padding: 0;
+}
+
+.focus-primary > .eyebrow {
+  justify-self: center;
+  max-width: calc(100% - 140px);
+  text-align: center;
 }
 
 .focus-back-icon {
@@ -1760,6 +1796,7 @@ button.current-schedule-card:hover {
 
 .focus-rail-card {
   display: grid;
+  min-width: 0;
   align-content: start;
   gap: 18px;
   padding: 22px;
@@ -1797,6 +1834,19 @@ button.current-schedule-card:hover {
   border-radius: 18px;
   background: rgba(255,255,255,0.72);
   padding: 14px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.next-card strong,
+.next-card p,
+.next-card span,
+.focus-rail-card strong,
+.focus-rail-card p,
+.focus-rail-card span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 .focus-rail-divider {
@@ -2112,6 +2162,7 @@ button.current-schedule-card:hover {
 
   .mobile-week-agenda {
     display: grid;
+    min-width: 0;
     gap: 14px;
   }
 
@@ -2122,6 +2173,7 @@ button.current-schedule-card:hover {
   .mobile-schedule-brief,
   .mobile-day-card {
     display: grid;
+    min-width: 0;
     gap: 12px;
     border: 1px solid var(--line);
     border-radius: var(--radius);
@@ -2134,6 +2186,7 @@ button.current-schedule-card:hover {
     display: grid;
     gap: 5px;
     width: 100%;
+    min-width: 0;
     border-radius: 16px;
     border: 1px solid var(--line);
     background: #fff;
@@ -2146,13 +2199,9 @@ button.current-schedule-card:hover {
     gap: 10px;
   }
 
-  .mobile-day-details summary {
-    cursor: pointer;
+  .mobile-day-head {
+    cursor: default;
     list-style: none;
-  }
-
-  .mobile-day-details summary::-webkit-details-marker {
-    display: none;
   }
 
   .mobile-empty-day {

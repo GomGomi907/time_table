@@ -54,6 +54,18 @@ class ReleaseRuntimeGuardTest {
     }
 
     @Test
+    void betaModeRejectsEnabledH2ConsoleEvenWithPostgres() {
+        AppProperties properties = properties("beta", false, true, "client-id", "client-secret", "gemini-key");
+        MockEnvironment environment = environment("jdbc:postgresql://localhost:5432/timetable", false)
+                .withProperty("spring.h2.console.enabled", "true");
+
+        assertThatThrownBy(() -> new ReleaseRuntimeGuard(properties, environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unsafe beta runtime configuration")
+                .hasMessageContaining("H2 console must be disabled");
+    }
+
+    @Test
     void cloudRunRejectsMissingReleaseMode() {
         AppProperties properties = properties("local", false, false, "client-id", "client-secret", null);
         MockEnvironment environment = environment("jdbc:postgresql://localhost:5432/timetable", false)
@@ -63,6 +75,33 @@ class ReleaseRuntimeGuardTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Unsafe local runtime configuration")
                 .hasMessageContaining("APP_RELEASE_MODE must be beta or production on Cloud Run");
+    }
+
+    @Test
+    void cloudRunRequiresExplicitReleaseModeEvenWhenSafeRuntimeFlagIsEnabled() {
+        AppProperties properties = properties("local", false, true, "client-id", "client-secret", "gemini-key");
+        MockEnvironment environment = environment("jdbc:postgresql://localhost:5432/timetable", false)
+                .withProperty("K_SERVICE", "timetable")
+                .withProperty("app.require-safe-runtime", "true");
+
+        assertThatThrownBy(() -> new ReleaseRuntimeGuard(properties, environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unsafe local runtime configuration")
+                .hasMessageContaining("APP_RELEASE_MODE must be beta or production on Cloud Run");
+    }
+
+    @Test
+    void explicitSafeRuntimeFlagEnforcesReleaseChecksOutsideCloudRun() {
+        AppProperties properties = properties("local", true, true, "client-id", "client-secret", "gemini-key");
+        MockEnvironment environment = environment("jdbc:h2:file:./data/timetable", true)
+                .withProperty("app.require-safe-runtime", "true");
+
+        assertThatThrownBy(() -> new ReleaseRuntimeGuard(properties, environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unsafe local runtime configuration")
+                .hasMessageContaining("APP_DB_URL must point to PostgreSQL/Cloud SQL")
+                .hasMessageContaining("mock login must be disabled")
+                .hasMessageContaining("mock Google sync must be disabled");
     }
 
     private static MockEnvironment environment(String datasourceUrl, boolean googleMockEnabled) {

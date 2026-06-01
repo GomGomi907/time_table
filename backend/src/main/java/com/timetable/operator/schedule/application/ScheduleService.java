@@ -101,7 +101,7 @@ public class ScheduleService {
         scheduleBlock.setEndTime(block.endTime());
         scheduleBlock.setActivity(block.activity());
         scheduleBlock.setCategory(parseCategory(block.category()));
-        scheduleBlock.setNote(blankToNull(block.note()));
+        scheduleBlock.setNote(ScheduleNoteSanitizer.cleanGeneratedNote(block.note()));
         scheduleBlock.setSourceType(ScheduleSourceType.AI_IMPORT);
         scheduleBlock.setSourceRef("gemini-api");
         return scheduleBlock;
@@ -111,17 +111,13 @@ public class ScheduleService {
         return ScheduleCategory.valueOf(category.trim().toUpperCase(Locale.ROOT));
     }
 
-    private String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
-    }
-
     private void applyManualBlock(ScheduleBlock block, ScheduleBlockWriteRequest request) {
         block.setDayOfWeek(request.dayOfWeek());
         block.setStartTime(request.startTime());
         block.setEndTime(request.endTime());
         block.setActivity(request.activity().trim());
         block.setCategory(request.category());
-        block.setNote(blankToNull(request.note()));
+        block.setNote(ScheduleNoteSanitizer.cleanManualNote(request.note()));
         block.setSourceType(ScheduleSourceType.MANUAL);
         block.setSourceRef("manual-edit");
     }

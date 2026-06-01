@@ -14,7 +14,7 @@ Date: 2026-04-26
 
 - [x] Persist onboarding completion in `onboarding_profiles`.
 - [x] Persist core rhythm answers: wake, work start, dinner, sleep, weekend style.
-- [x] Keep `localStorage` only for first-day handoff hints, not canonical completion state.
+- [x] Keep onboarding completion, answers, and first-day handoff state DB-backed; do not use `localStorage` for onboarding handoff.
 - [x] Cover onboarding status, answers, completion, and suggestion application with backend tests.
 - [x] Extend onboarding profile for detailed focus preferences when UX is fixed.
 

@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
 import { api } from "@/lib/api";
@@ -65,35 +66,16 @@ function getWeekBlocks(week: WeekScheduleResponse | null) {
   );
 }
 
-function dedupeBlocks<T extends ScheduleBlock & { dayOfWeek?: string }>(blocks: T[]) {
-  const seen = new Set<string>();
-  return blocks.filter((block) => {
-    const key = [
-      block.dayOfWeek ?? "",
-      block.startTime,
-      block.endTime,
-      block.activity.trim(),
-      block.category,
-      block.note?.trim() ?? "",
-    ].join("|");
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
-}
-
 function shouldShowInWeeklyStack(block: ScheduleBlock) {
   return block.category !== "SLEEP";
 }
 
 function getVisibleWeekBlocks(week: WeekScheduleResponse | null) {
-  return dedupeBlocks(getWeekBlocks(week).filter(shouldShowInWeeklyStack));
+  return getWeekBlocks(week).filter(shouldShowInWeeklyStack);
 }
 
 function getVisibleDailyBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
-  return dedupeBlocks(getDailyBlocks(week, dayOfWeek).filter(shouldShowInWeeklyStack));
+  return getDailyBlocks(week, dayOfWeek).filter(shouldShowInWeeklyStack);
 }
 
 function formatDurationLabel(totalMinutes: number) {
@@ -109,6 +91,18 @@ function formatDurationLabel(totalMinutes: number) {
 
 function visibleScheduleNote(note: string | null | undefined) {
   return formatUserMemo(note);
+}
+
+function scheduleBlockActionLabel(dayOfWeek: string, block: ScheduleBlock, stateLabel?: string) {
+  const pieces = [
+    stateLabel,
+    DAY_FULL_LABELS[dayOfWeek],
+    `${formatClockValue(block.startTime)}부터 ${formatClockValue(block.endTime)}까지`,
+    formatServiceCopy(block.activity),
+    CATEGORY_LABELS[block.category] ? `${CATEGORY_LABELS[block.category]} 일정` : null,
+  ].filter(Boolean);
+  const note = visibleScheduleNote(block.note);
+  return `${pieces.join(", ")}. ${note ? `메모: ${note}. ` : ""}선택하면 일정 편집 창을 엽니다.`;
 }
 
 function WeeklyStack({
@@ -183,6 +177,7 @@ function WeeklyStack({
                         <button
                           key={block.id}
                           type="button"
+                          aria-label={scheduleBlockActionLabel(day, block)}
                           className={`mobile-schedule-block ${categoryTone(block.category)}`}
                           onClick={() =>
                             onBlockSelect({
@@ -216,23 +211,11 @@ function WeeklyStack({
 
           return (
             <section className={`mobile-day-card ${isToday ? "today" : ""}`} key={day}>
-              {isToday ? (
-                <>
-                  <div className="mobile-day-head">
-                    <strong>오늘 · {DAY_FULL_LABELS[day]}</strong>
-                    <span>{blocks.length ? `${blocks.length}개 일정` : "비어 있음"}</span>
-                  </div>
-                  {cardContent}
-                </>
-              ) : (
-                <details className="mobile-day-details">
-                  <summary className="mobile-day-head">
-                    <strong>{DAY_FULL_LABELS[day]}</strong>
-                    <span>{blocks.length ? `${blocks.length}개 일정 보기` : "비어 있음"}</span>
-                  </summary>
-                  {cardContent}
-                </details>
-              )}
+              <div className="mobile-day-head">
+                <strong>{isToday ? "오늘 · " : ""}{DAY_FULL_LABELS[day]}</strong>
+                <span>{blocks.length ? `${blocks.length}개 일정` : "비어 있음"}</span>
+              </div>
+              {cardContent}
             </section>
           );
         })}
@@ -269,6 +252,7 @@ function WeeklyStack({
               <button
                 className={`current-schedule-card ${categoryTone(focusScheduleBlock.category)}`}
                 type="button"
+                aria-label={scheduleBlockActionLabel(currentDay, focusScheduleBlock, focusScheduleLabel)}
                 onClick={() =>
                   onBlockSelect({
                     ...focusScheduleBlock,
@@ -313,7 +297,7 @@ function WeeklyStack({
                         <button
                           key={block.id}
                           type="button"
-                          aria-label={`${DAY_FULL_LABELS[day]} ${formatClockValue(block.startTime)}부터 ${formatClockValue(block.endTime)}까지 ${formatServiceCopy(block.activity)} 수정`}
+                          aria-label={scheduleBlockActionLabel(day, block, isCurrentBlock ? "지금 일정" : undefined)}
                           className={`schedule-block week-stack-block ${categoryTone(block.category)} ${isCurrentBlock ? "current" : ""}`}
                           onClick={() =>
                             onBlockSelect({
@@ -357,6 +341,7 @@ export function ScheduleView() {
   const [requestReason, setRequestReason] = useState("");
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<EditableScheduleBlock | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -489,20 +474,16 @@ export function ScheduleView() {
     }
   }
 
-  async function handleDeleteBlock() {
-    if (!editingBlock || isMutating) {
-      return;
-    }
-
-    const confirmed = window.confirm(`"${editingBlock.activity}" 블록을 삭제할까요?`);
-    if (!confirmed) {
+  async function handleDeleteBlock(block: EditableScheduleBlock) {
+    if (isMutating) {
       return;
     }
 
     try {
       setIsMutating(true);
-      await api.deleteScheduleBlock(editingBlock.id);
+      await api.deleteScheduleBlock(block.id);
       setEditingBlock(null);
+      setDeleteCandidate(null);
       setForm(DEFAULT_FORM);
       setCreateModalOpen(false);
       showNotice({
@@ -873,7 +854,7 @@ export function ScheduleView() {
                     className="ghost-btn danger-btn"
                     type="button"
                     disabled={isMutating}
-                    onClick={() => void handleDeleteBlock()}
+                    onClick={() => setDeleteCandidate(editingBlock)}
                   >
                     삭제
                   </button>
@@ -893,6 +874,17 @@ export function ScheduleView() {
             </form>
           </div>
         </div>
+      ) : null}
+
+      {deleteCandidate ? (
+        <ConfirmDialog
+          title="일정 블록을 삭제할까요?"
+          description={`"${deleteCandidate.activity}" 블록을 삭제합니다. 삭제한 블록은 되돌릴 수 없습니다.`}
+          confirmLabel="삭제"
+          isPending={isMutating}
+          onCancel={() => setDeleteCandidate(null)}
+          onConfirm={() => void handleDeleteBlock(deleteCandidate)}
+        />
       ) : null}
     </AppShell>
   );

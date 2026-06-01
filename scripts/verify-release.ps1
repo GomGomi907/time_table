@@ -108,6 +108,23 @@ function Invoke-WorkspaceSecretHygiene {
   return "No blocking untracked/ignored secret-like files found outside approved local-only paths."
 }
 
+function Invoke-DeprecatedGemmaDocsGate {
+  $gemmaReadmePath = Join-Path $repoRoot "gemma4\README.md"
+  $rootReadmePath = Join-Path $repoRoot "README.md"
+  if (-not (Test-Path $gemmaReadmePath)) { throw "gemma4/README.md is missing; deprecated local LLM scope is undocumented." }
+  if (-not (Test-Path $rootReadmePath)) { throw "README.md is missing; root project map cannot mark gemma4 as non-runtime." }
+
+  $gemmaReadme = Get-Content $gemmaReadmePath -Raw
+  $rootReadme = Get-Content $rootReadmePath -Raw
+  foreach ($required in @("Deprecated Gemma 4 Workspace", "과거 로컬 LLM", "운영 배포 검증 대상이 아닙니다", "APP_GEMINI_API_KEY")) {
+    if (-not $gemmaReadme.Contains($required)) { throw "gemma4 README missing required deprecated-runtime marker: $required" }
+  }
+  if (-not ($rootReadme.Contains("gemma4/") -and $rootReadme.Contains("이전 로컬 LLM 실험 자산"))) {
+    throw "Root README must classify gemma4/ as previous local LLM experiment assets."
+  }
+  return "gemma4 is documented as deprecated, non-runtime local LLM experiment assets; runtime AI path points at Gemini."
+}
+
 function Invoke-BackendGate {
   Push-Location $backendDir
   try { .\gradlew.bat test; Assert-LastExitCode "backend test"; return "Gradle backend tests passed." } finally { Pop-Location }
@@ -187,6 +204,7 @@ if (-not $SkipSecretHygiene) {
   Invoke-Gate -Id "SEC-001" -Category "security" -Name "tracked and Docker-context secret hygiene" -Action { Assert-NoTrackedSecrets }
   Invoke-Gate -Id "SEC-002" -Category "security" -Name "workspace secret hygiene" -Action { Invoke-WorkspaceSecretHygiene }
 }
+Invoke-Gate -Id "REL-001" -Category "documentation" -Name "deprecated Gemma runtime exclusion" -Action { Invoke-DeprecatedGemmaDocsGate }
 if (-not $SkipBackend) { Invoke-Gate -Id "BE-001" -Category "backend" -Name "backend regression gate" -Action { Invoke-BackendGate } }
 if (-not $SkipFrontend) { Invoke-Gate -Id "FE-001" -Category "frontend" -Name "frontend regression gate" -Action { Invoke-FrontendGate } }
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { AppShell } from "@/components/app-shell";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FocusActionBar } from "@/components/focus-action-bar";
 import { FocusRailCard } from "@/components/focus-rail-card";
 import { api } from "@/lib/api";
@@ -171,6 +172,11 @@ export function FocusView() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    id: string;
+    type: string;
+    label: string;
+  } | null>(null);
 
   async function loadFocusPage() {
     if (!session?.authenticated) {
@@ -284,14 +290,22 @@ export function FocusView() {
     }
 
     const itemLabel = currentItem.type.toLowerCase() === "task" ? "할 일" : "일정";
-    const confirmed = window.confirm(`현재 ${itemLabel}을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`);
-    if (!confirmed) {
+    setDeleteConfirmation({
+      id: currentItem.id,
+      type: currentItem.type,
+      label: itemLabel,
+    });
+  }
+
+  function confirmDeleteCurrentItem() {
+    if (!deleteConfirmation) {
       return;
     }
-
+    const item = deleteConfirmation;
+    setDeleteConfirmation(null);
     void withFocusMutation(
-      () => api.deleteFocusItem(currentItem.type, currentItem.id),
-      `현재 ${itemLabel}을 삭제했습니다.`,
+      () => api.deleteFocusItem(item.type, item.id),
+      `현재 ${item.label}을 삭제했습니다.`,
     );
   }
 
@@ -483,6 +497,16 @@ export function FocusView() {
           </div>
         )}
       </section>
+      {deleteConfirmation ? (
+        <ConfirmDialog
+          title={`현재 ${deleteConfirmation.label}을 삭제할까요?`}
+          description="삭제하면 되돌릴 수 없습니다. 계속하려면 삭제를 선택하세요."
+          confirmLabel="삭제"
+          isPending={isMutating}
+          onCancel={() => setDeleteConfirmation(null)}
+          onConfirm={confirmDeleteCurrentItem}
+        />
+      ) : null}
     </AppShell>
   );
 }

@@ -55,26 +55,10 @@ export const CATEGORY_LABELS: Record<string, string> = {
   HEALTH: "건강",
 };
 
-export const PIXELS_PER_MINUTE = 0.95;
-export const DEFAULT_WEEK_VIEW_START_MINUTES = 6 * 60;
-export const DEFAULT_WEEK_VIEW_END_MINUTES = 24 * 60;
-export const DAY_TRACK_HEIGHT =
-  (DEFAULT_WEEK_VIEW_END_MINUTES - DEFAULT_WEEK_VIEW_START_MINUTES) * PIXELS_PER_MINUTE;
-const MIN_RENDERED_BLOCK_MINUTES = 30;
-const BLOCK_HORIZONTAL_INSET = 6;
-const BLOCK_HORIZONTAL_GAP = 6;
 const LOW_SIGNAL_ROUTINE_PATTERN =
   /(기상|출근|퇴근|등교|하교|이동|저녁|점심|아침|샤워|정리|취침|수면|준비)/;
 const GENERIC_WORK_PATTERN = /^근무(?:$|\s|\()/;
-
-export interface PositionedScheduleBlock extends ScheduleBlock {
-  top: string;
-  height: string;
-  left: string;
-  width: string;
-  isCompact: boolean;
-  isTight: boolean;
-}
+const CLOCK_VALUE_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/;
 
 export interface UpcomingScheduleBlock extends ScheduleBlock {
   dayOfWeek: string;
@@ -99,165 +83,29 @@ function getNowParts(timeZone?: string) {
 }
 
 export function minutesFromClock(value: string) {
-  const [hour, minute] = value.split(":").map(Number);
-  return hour * 60 + minute;
+  const match = CLOCK_VALUE_PATTERN.exec(value);
+  if (!match) {
+    throw new Error(`Invalid clock value: ${value}`);
+  }
+
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 export function durationInMinutes(startTime: string, endTime: string) {
   const start = minutesFromClock(startTime);
   const end = minutesFromClock(endTime);
   const diff = end - start;
-  return diff > 0 ? diff : diff + 24 * 60;
-}
-
-export function getBlockPosition(block: ScheduleBlock) {
-  const start = minutesFromClock(block.startTime);
-  const duration = Math.max(durationInMinutes(block.startTime, block.endTime), MIN_RENDERED_BLOCK_MINUTES);
-
-  return {
-    top: `${start * PIXELS_PER_MINUTE}px`,
-    height: `${duration * PIXELS_PER_MINUTE}px`,
-  };
-}
-
-function getHorizontalBlockStyle(column: number, columns: number) {
-  const sharedWidth = `((100% - ${BLOCK_HORIZONTAL_INSET * 2}px - ${(columns - 1) * BLOCK_HORIZONTAL_GAP}px) / ${columns})`;
-
-  return {
-    width: `calc(${sharedWidth})`,
-    left: `calc(${BLOCK_HORIZONTAL_INSET}px + (${column} * (${sharedWidth} + ${BLOCK_HORIZONTAL_GAP}px)))`,
-  };
-}
-
-export function getLaidOutBlocks(
-  blocks: ScheduleBlock[],
-  viewportStart = DEFAULT_WEEK_VIEW_START_MINUTES,
-  viewportEnd = DEFAULT_WEEK_VIEW_END_MINUTES,
-): PositionedScheduleBlock[] {
-  if (!blocks.length) {
-    return [];
+  if (diff > 0) {
+    return diff;
   }
-
-  const prepared = [...blocks]
-    .map((block) => {
-      const start = minutesFromClock(block.startTime);
-      const actualDuration = durationInMinutes(block.startTime, block.endTime);
-      const shouldShiftAfterMidnight =
-        start < viewportStart && start + 24 * 60 < viewportEnd;
-      const layoutStart = shouldShiftAfterMidnight ? start + 24 * 60 : start;
-      const actualEnd = layoutStart + actualDuration;
-      const visibleStart = Math.max(layoutStart, viewportStart);
-      const visibleEnd = Math.min(actualEnd, viewportEnd);
-      const visibleDuration = visibleEnd - visibleStart;
-
-      if (visibleDuration <= 0) {
-        return null;
-      }
-
-      return {
-        block,
-        start,
-        layoutStart: visibleStart,
-        end: visibleEnd,
-        actualDuration,
-        displayDuration: Math.max(visibleDuration, MIN_RENDERED_BLOCK_MINUTES),
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null)
-    .sort((left, right) => {
-      if (left.layoutStart !== right.layoutStart) {
-        return left.layoutStart - right.layoutStart;
-      }
-
-      return right.end - left.end;
-    });
-
-  const positioned: PositionedScheduleBlock[] = [];
-  let cluster: typeof prepared = [];
-  let clusterEnd = -1;
-
-  function flushCluster() {
-    if (!cluster.length) {
-      return;
-    }
-
-    const columnEnds: number[] = [];
-    const clusterItems = cluster.map((item) => {
-      const visualEnd = item.layoutStart + item.displayDuration;
-      const column = columnEnds.findIndex((end) => end <= item.layoutStart);
-      const nextColumn = column === -1 ? columnEnds.length : column;
-      columnEnds[nextColumn] = visualEnd;
-
-      return {
-        item,
-        column: nextColumn,
-      };
-    });
-
-    const columns = Math.max(columnEnds.length, 1);
-
-    clusterItems.forEach(({ item, column }) => {
-      const blockHeight = item.displayDuration * PIXELS_PER_MINUTE;
-      const horizontal = getHorizontalBlockStyle(column, columns);
-
-      positioned.push({
-        ...item.block,
-        top: `${(item.layoutStart - viewportStart) * PIXELS_PER_MINUTE}px`,
-        height: `${blockHeight}px`,
-        left: horizontal.left,
-        width: horizontal.width,
-        isCompact: item.actualDuration <= 40 || item.displayDuration <= 40 || columns > 1,
-        isTight: item.actualDuration <= 25,
-      });
-    });
-
-    cluster = [];
-    clusterEnd = -1;
+  if (diff === 0) {
+    return 0;
   }
-
-  prepared.forEach((item) => {
-    if (!cluster.length) {
-      cluster = [item];
-      clusterEnd = item.layoutStart + item.displayDuration;
-      return;
-    }
-
-    if (item.layoutStart < clusterEnd) {
-      cluster.push(item);
-      clusterEnd = Math.max(clusterEnd, item.layoutStart + item.displayDuration);
-      return;
-    }
-
-    flushCluster();
-    cluster = [item];
-    clusterEnd = item.layoutStart + item.displayDuration;
-  });
-
-  flushCluster();
-
-  return positioned;
+  return diff + 24 * 60;
 }
 
 export function getDailyBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
   return week?.week.find((day) => day.dayOfWeek === dayOfWeek)?.blocks ?? [];
-}
-
-function dedupeScheduleBlocks(blocks: ScheduleBlock[]) {
-  const seen = new Set<string>();
-  return blocks.filter((block) => {
-    const key = [
-      block.startTime,
-      block.endTime,
-      block.activity.trim(),
-      block.category,
-      block.note?.trim() ?? "",
-    ].join("|");
-    if (seen.has(key)) {
-      return false;
-    }
-    seen.add(key);
-    return true;
-  });
 }
 
 export function isPlanningSignalBlock(block: ScheduleBlock) {
@@ -280,10 +128,10 @@ export function isPlanningSignalBlock(block: ScheduleBlock) {
 }
 
 function getPlanningSignalBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
-  const blocks = dedupeScheduleBlocks(getDailyBlocks(week, dayOfWeek).filter(isPlanningSignalBlock));
+  const blocks = getDailyBlocks(week, dayOfWeek).filter(isPlanningSignalBlock);
   return blocks.length
     ? blocks
-    : dedupeScheduleBlocks(getDailyBlocks(week, dayOfWeek).filter((block) => block.category !== "SLEEP"));
+    : getDailyBlocks(week, dayOfWeek).filter((block) => block.category !== "SLEEP");
 }
 
 function sortBlocksByStart(blocks: ScheduleBlock[]) {

@@ -12,6 +12,7 @@ Do not invite beta users until every P0 gate in
 Hard no-go conditions:
 
 - beta runtime uses H2 or omits `APP_RELEASE_MODE=beta`
+- H2 console is enabled, or beta sessions keep the local fallback timeout instead of an explicit `APP_SESSION_TIMEOUT`
 - mock login or mock Google sync is enabled
 - OAuth/Gemini/DB secrets are in source, screenshots, logs, or build context
 - Google OAuth/Calendar/Tasks live smoke tests have not passed
@@ -44,6 +45,8 @@ Do not paste values into reports. Record only secret names, versions, and deploy
 | Area | Variable | Source |
 |---|---|---|
 | Runtime mode | `APP_RELEASE_MODE=beta` | explicit beta fail-closed guard |
+| Runtime guard | `APP_REQUIRE_SAFE_RUNTIME=true` | optional non-Cloud-Run fail-closed guard |
+| Session | `APP_SESSION_TIMEOUT=4h` or shorter | public/shared-device risk reduction |
 | Frontend origin | `APP_FRONTEND_URL` | Cloud Run service URL/custom domain |
 | Backend DB | `APP_DB_URL` | Cloud SQL PostgreSQL JDBC URL |
 | Backend DB | `APP_DB_USERNAME` | Secret Manager pinned version |
@@ -54,6 +57,7 @@ Do not paste values into reports. Record only secret names, versions, and deploy
 | Gemini | `APP_GEMINI_API_KEY` | Secret Manager pinned version |
 | Safety | `APP_AUTH_MOCK_LOGIN_ENABLED=false` | explicit beta env |
 | Safety | `APP_SYNC_GOOGLE_MOCK_ENABLED=false` | explicit beta env |
+| Safety | `APP_H2_CONSOLE_ENABLED=false` | explicit beta env |
 
 ## 4. Pre-deploy hygiene checklist
 

@@ -3,6 +3,7 @@ import { expect, Locator, Page, TestInfo, test } from "@playwright/test";
 import {
   assertNoHorizontalOverflow,
   assertNoInternalUserCopy,
+  assertNoVisibleElementOverflowsViewport,
   assertSelectorTextDoesNotOverflow,
   assertSingleLineBySelector,
   assertSingleVisibleByTestId,
@@ -65,6 +66,12 @@ function isActiveNow(block: { startTime: string; endTime: string }, currentMinut
   return normalizedNow >= start && normalizedNow < end;
 }
 
+function nextBackendDay(dayOfWeek: string) {
+  const days = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+  const index = days.indexOf(dayOfWeek);
+  return days[(index + 1) % days.length] ?? "TUESDAY";
+}
+
 function preferredAction(
   page: Page,
   testId: string,
@@ -79,6 +86,7 @@ function preferredAction(
 
 async function assertReleaseVisualDiscipline(page: Page) {
   await assertNoHorizontalOverflow(page);
+  await assertNoVisibleElementOverflowsViewport(page);
   await assertNoInternalUserCopy(page);
 
   await expect
@@ -107,8 +115,8 @@ async function assertReleaseVisualDiscipline(page: Page) {
 async function assertScheduleRightRailContract(page: Page) {
   const appRail = await assertSingleVisibleByTestId(page, "app-right-rail");
   const scheduleRail = await assertSingleVisibleByTestId(page, "schedule-ai-right-rail");
-  await assertSingleVisibleByTestId(page, "schedule-ai-request-input");
-  await assertSingleVisibleByTestId(page, "schedule-ai-request-submit");
+  const requestInput = await assertSingleVisibleByTestId(page, "schedule-ai-request-input");
+  const requestSubmit = await assertSingleVisibleByTestId(page, "schedule-ai-request-submit");
   await assertSingleLineBySelector(page, "[data-testid='schedule-pending-count']");
 
   const viewport = page.viewportSize();
@@ -119,13 +127,18 @@ async function assertScheduleRightRailContract(page: Page) {
     const boardBox = await board.boundingBox();
     const appRailBox = await appRail.boundingBox();
     const scheduleRailBox = await scheduleRail.boundingBox();
-    if (!boardBox || !appRailBox || !scheduleRailBox) {
+    const inputBox = await requestInput.boundingBox();
+    const submitBox = await requestSubmit.boundingBox();
+    if (!boardBox || !appRailBox || !scheduleRailBox || !inputBox || !submitBox || !viewport) {
       throw new Error("Schedule board and AI right rail must have visible geometry.");
     }
     expect(appRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
     expect(scheduleRailBox.x).toBeGreaterThan(boardBox.x + boardBox.width + 12);
-    expect(Math.abs(scheduleRailBox.y - boardBox.y)).toBeLessThanOrEqual(18);
-    expect(Math.abs(scheduleRailBox.height - boardBox.height)).toBeLessThanOrEqual(18);
+    expect(scheduleRailBox.y - boardBox.y).toBeGreaterThanOrEqual(-2);
+    expect(scheduleRailBox.y - boardBox.y).toBeLessThanOrEqual(72);
+    expect(scheduleRailBox.height).toBeLessThanOrEqual(viewport.height - 36);
+    expect(inputBox.y + inputBox.height).toBeLessThanOrEqual(viewport.height - 20);
+    expect(submitBox.y + submitBox.height).toBeLessThanOrEqual(viewport.height - 20);
     expect(scheduleRailBox.width).toBeLessThanOrEqual(380);
     return;
   }
@@ -239,6 +252,14 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
     await clearScheduleBlocksForDay(page, currentDay);
     await createScheduleBlockViaApi(page, buildActiveScheduleBlock(activeScheduleTitle));
   }
+  await createScheduleBlockViaApi(page, {
+    dayOfWeek: nextBackendDay(currentDay),
+    startTime: "16:10",
+    endTime: "16:40",
+    activity: "매우긴일정명으로레이아웃오버플로우를검증하는QA블록",
+    category: "WORK",
+    note: "공백없이길게이어지는메모텍스트가카드밖으로삐져나오지않아야합니다".repeat(2),
+  });
 
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: /오늘 일정은|오늘 예정된 일정이 없습니다/ }).first()).toBeVisible({

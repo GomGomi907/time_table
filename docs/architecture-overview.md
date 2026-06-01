@@ -67,7 +67,7 @@ flowchart LR
 | `user_preferences` | 조용한 시간, 버퍼, 개입 빈도, 집중 선호값 | `users`와 1:1 |
 | `onboarding_profiles` | 온보딩 답변과 완료 시각 | `users`와 1:1 |
 
-`onboarding_profiles`는 온보딩 완료 여부의 canonical source다. 프론트의 `localStorage`는 온보딩 직후 첫날 안내 같은 handoff 보조 용도로만 사용한다.
+`onboarding_profiles`는 온보딩 완료 여부의 canonical source다. 2026-06-02 기준 프론트 소스는 온보딩 완료/답변 handoff에 `localStorage`를 사용하지 않는다. 향후 보조 handoff를 추가하더라도 canonical 상태로 쓰면 안 되며, `frontend/scripts/verify-hygiene.mjs` allowlist와 E2E storage policy test를 먼저 갱신해야 한다.
 
 ### 3.2 Planning Core
 
@@ -265,9 +265,8 @@ frontend/
 | `use-session-bootstrap.ts` | 앱 진입 시 `/api/auth/session` 확인 |
 | `use-onboarding-bootstrap.ts` | 온보딩 상태 확인 및 guard |
 | `stores/app-store.ts` | notice, session cache 등 가벼운 클라이언트 상태 |
-| `onboarding-day-handoff.ts` | 온보딩 직후 첫날 안내용 localStorage |
 
-중요한 사용자 상태는 DB에 저장하고, 프론트 store/localStorage는 화면 전환과 알림 보조에만 둔다.
+중요한 사용자 상태는 DB에 저장한다. 프론트 store는 화면 전환과 알림 보조에만 두며, 현재 프론트 소스는 `localStorage` 기반 온보딩 handoff를 쓰지 않는다.
 
 ## 6. 기능별 데이터 흐름
 
@@ -394,6 +393,8 @@ sequenceDiagram
 
 승인된 local/manual/focus/AI 변경은 먼저 로컬 DB에 커밋되고, Google 호출은 outbox flush에서 수행한다. 이 구조는 provider 실패가 사용자의 승인된 로컬 변경을 롤백하지 않도록 하며, dashboard는 `pendingProviderWriteCount`와 capability label로 대기/재연결 상태를 보여준다.
 
+현재 운영상 한계도 명확하다. Provider write-back은 outbox와 수동 outbound sync 경로로 검증되어 있지만, 별도 자동 flush worker와 provider exactly-once 보장은 아직 다음 단계다. Dirty local row와 변경된 remote etag가 동시에 존재하는 conflict materialization 역시 구조는 있으나 사용자 친화적인 conflict review UX까지 완성된 상태는 아니다.
+
 ### 6.8 AI Reschedule Suggestions
 
 AI 재배치 흐름은 아직 user-confirmed UX다.
@@ -402,7 +403,7 @@ AI 재배치 흐름은 아직 user-confirmed UX다.
 2. `RescheduleSuggestionService`가 structured command batch를 만든다.
 3. `reschedule_suggestions`에 payload와 상태를 저장한다.
 4. 프론트는 preview, executable 여부, 적용/거절 액션을 보여준다.
-5. 사용자가 적용하면 백엔드가 실행 가능한 command만 반영하고 execution summary를 남긴다.
+5. 사용자가 적용하면 백엔드가 실행 가능한 command를 하나의 트랜잭션에서 반영한다. 중간 명령 검증이 실패하면 앞선 변경도 롤백하고 suggestion은 `pending`으로 남긴다.
 
 2026-05-15 이후 `target_type=event` 명령은 먼저 canonical `events`를 찾고, 없으면 legacy `schedule_blocks` 호환 경로로 fallback한다. `target_type=task` 명령은 canonical `tasks`를 수정하며 provider write outbox를 예약한다.
 
@@ -425,7 +426,8 @@ AI 재배치 흐름은 아직 user-confirmed UX다.
 | Docker/CI | 의도적으로 보류 | packaging 단계에서 backend/frontend/E2E wrapper 작성 |
 | Google sync | inbound + write-capable scopes + provider write outbox foundation | token refresh, reconnect UX, mocked write-back E2E, conflict review UX |
 | Conflict UI | DB record와 resolve API 존재 | 사용자 친화적인 conflict review 화면 필요 |
-| API 응답 형식 | envelope와 raw DTO 혼재 | 신규 API는 envelope로 통일 권장 |
+| API 응답 형식 | Auth/Onboarding/Schedule legacy raw DTO와 envelope DTO가 공존 | 신규 API는 envelope 기본, raw 예외는 `frontend/scripts/verify-hygiene.mjs` allowlist에 명시 |
+| Schedule duplicate ownership | 프론트 presentation dedupe 제거, 백엔드 `ScheduleBlockRules`가 중복/겹침 방지 | DB unique constraint는 아직 없으므로 service/API 테스트 유지 |
 | Settings UI | backend contract 존재 | 프론트 설정 화면을 별도 노출 가능 |
 | AI 재배치 | proposal/apply가 canonical Event/Task와 legacy ScheduleBlock 경로를 지원 | 설명 품질, command coverage, revert의 provider side-effect 강화 |
 

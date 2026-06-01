@@ -469,6 +469,122 @@ class AgentControllerTest {
     }
 
     @Test
+    void applySuggestionRollsBackEntireBatchWhenLaterCommandFails() throws Exception {
+        long blockCountBefore = scheduleBlockRepository.count();
+        RescheduleSuggestion suggestion = new RescheduleSuggestion();
+        suggestion.setUserId(savedUser.getId());
+        suggestion.setTriggerType(RescheduleSuggestionTriggerType.MANUAL_REQUEST);
+        suggestion.setStatus(RescheduleSuggestionStatus.PENDING);
+        suggestion.setSummary("원자성 검증");
+        suggestion.setReason("첫 명령 성공 후 두 번째 명령 실패");
+        suggestion.setExplanation("부분 적용 없이 전체 적용을 중단해야 한다.");
+        suggestion.setSuggestionPayload("""
+                {
+                  "summary": "원자성 검증",
+                  "explanation": "부분 적용 없이 전체 적용을 중단해야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "dayOfWeek": "THURSDAY",
+                        "startTime": "13:00",
+                        "endTime": "14:00",
+                        "activity": "롤백되어야 하는 일정",
+                        "category": "WORK"
+                      },
+                      "reason": "첫 번째 명령",
+                      "requires_confirmation": true
+                    },
+                    {
+                      "action_type": "move_event",
+                      "target_type": "event",
+                      "target_id": "00000000-0000-0000-0000-000000000001",
+                      "payload": {
+                        "suggestedShiftMinutes": 30
+                      },
+                      "reason": "존재하지 않는 대상",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+        RescheduleSuggestion savedSuggestion = rescheduleSuggestionRepository.save(suggestion);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "부분 적용 방지"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("전체 적용을 중단")));
+
+        assertThat(scheduleBlockRepository.count()).isEqualTo(blockCountBefore);
+        assertThat(scheduleBlockRepository.findByUserId(savedUser.getId()).stream()
+                .noneMatch(block -> "롤백되어야 하는 일정".equals(block.getActivity()))).isTrue();
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
+    void applySuggestionDoesNotPersistGeneratedMemoNoise() throws Exception {
+        RescheduleSuggestion suggestion = new RescheduleSuggestion();
+        suggestion.setUserId(savedUser.getId());
+        suggestion.setTriggerType(RescheduleSuggestionTriggerType.MANUAL_REQUEST);
+        suggestion.setStatus(RescheduleSuggestionStatus.PENDING);
+        suggestion.setSummary("메모 정제 검증");
+        suggestion.setReason("AI가 설명형 메모를 payload에 넣었다.");
+        suggestion.setExplanation("사용자 일정 메모에는 AI 근거 문장이 저장되면 안 된다.");
+        suggestion.setSuggestionPayload("""
+                {
+                  "summary": "메모 정제 검증",
+                  "explanation": "사용자 일정 메모에는 AI 근거 문장이 저장되면 안 된다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "dayOfWeek": "FRIDAY",
+                        "startTime": "15:00",
+                        "endTime": "16:00",
+                        "activity": "메모 정제 일정",
+                        "category": "LIFE",
+                        "note": "퇴근 후 회복 시간을 기본 블록으로 남겨 조정안이 과하게 침범하지 않게 합니다."
+                      },
+                      "reason": "AI 설명형 메모 제거",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+        RescheduleSuggestion savedSuggestion = rescheduleSuggestionRepository.save(suggestion);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "메모 정제 적용"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1));
+
+        ScheduleBlock created = scheduleBlockRepository.findByUserId(savedUser.getId()).stream()
+                .filter(block -> "메모 정제 일정".equals(block.getActivity()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(created.getNote()).isNull();
+    }
+
+    @Test
     void chatSuggestionApplyMutatesCanonicalEventAndQueuesProviderWrite() throws Exception {
         Event event = new Event();
         event.setUserId(savedUser.getId());

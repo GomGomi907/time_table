@@ -131,6 +131,36 @@ class ScheduleControllerTest {
     }
 
     @Test
+    void duplicateManualBlockReturnsBadRequestJson() throws Exception {
+        String payload = """
+                {
+                  "dayOfWeek": "TUESDAY",
+                  "startTime": "13:00",
+                  "endTime": "14:00",
+                  "activity": "중복 방지 블록",
+                  "category": "WORK",
+                  "note": "duplicate guard"
+                }
+                """;
+
+        mockMvc.perform(post("/api/schedule/blocks")
+                        .with(user("duplicate-tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/schedule/blocks")
+                        .with(user("duplicate-tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(content().string(containsString("겹칩니다")));
+    }
+
+    @Test
     void oversizedManualBlockTextReturnsBadRequestJson() throws Exception {
         String oversizedActivity = "긴 활동".repeat(90);
         String oversizedNote = "긴 메모".repeat(260);

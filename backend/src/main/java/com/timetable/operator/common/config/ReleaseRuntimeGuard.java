@@ -22,9 +22,11 @@ public class ReleaseRuntimeGuard implements InitializingBean {
 
     void validate() {
         String releaseMode = normalize(appProperties.releaseMode());
-        boolean releaseRuntime = isReleaseMode(releaseMode);
+        boolean safeRuntimeRequired = environment.getProperty("app.require-safe-runtime", Boolean.class, false);
+        boolean explicitReleaseMode = isReleaseMode(releaseMode);
+        boolean releaseRuntime = explicitReleaseMode || safeRuntimeRequired;
         List<String> violations = new ArrayList<>();
-        if (isCloudRun() && !releaseRuntime) {
+        if (isCloudRun() && !explicitReleaseMode) {
             violations.add("APP_RELEASE_MODE must be beta or production on Cloud Run");
         }
         if (!releaseRuntime && violations.isEmpty()) {
@@ -39,6 +41,9 @@ public class ReleaseRuntimeGuard implements InitializingBean {
         }
         if (environment.getProperty("app.sync.google.mock-enabled", Boolean.class, false)) {
             violations.add("mock Google sync must be disabled");
+        }
+        if (environment.getProperty("spring.h2.console.enabled", Boolean.class, false)) {
+            violations.add("H2 console must be disabled");
         }
         if (!appProperties.googleOauthEnabled()) {
             violations.add("Google OAuth credentials are required");

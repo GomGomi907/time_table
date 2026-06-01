@@ -239,6 +239,48 @@ export async function assertNoHorizontalOverflow(page: Page) {
     .toBe(true);
 }
 
+export async function assertNoVisibleElementOverflowsViewport(page: Page) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const viewportWidth = document.documentElement.clientWidth;
+        const ignoredTags = new Set(["HTML", "BODY", "SCRIPT", "STYLE", "NOSCRIPT"]);
+
+        return Array.from(document.querySelectorAll<HTMLElement>("body *"))
+          .filter((element) => {
+            if (ignoredTags.has(element.tagName)) {
+              return false;
+            }
+            const style = window.getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return (
+              style.display !== "none"
+              && style.visibility !== "hidden"
+              && rect.width > 0
+              && rect.height > 0
+              && rect.bottom >= 0
+              && rect.top <= window.innerHeight
+            );
+          })
+          .filter((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.left < -1 || rect.right > viewportWidth + 1 || element.scrollWidth > element.clientWidth + 1;
+          })
+          .slice(0, 5)
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            const label =
+              element.getAttribute("data-testid")
+              ?? element.getAttribute("aria-label")
+              ?? element.textContent?.trim().slice(0, 80)
+              ?? element.tagName.toLowerCase();
+            return `${element.tagName.toLowerCase()} ${label} left=${Math.round(rect.left)} right=${Math.round(rect.right)} width=${Math.round(rect.width)} scroll=${element.scrollWidth}/${element.clientWidth}`;
+          });
+      }),
+    )
+    .toEqual([]);
+}
+
 export async function assertSelectorTextDoesNotOverflow(page: Page, selector: string) {
   await expect
     .poll(async () =>

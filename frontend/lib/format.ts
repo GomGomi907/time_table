@@ -62,23 +62,62 @@ export function formatPercent(value: number) {
   return `${Math.max(0, Math.min(100, Math.round(value)))}%`;
 }
 
+const SERVICE_COPY_EXACT_LABELS = new Map<string, string>([
+  ["취미/탐색 (AI/Technical)", "기술 탐색"],
+  ["Mock Google 태스크", "오늘 할 일 정리"],
+  ["Mock Google 할 일", "오늘 할 일 정리"],
+  ["Mock Google 회의", "제품 리뷰 회의"],
+]);
+
+const KOREAN_PARTICLE_GROUPS: Record<string, ["은" | "는", "이" | "가", "을" | "를"]> = {
+  "은": ["은", "이", "을"],
+  "는": ["은", "이", "을"],
+  "이": ["은", "이", "을"],
+  "가": ["은", "이", "을"],
+  "을": ["은", "이", "을"],
+  "를": ["은", "이", "을"],
+};
+
+function hasFinalConsonant(value: string) {
+  const lastCode = value.charCodeAt(value.length - 1);
+  const hangulOffset = lastCode - 0xac00;
+  return hangulOffset >= 0 && hangulOffset <= 11171 && hangulOffset % 28 !== 0;
+}
+
+function particleFor(value: string, particle: string | undefined) {
+  if (!particle) {
+    return "";
+  }
+
+  const group = KOREAN_PARTICLE_GROUPS[particle];
+  if (!group) {
+    return particle;
+  }
+
+  if (particle === "은" || particle === "는") {
+    return hasFinalConsonant(value) ? group[0] : "는";
+  }
+  if (particle === "이" || particle === "가") {
+    return hasFinalConsonant(value) ? group[1] : "가";
+  }
+  return hasFinalConsonant(value) ? group[2] : "를";
+}
+
+function normalizeLegacyProductTerms(value: string) {
+  return value.replace(/태스크([은는이가을를])?/g, (_match, particle: string | undefined) => (
+    `할 일${particleFor("할 일", particle)}`
+  ));
+}
+
 export function formatServiceCopy(value: string | null | undefined) {
-  return (value ?? "")
-    .replaceAll("취미/탐색 (AI/Technical)", "기술 탐색")
-    .replaceAll("Mock Google 태스크", "오늘 할 일 정리")
-    .replaceAll("Mock Google 할 일", "오늘 할 일 정리")
-    .replaceAll("Mock Google 회의", "제품 리뷰 회의")
-    .replaceAll("추천 태스크는", "추천 할 일은")
-    .replaceAll("태스크", "할 일")
-    .replaceAll("할 일는", "할 일은");
+  const normalized = (value ?? "").trim();
+  const exactLabel = SERVICE_COPY_EXACT_LABELS.get(normalized);
+  return exactLabel ?? normalizeLegacyProductTerms(normalized);
 }
 
 
 const TEST_OR_INTERNAL_MEMO_PATTERN =
   /(e2e|playwright|qa seed|service improvement|mock|dashboard briefing pending approval)/i;
-
-const AI_GENERATED_MEMO_PATTERN =
-  /(AI|인공지능|제안합니다|제안해요|권장합니다|추천합니다|추천해요|추천|근거|예상 영향|확인한 내용|기준으로 재배치|조정안|최적화|리스크|검증|판단|추론|전략|의도|사용자(?:의)?\s*패턴|사용자(?:의)?\s*선호|회복 시간을 지키도록|주말.*(?:비워|회복|제안)|비워두고.*회복|완충|버퍼|컨디션 리셋)/i;
 
 export function formatUserMemo(value: string | null | undefined) {
   const normalized = formatServiceCopy(value).trim();
@@ -88,8 +127,7 @@ export function formatUserMemo(value: string | null | undefined) {
 
   if (
     TEST_OR_INTERNAL_MEMO_PATTERN.test(normalized) ||
-    INTERNAL_AI_METADATA_PATTERN.test(normalized) ||
-    AI_GENERATED_MEMO_PATTERN.test(normalized)
+    INTERNAL_AI_METADATA_PATTERN.test(normalized)
   ) {
     return null;
   }
@@ -127,7 +165,7 @@ export function formatAiActionLabel(value: string | null | undefined) {
     return "제안";
   }
 
-  return AI_ACTION_LABELS[value.toLowerCase()] ?? value.replaceAll("_", " ");
+  return AI_ACTION_LABELS[value.toLowerCase()] ?? value.split("_").join(" ");
 }
 
 export function formatAiPreviewDetail(value: string | null | undefined) {
@@ -136,7 +174,7 @@ export function formatAiPreviewDetail(value: string | null | undefined) {
   }
 
   return Object.entries(DAY_LABELS).reduce(
-    (detail, [day, label]) => detail.replaceAll(day, label),
+    (detail, [day, label]) => detail.split(day).join(label),
     formatServiceCopy(value),
   );
 }
