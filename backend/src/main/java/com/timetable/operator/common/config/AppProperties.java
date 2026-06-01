@@ -3,15 +3,34 @@ package com.timetable.operator.common.config;
 import java.time.LocalTime;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 @ConfigurationProperties(prefix = "app")
 public record AppProperties(
+        String releaseMode,
         String frontendBaseUrl,
         AuthProperties auth,
         CalendarProperties calendar,
         ScheduleProperties schedule,
         AiProperties ai
 ) {
+    @ConstructorBinding
+    public AppProperties {
+        if (releaseMode == null || releaseMode.isBlank()) {
+            releaseMode = "local";
+        }
+    }
+
+    public AppProperties(
+            String frontendBaseUrl,
+            AuthProperties auth,
+            CalendarProperties calendar,
+            ScheduleProperties schedule,
+            AiProperties ai
+    ) {
+        this("local", frontendBaseUrl, auth, calendar, schedule, ai);
+    }
+
     public record AuthProperties(
             String defaultUserEmail,
             String defaultUserName,

@@ -1,5 +1,7 @@
 package com.timetable.operator.sync.domain;
 
+import java.util.Locale;
+
 public enum SyncTargetSystem {
     GOOGLE_CALENDAR("google_calendar"),
     GOOGLE_TASKS("google_tasks");
@@ -19,8 +21,14 @@ public enum SyncTargetSystem {
             return GOOGLE_CALENDAR;
         }
 
-        return switch (value.trim().toLowerCase()) {
-            case "google_tasks", "google-tasks", "tasks" -> GOOGLE_TASKS;
+        String normalized = value.trim()
+                .replace("-", "")
+                .replace("_", "")
+                .replace(" ", "")
+                .toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "googletasks", "tasks" -> GOOGLE_TASKS;
+            case "googlecalendar", "calendar" -> GOOGLE_CALENDAR;
             default -> GOOGLE_CALENDAR;
         };
     }

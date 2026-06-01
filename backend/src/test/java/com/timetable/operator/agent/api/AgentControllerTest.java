@@ -9,12 +9,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.timetable.operator.auth.domain.AppUser;
-import com.timetable.operator.auth.infrastructure.AppUserRepository;
 import com.timetable.operator.agent.domain.RescheduleSuggestion;
 import com.timetable.operator.agent.domain.RescheduleSuggestionStatus;
 import com.timetable.operator.agent.domain.RescheduleSuggestionTriggerType;
 import com.timetable.operator.agent.infrastructure.RescheduleSuggestionRepository;
+import com.timetable.operator.auth.domain.AppUser;
+import com.timetable.operator.auth.infrastructure.AppUserRepository;
 import com.timetable.operator.calendar.domain.CalendarConnection;
 import com.timetable.operator.calendar.domain.CalendarConnectionStatus;
 import com.timetable.operator.calendar.infrastructure.CalendarConnectionRepository;
@@ -565,5 +565,253 @@ class AgentControllerTest {
         assertThat(shifted.getDueDate()).isEqualTo(Instant.parse("2026-05-15T03:30:00Z"));
         assertThat(shifted.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
         assertThat(providerWriteOutboxRepository.count()).isGreaterThan(outboxBefore);
+    }
+
+    @Test
+    void applyCanonicalEventNoOpDoesNotDirtyOrQueueProviderWrite() throws Exception {
+        Event event = new Event();
+        event.setUserId(savedUser.getId());
+        event.setTitle("변경 없는 Google 회의");
+        event.setStartAt(Instant.parse("2026-05-15T01:00:00Z"));
+        event.setEndAt(Instant.parse("2026-05-15T02:00:00Z"));
+        event.setCategory(ScheduleCategory.WORK);
+        event.setPriority((short) 2);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.GOOGLE_CALENDAR);
+        event.setSyncState(PlannerSyncState.IMPORTED);
+        event.setExternalSourceId("google_calendar:event-noop");
+        Event savedEvent = eventRepository.save(event);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "변경 없는 이벤트 이동",
+                  "explanation": "시간 정보가 없는 canonical event 이동 명령은 적용되면 안 된다.",
+                  "commands": [
+                    {
+                      "action_type": "move_event",
+                      "target_type": "event",
+                      "target_id": "%s",
+                      "payload": {},
+                      "reason": "시간 정보 없음",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedEvent.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "no-op canonical event 적용 방지"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+        Event unchanged = eventRepository.findById(savedEvent.getId()).orElseThrow();
+        assertThat(unchanged.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:00:00Z"));
+        assertThat(unchanged.getEndAt()).isEqualTo(Instant.parse("2026-05-15T02:00:00Z"));
+        assertThat(unchanged.getSyncState()).isEqualTo(PlannerSyncState.IMPORTED);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
+    void applyCanonicalTaskNoOpDoesNotDirtyOrQueueProviderWrite() throws Exception {
+        Task task = new Task();
+        task.setUserId(savedUser.getId());
+        task.setTitle("변경 없는 Google 할 일");
+        task.setDueDate(Instant.parse("2026-05-15T03:00:00Z"));
+        task.setEstimatedMinutes(30);
+        task.setActualMinutes(0);
+        task.setPriority((short) 3);
+        task.setStatus(TaskStatus.TODO);
+        task.setSourceType(TaskSourceType.GOOGLE_TASKS);
+        task.setSyncState(PlannerSyncState.IMPORTED);
+        task.setExternalSourceId("google_tasks:task-noop");
+        Task savedTask = taskRepository.save(task);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "변경 없는 할 일 이동",
+                  "explanation": "시간 정보가 없는 canonical task 이동 명령은 적용되면 안 된다.",
+                  "commands": [
+                    {
+                      "action_type": "move_event",
+                      "target_type": "task",
+                      "target_id": "%s",
+                      "payload": {},
+                      "reason": "시간 정보 없음",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedTask.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "no-op canonical task 적용 방지"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+        Task unchanged = taskRepository.findById(savedTask.getId()).orElseThrow();
+        assertThat(unchanged.getDueDate()).isEqualTo(Instant.parse("2026-05-15T03:00:00Z"));
+        assertThat(unchanged.getSyncState()).isEqualTo(PlannerSyncState.IMPORTED);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
+    void revertCanonicalEventApplyFailsClosedAndKeepsSuggestionApplied() throws Exception {
+        Event event = new Event();
+        event.setUserId(savedUser.getId());
+        event.setTitle("되돌리기 제한 Google 회의");
+        event.setStartAt(Instant.parse("2026-05-15T01:00:00Z"));
+        event.setEndAt(Instant.parse("2026-05-15T02:00:00Z"));
+        event.setCategory(ScheduleCategory.WORK);
+        event.setPriority((short) 2);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.GOOGLE_CALENDAR);
+        event.setSyncState(PlannerSyncState.IMPORTED);
+        event.setExternalSourceId("google_calendar:event-revert");
+        Event savedEvent = eventRepository.save(event);
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "canonical event 이동",
+                  "explanation": "canonical event 적용은 되돌리기를 fail-closed 해야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "move_event",
+                      "target_type": "event",
+                      "target_id": "%s",
+                      "payload": {"suggestedShiftMinutes": 30},
+                      "reason": "30분 이동",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedEvent.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "canonical event 적용"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"));
+
+        long outboxBeforeRevert = providerWriteOutboxRepository.count();
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/revert", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "canonical event 되돌리기"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+        Event shifted = eventRepository.findById(savedEvent.getId()).orElseThrow();
+        assertThat(shifted.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:30:00Z"));
+        assertThat(shifted.getEndAt()).isEqualTo(Instant.parse("2026-05-15T02:30:00Z"));
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBeforeRevert);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.APPLIED);
+    }
+
+    @Test
+    void revertCanonicalTaskApplyFailsClosedAndKeepsSuggestionApplied() throws Exception {
+        Task task = new Task();
+        task.setUserId(savedUser.getId());
+        task.setTitle("되돌리기 제한 Google 할 일");
+        task.setDueDate(Instant.parse("2026-05-15T03:00:00Z"));
+        task.setEstimatedMinutes(30);
+        task.setActualMinutes(0);
+        task.setPriority((short) 3);
+        task.setStatus(TaskStatus.TODO);
+        task.setSourceType(TaskSourceType.GOOGLE_TASKS);
+        task.setSyncState(PlannerSyncState.IMPORTED);
+        task.setExternalSourceId("google_tasks:task-revert");
+        Task savedTask = taskRepository.save(task);
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "canonical task 이동",
+                  "explanation": "canonical task 적용은 되돌리기를 fail-closed 해야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "move_event",
+                      "target_type": "task",
+                      "target_id": "%s",
+                      "payload": {"suggestedShiftMinutes": 30},
+                      "reason": "30분 이동",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedTask.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "canonical task 적용"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"));
+
+        long outboxBeforeRevert = providerWriteOutboxRepository.count();
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/revert", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "canonical task 되돌리기"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+        Task shifted = taskRepository.findById(savedTask.getId()).orElseThrow();
+        assertThat(shifted.getDueDate()).isEqualTo(Instant.parse("2026-05-15T03:30:00Z"));
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBeforeRevert);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.APPLIED);
+    }
+
+    private RescheduleSuggestion saveSuggestion(String payload) {
+        RescheduleSuggestion suggestion = new RescheduleSuggestion();
+        suggestion.setUserId(savedUser.getId());
+        suggestion.setTriggerType(RescheduleSuggestionTriggerType.MANUAL_REQUEST);
+        suggestion.setStatus(RescheduleSuggestionStatus.PENDING);
+        suggestion.setSummary("테스트 제안");
+        suggestion.setReason("테스트 요청");
+        suggestion.setExplanation("테스트 설명");
+        suggestion.setSuggestionPayload(payload);
+        return rescheduleSuggestionRepository.save(suggestion);
     }
 }
