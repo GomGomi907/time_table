@@ -14,6 +14,10 @@ export interface CalendarRangeQueryInput {
   timezone?: string;
 }
 
+export interface CalendarRangeQueryOptions {
+  enabled?: boolean;
+}
+
 export function calendarRangeQueryKey(input: CalendarRangeQueryInput) {
   return [
     ...calendarRangeQueryRootKey,
@@ -26,10 +30,11 @@ export function calendarRangeQueryKey(input: CalendarRangeQueryInput) {
   ] as const;
 }
 
-export function useCalendarRangeQuery(input: CalendarRangeQueryInput) {
+export function useCalendarRangeQuery(input: CalendarRangeQueryInput, options: CalendarRangeQueryOptions = {}) {
   return useQuery({
     queryKey: calendarRangeQueryKey(input),
     queryFn: ({ signal }) => api.getCalendarRange(input, signal).then((response) => response.data),
+    enabled: options.enabled ?? true,
     placeholderData: (previousData) => previousData,
   });
 }

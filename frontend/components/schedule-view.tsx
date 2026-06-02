@@ -1,13 +1,13 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
-import { calendarRangeQueryRootKey } from "@/hooks/use-calendar-range-query";
+import { calendarRangeQueryRootKey, useCalendarRangeQuery } from "@/hooks/use-calendar-range-query";
 import { api, isConflictError } from "@/lib/api";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
@@ -402,6 +402,119 @@ function removeCalendarRoutine(range: CalendarRangeResponse, blockId: string) {
   };
 }
 
+function compareCalendarOccurrences(left: CalendarOccurrence, right: CalendarOccurrence) {
+  const leftStart = left.startAt ?? left.endAt ?? "";
+  const rightStart = right.startAt ?? right.endAt ?? "";
+  if (leftStart !== rightStart) {
+    if (!leftStart) {
+      return 1;
+    }
+    if (!rightStart) {
+      return -1;
+    }
+    return leftStart.localeCompare(rightStart);
+  }
+  return left.priorityTier - right.priorityTier || left.title.localeCompare(right.title);
+}
+
+function groupAgendaOccurrences(range: CalendarRangeResponse | null | undefined, timeZone: string) {
+  if (!range) {
+    return [];
+  }
+
+  const groups = new Map<string, CalendarOccurrence[]>();
+  range.occurrences
+    .toSorted(compareCalendarOccurrences)
+    .forEach((occurrence) => {
+      const anchor = occurrence.startAt ?? occurrence.endAt;
+      const dateKey = anchor ? zonedDateKey(new Date(anchor), timeZone) : "unscheduled";
+      const occurrences = groups.get(dateKey) ?? [];
+      occurrences.push(occurrence);
+      groups.set(dateKey, occurrences);
+    });
+
+  return Array.from(groups, ([dateKey, occurrences]) => ({
+    dateKey,
+    occurrences,
+  })).toSorted((left, right) => {
+    if (left.dateKey === right.dateKey) {
+      return 0;
+    }
+    if (left.dateKey === "unscheduled") {
+      return 1;
+    }
+    if (right.dateKey === "unscheduled") {
+      return -1;
+    }
+    return left.dateKey.localeCompare(right.dateKey);
+  });
+}
+
+function formatAgendaDateLabel(dateKey: string) {
+  if (dateKey === "unscheduled") {
+    return "날짜 미정";
+  }
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "UTC",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function formatOccurrenceClock(value: string | null, timeZone: string) {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const parts = getZonedDateTimeParts(date, timeZone);
+  return `${padDatePart(parts.hour)}:${padDatePart(parts.minute)}`;
+}
+
+function formatOccurrenceTimeRange(occurrence: CalendarOccurrence, timeZone: string) {
+  const start = formatOccurrenceClock(occurrence.startAt, timeZone);
+  const end = formatOccurrenceClock(occurrence.endAt, timeZone);
+  if (start && end && start !== end) {
+    return `${start}–${end}`;
+  }
+  return start ?? end ?? "시간 미정";
+}
+
+function occurrenceKindLabel(occurrence: CalendarOccurrence) {
+  if (occurrence.entityType === "EVENT") {
+    return "이벤트";
+  }
+  if (occurrence.entityType === "TASK") {
+    return "할 일";
+  }
+  return "루틴";
+}
+
+function agendaOccurrenceTone(occurrence: CalendarOccurrence) {
+  if (occurrence.category) {
+    return categoryTone(occurrence.category);
+  }
+  if (occurrence.entityType === "TASK") {
+    return "deep";
+  }
+  return "meeting";
+}
+
+function buildAgendaRangeWindow(timeZoneInput: string | null | undefined) {
+  const timeZone = safeTimeZone(timeZoneInput);
+  const startDateKey = zonedDateKey(new Date(), timeZone);
+  const endDateKey = addDaysToDateKey(startDateKey, 14);
+  return {
+    start: toIsoAtZonedDate(startDateKey, "00:00", timeZone),
+    end: toIsoAtZonedDate(endDateKey, "00:00", timeZone),
+    timeZone,
+  };
+}
+
 function formatDurationLabel(totalMinutes: number) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -652,6 +765,79 @@ function WeeklyStack({
   );
 }
 
+function AgendaStream({
+  range,
+  isLoading,
+  isError,
+  timeZone,
+}: {
+  range: CalendarRangeResponse | null | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  timeZone: string;
+}) {
+  const groups = groupAgendaOccurrences(range, timeZone);
+  const occurrenceCount = groups.reduce((sum, group) => sum + group.occurrences.length, 0);
+
+  return (
+    <section className="agenda-stream-card" data-testid="agenda-stream" aria-label="아젠다 스트림">
+      <div className="agenda-stream-head">
+        <div>
+          <p className="panel-kicker">Agenda</p>
+          <h2>다가오는 일정 흐름</h2>
+          <p>캘린더 범위 응답의 발생 항목을 현지 날짜별로 묶어 시간순으로 보여줍니다.</p>
+        </div>
+        <span>{occurrenceCount}개</span>
+      </div>
+
+      {isLoading ? (
+        <p className="agenda-stream-empty">아젠다를 불러오는 중입니다.</p>
+      ) : null}
+
+      {isError ? (
+        <p className="agenda-stream-empty">아젠다를 불러오지 못했습니다. 주간 일정은 계속 사용할 수 있습니다.</p>
+      ) : null}
+
+      {!isLoading && !isError && groups.length === 0 ? (
+        <p className="agenda-stream-empty">표시할 아젠다가 없습니다.</p>
+      ) : null}
+
+      {!isLoading && !isError && groups.length > 0 ? (
+        <div className="agenda-stream-groups">
+          {groups.map((group) => (
+            <section className="agenda-day-group" key={group.dateKey} data-testid="agenda-day-group">
+              <div className="agenda-day-head">
+                <strong>{formatAgendaDateLabel(group.dateKey)}</strong>
+                <span>{group.occurrences.length}개</span>
+              </div>
+              <ol className="agenda-occurrence-list">
+                {group.occurrences.map((occurrence) => (
+                  <li
+                    className={`agenda-occurrence ${agendaOccurrenceTone(occurrence)}`}
+                    data-testid="agenda-occurrence"
+                    key={occurrence.occurrenceId}
+                  >
+                    <span className="agenda-occurrence-time">
+                      {formatOccurrenceTimeRange(occurrence, timeZone)}
+                    </span>
+                    <div>
+                      <strong>{formatServiceCopy(occurrence.title)}</strong>
+                      <span>
+                        {occurrenceKindLabel(occurrence)}
+                        {occurrence.synthetic ? " · 반복" : ""}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function ScheduleView() {
   const { session, refreshSession } = useSessionBootstrap();
   const showNotice = useAppStore((state) => state.showNotice);
@@ -679,6 +865,19 @@ export function ScheduleView() {
   const scheduleMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const scheduleMutationActiveRef = useRef(false);
   const queryClient = useQueryClient();
+  const agendaRangeWindow = useMemo(
+    () => buildAgendaRangeWindow(session?.timezone),
+    [session?.timezone],
+  );
+  const agendaRangeQuery = useCalendarRangeQuery(
+    {
+      start: agendaRangeWindow.start,
+      end: agendaRangeWindow.end,
+      view: "agenda",
+      timezone: agendaRangeWindow.timeZone,
+    },
+    { enabled: Boolean(session?.authenticated) },
+  );
 
   async function runScheduleMutationExclusive<T>(operation: (signal: AbortSignal) => Promise<T>) {
     const previousMutation = scheduleMutationQueueRef.current;
@@ -1311,6 +1510,12 @@ export function ScheduleView() {
                   week={data.week}
                   onBlockSelect={(block) => void openEditModal(block)}
                   timeZone={session?.timezone}
+                />
+                <AgendaStream
+                  range={agendaRangeQuery.data}
+                  isLoading={agendaRangeQuery.isLoading || agendaRangeQuery.isFetching}
+                  isError={agendaRangeQuery.isError}
+                  timeZone={agendaRangeWindow.timeZone}
                 />
               </section>
             </div>
