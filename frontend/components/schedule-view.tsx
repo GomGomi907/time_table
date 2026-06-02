@@ -288,6 +288,15 @@ function addMonthsToDateKey(dateKey: string, months: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function isCalendarDateKey(dateKey: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return false;
+  }
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === dateKey;
+}
+
 function getMonthRangeForDateKey(dateKey: string, timeZone: string) {
   const monthStartKey = `${dateKey.slice(0, 7)}-01`;
   const nextMonthStartKey = addMonthsToDateKey(monthStartKey, 1);
@@ -586,7 +595,8 @@ function monthStartDateKey(dateKey: string) {
 
 function buildMonthRangeWindow(dateKey: string, timeZoneInput: string | null | undefined) {
   const timeZone = safeTimeZone(timeZoneInput);
-  const startDateKey = monthStartDateKey(dateKey);
+  const safeDateKey = isCalendarDateKey(dateKey) ? dateKey : zonedDateKey(new Date(), timeZone);
+  const startDateKey = monthStartDateKey(safeDateKey);
   const endDateKey = addMonthsToDateKey(startDateKey, 1);
   return {
     start: toIsoAtZonedDate(startDateKey, "00:00", timeZone),
@@ -1087,11 +1097,22 @@ function AgendaStream({
 
       {!isLoading && !isError && groups.length > 0 ? (
         <div className="agenda-stream-groups">
-          {groups.map((group) => (
+          {groups.map((group) => {
+            const canOpenDay = isCalendarDateKey(group.dateKey);
+            return (
             <section className="agenda-day-group" key={group.dateKey} data-testid="agenda-day-group">
-              <button className="agenda-day-head" type="button" onClick={() => onSelectDate(group.dateKey)}>
+              <button
+                className="agenda-day-head"
+                type="button"
+                disabled={!canOpenDay}
+                onClick={() => {
+                  if (canOpenDay) {
+                    onSelectDate(group.dateKey);
+                  }
+                }}
+              >
                 <strong>{formatAgendaDateLabel(group.dateKey)}</strong>
-                <span>{group.occurrences.length}개 · 일간 보기</span>
+                <span>{canOpenDay ? group.occurrences.length + "개 · 일간 보기" : group.occurrences.length + "개 · 날짜 미정"}</span>
               </button>
               <ol className="agenda-occurrence-list">
                 {group.occurrences.map((occurrence) => (
@@ -1114,7 +1135,8 @@ function AgendaStream({
                 ))}
               </ol>
             </section>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </section>

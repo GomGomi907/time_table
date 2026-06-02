@@ -1803,6 +1803,11 @@ summary,
   color: var(--ink);
 }
 
+.agenda-day-head:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .agenda-occurrence-list,
 .selected-day-occurrence-list {
   display: grid;

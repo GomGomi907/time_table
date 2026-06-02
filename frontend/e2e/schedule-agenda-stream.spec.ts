@@ -5,8 +5,8 @@ import { completeOnboardingIfPresent, loginAsUniqueMockUser } from "./helpers";
 function agendaOccurrence(
   occurrenceId: string,
   title: string,
-  startAt: string,
-  endAt: string,
+  startAt: string | null,
+  endAt: string | null,
   entityType: "EVENT" | "TASK" | "ROUTINE_BLOCK" = "EVENT",
 ) {
   return {
@@ -53,11 +53,12 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
             agendaOccurrence("multi-day-release", "밤샘 출시 점검", "2026-01-02T14:00:00.000Z", "2026-01-03T02:00:00.000Z"),
             agendaOccurrence("task-next-day", "다음날 성장 과제", "2026-01-03T00:00:00.000Z", "2026-01-03T00:30:00.000Z", "TASK"),
             agendaOccurrence("routine-early", "아침 루틴 정리", "2026-01-01T23:00:00.000Z", "2026-01-01T23:30:00.000Z", "ROUTINE_BLOCK"),
+            agendaOccurrence("unscheduled-idea", "날짜 미정 아이디어", null, null, "TASK"),
           ],
           instrumentation: {
             repositoryGroupCount: 3,
             repositoryGroups: ["events", "tasks", "routineBlocks"],
-            occurrenceCount: 4,
+            occurrenceCount: 5,
             rangeDays: 14,
           },
         },
@@ -70,13 +71,16 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
   await expect(page.getByTestId("agenda-stream")).toBeVisible({ timeout: 30_000 });
 
   const groups = page.getByTestId("agenda-day-group");
-  await expect(groups).toHaveCount(2);
+  await expect(groups).toHaveCount(3);
   await expect(groups.nth(0)).toContainText("아침 루틴 정리");
   await expect(groups.nth(0)).toContainText("오전 제품 리뷰");
   await expect(groups.nth(0)).toContainText("밤샘 출시 점검");
   await expect(groups.nth(1)).toContainText("밤샘 출시 점검");
   await expect(groups.nth(1)).toContainText("다음날 성장 과제");
-  await expect(page.getByTestId("agenda-occurrence")).toHaveCount(5);
+  await expect(groups.nth(2)).toContainText("날짜 미정");
+  await expect(groups.nth(2)).toContainText("날짜 미정 아이디어");
+  await expect(groups.nth(2).locator("button")).toBeDisabled();
+  await expect(page.getByTestId("agenda-occurrence")).toHaveCount(6);
 
   const orderedTitles = await page.getByTestId("agenda-occurrence").evaluateAll((items) =>
     items.map((item) => item.textContent ?? ""),
