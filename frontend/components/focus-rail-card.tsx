@@ -94,7 +94,7 @@ export function FocusRailCard({
               </li>
               <li>
                 <span>예정 시간</span>
-                <b>
+                <b className="focus-time-range">
                   {formatClockValue(fallbackBlock.startTime)} - {formatClockValue(
                     fallbackBlock.endTime,
                   )}

@@ -654,6 +654,9 @@ export function ScheduleView() {
   const [isMutating, setIsMutating] = useState(false);
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const aiThreadRef = useRef<HTMLDivElement | null>(null);
+  const aiThreadEndRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickToAiThreadBottomRef = useRef(true);
   const loadSequenceRef = useRef(0);
   const scheduleMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const scheduleMutationActiveRef = useRef(false);
@@ -841,6 +844,16 @@ export function ScheduleView() {
     void loadSchedulePage(controller.signal);
     return () => controller.abort();
   }, [session?.authenticated]);
+
+  useEffect(() => {
+    if (!data.suggestions.length) {
+      return;
+    }
+    if (!shouldStickToAiThreadBottomRef.current) {
+      return;
+    }
+    aiThreadEndRef.current?.scrollIntoView({ block: "end" });
+  }, [data.suggestions]);
 
   useBodyScrollLock(isCreateModalOpen || Boolean(blockingConflictMessage));
 
@@ -1110,7 +1123,7 @@ export function ScheduleView() {
 
 
   const pendingSuggestions = data.suggestions.filter((suggestion) => suggestion.status === "pending");
-  const conversationSuggestions = data.suggestions.slice(0, 8);
+  const conversationSuggestions = [...data.suggestions.slice(0, 8)].reverse();
   const aiRequestRail = (
     <section className="ai-compose-card ai-chat-card" data-testid="schedule-ai-right-rail" aria-label="일정 변경 요청 대화">
       <div className="ai-chat-head">
@@ -1123,7 +1136,17 @@ export function ScheduleView() {
         </span>
       </div>
 
-      <div className="ai-chat-thread" aria-live="polite">
+      <div
+        ref={aiThreadRef}
+        className="ai-chat-thread"
+        aria-label="일정 변경 요청 대화"
+        aria-live="polite"
+        role="log"
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          shouldStickToAiThreadBottomRef.current = element.scrollHeight - element.clientHeight - element.scrollTop <= 48;
+        }}
+      >
         {conversationSuggestions.length ? (
           conversationSuggestions.map((suggestion) => {
             const display = getSuggestionDisplayState(suggestion);
@@ -1155,6 +1178,7 @@ export function ScheduleView() {
             <p>아래 입력창에 “내일 오전 회의 준비 시간을 비워줘”처럼 요청하면 답변이 이어집니다.</p>
           </div>
         )}
+        <div ref={aiThreadEndRef} aria-hidden="true" />
       </div>
 
       <form className="ai-compose-form ai-chat-input" onSubmit={(event) => void handleRequestSuggestion(event)}>

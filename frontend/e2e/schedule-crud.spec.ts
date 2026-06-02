@@ -128,6 +128,100 @@ test("pending schedule conflict blocks editing before the create dialog opens", 
   await expect(page.getByRole("dialog", { name: /새 블록 추가/ })).toHaveCount(0);
 });
 
+test("schedule AI chat renders newest backend suggestions as chronological bottom-anchored turns", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  const suggestions = Array.from({ length: 10 }, (_value, index) => buildReadonlySuggestion(index + 1)).reverse();
+  await page.route("**/api/agent/suggestions", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: suggestions, meta: {} }),
+    });
+  });
+
+  await page.goto("/schedule");
+  const chatLog = page.getByRole("log", { name: "일정 변경 요청 대화" });
+  await expect(chatLog).toBeVisible({ timeout: 30_000 });
+  const turns = chatLog.locator(".ai-chat-turn");
+  await expect(turns).toHaveCount(8);
+  await expect(turns.first()).toContainText("요청 3");
+  await expect(turns.last()).toContainText("요청 10");
+  await expect.poll(async () =>
+    chatLog.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
+  ).toBeLessThanOrEqual(8);
+
+  await page.unroute("**/api/agent/suggestions");
+});
+
+test("schedule AI chat does not force-scroll when the user is reading older turns", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  let suggestions = Array.from({ length: 10 }, (_value, index) => buildReadonlySuggestion(index + 1, true)).reverse();
+  await page.route("**/api/agent/suggestions", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: suggestions, meta: {} }),
+    });
+  });
+  await page.route("**/api/agent/reschedule", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const createdSuggestion = buildReadonlySuggestion(11, true);
+    suggestions = [createdSuggestion, ...suggestions];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: createdSuggestion, meta: {} }),
+    });
+  });
+
+  await page.goto("/schedule");
+  const chatLog = page.getByRole("log", { name: "일정 변경 요청 대화" });
+  await expect(chatLog.locator(".ai-chat-turn")).toHaveCount(8);
+  await chatLog.evaluate((element) => {
+    element.style.maxHeight = "220px";
+    element.style.overflowY = "auto";
+  });
+  await chatLog.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  await expect.poll(async () =>
+    chatLog.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
+  ).toBeLessThanOrEqual(8);
+
+  await chatLog.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+  await expect.poll(async () => chatLog.evaluate((element) => element.scrollTop)).toBeLessThanOrEqual(8);
+
+  await page.getByTestId("schedule-ai-request-input").fill("다른 답변도 보여줘");
+  await page.getByRole("button", { name: "요청 보내기" }).click();
+  await expect(chatLog.locator(".ai-chat-turn").last()).toContainText("요청 11");
+  await expect.poll(async () => chatLog.evaluate((element) => element.scrollTop)).toBeLessThanOrEqual(8);
+  await expect.poll(async () =>
+    chatLog.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)
+  ).toBeGreaterThan(48);
+
+  await page.unroute("**/api/agent/suggestions");
+  await page.unroute("**/api/agent/reschedule");
+});
+
 test("schedule create blocks duplicate synchronous submits while the mutation is pending", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo);
   await completeOnboardingIfPresent(page);
@@ -180,3 +274,51 @@ test("schedule create blocks duplicate synchronous submits while the mutation is
   await page.unroute("**/api/schedule/blocks");
   await clearScheduleBlocksForDay(page, currentDay);
 });
+
+function buildReadonlySuggestion(index: number, verbose = false) {
+  const paddedDetail = verbose
+    ? ` ${"이전 대화 맥락을 읽는 중인 사용자의 스크롤 위치를 보존해야 합니다.".repeat(12)}`
+    : "";
+  return {
+    id: `suggestion-${index}`,
+    triggerType: "manual_request",
+    status: "rejected",
+    statusLabel: "보류됨",
+    statusDetail: "테스트 읽기 전용 제안",
+    summary: `답변 ${index}${paddedDetail}`,
+    reason: `요청 ${index}${paddedDetail}`,
+    explanation: `답변 ${index}${paddedDetail}`,
+    commandBatch: {
+      summary: `답변 ${index}`,
+      explanation: `답변 ${index}`,
+      commands: [
+        {
+          actionType: "explain_only",
+          targetType: "none",
+          targetId: null,
+          payload: {},
+          reason: `답변 ${index}`,
+          executable: false,
+        },
+      ],
+    },
+    previewItems: [
+      {
+        actionType: "explain_only",
+        targetType: "none",
+        targetId: null,
+        title: `답변 ${index}`,
+        detail: null,
+        reason: `답변 ${index}`,
+        executable: false,
+      },
+    ],
+    executableCommandCount: 0,
+    executable: false,
+    executionSummary: null,
+    createdAt: `2026-06-02T00:${String(index).padStart(2, "0")}:00Z`,
+    appliedAt: null,
+    rejectedAt: null,
+    revertedAt: null,
+  };
+}

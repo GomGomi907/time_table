@@ -91,6 +91,8 @@ class AiRescheduleClientTest {
         assertThat(body.path("systemInstruction").path("parts").get(0).path("text").asText())
                 .contains("AI schedule adjustment planner")
                 .contains("To add a weekly schedule block")
+                .contains("This id rule does not apply to create commands")
+                .contains("create_event/recommend_task MUST use target_id null/targetId null")
                 .contains("category");
         assertThat(body.path("contents").get(0).path("parts").get(0).path("text").asText())
                 .contains("오전 일정이 너무 빡빡함")
@@ -160,7 +162,9 @@ class AiRescheduleClientTest {
                 .contains("context");
         assertThat(body.path("systemInstruction").path("parts").get(0).path("text").asText())
                 .contains("userRequest is the exact Korean text")
-                .contains("For random text");
+                .contains("For random text")
+                .contains("Create actions do not need existing ids")
+                .contains("For create, targetId must be null");
     }
 
     @Test

@@ -49,10 +49,14 @@ public class AiRescheduleClient implements AiAgentStageClient {
             - context.weeklyBlocks are repeating weekly schedule blocks.
             - context.events are dated calendar events.
             - context.tasks are actionable tasks.
-            - Use only ids included in context for update, move, and delete.
+            - context.messageHistory contains compact recent user/assistant turns ordered oldest-to-newest, including rejected suggestions when available so you do not repeat refused ideas.
+            - context.availabilityWindows is included only when the request likely needs empty time-slot reasoning; prefer these windows for new dated events when present.
+            - Use only ids included in context for update, move, and delete. This id rule does not apply to create commands.
+            - Create commands are independent new objects: create_event/recommend_task MUST use target_id null/targetId null and must not require an existing id.
             - Treat Korean relative dates/times from userRequest in the provided timezone.
             - Prefer small, directly executable commands over broad plans.
-            - If the user request is random, vague, not schedule/task related, or lacks required time/title information, return explain_only with requires_confirmation=false instead of guessing.
+            - If the latest userRequest is a short follow-up, resolve it against context.messageHistory before asking again.
+            - If the user request is random, vague, not schedule/task related, or lacks required time/title information after using messageHistory and any provided availabilityWindows, return explain_only with requires_confirmation=false instead of guessing.
 
             Return exactly one JSON object with this shape:
             {
@@ -86,6 +90,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
 
             Rules:
             - Use only ids present in the provided context for move/update/delete commands.
+            - Never require or invent an id for creation. For create_event, target_type must be "event" and target_id must be null.
             - Existing weekly schedule blocks are applied through action_type *_event with target_type "event" and the block id.
             - Existing canonical events use target_type "event"; tasks use target_type "task".
             - To add a weekly schedule block, use action_type create_event, target_type event, target_id null, and include dayOfWeek, startTime, endTime, activity, and category.
@@ -109,10 +114,13 @@ public class AiRescheduleClient implements AiAgentStageClient {
             - generatedAt is the server timestamp for this request.
             - timezone is the user's timezone. Interpret relative Korean dates/times in this timezone.
             - context.weeklyBlocks are recurring weekly blocks, context.events are dated events, and context.tasks are tasks.
-            - Existing ids must be copied exactly from context. Never invent targetId.
+            - context.messageHistory is compact recent conversation history ordered oldest-to-newest; rejected entries mean the user refused that idea and should not be repeated blindly.
+            - context.availabilityWindows is server-computed empty schedule time and may be omitted for low-value requests; use it to understand likely insertion points only when present.
+            - Existing ids must be copied exactly from context for update/move/delete. Never invent targetId.
+            - Create actions do not need existing ids. For action create with targetType event/task, targetId must be null and confidence may be high when title/activity plus time intent are clear.
 
             Decision rules:
-            - For create event/task, require a clear title/activity and either a concrete date/time or enough weekly-block information.
+            - For create event/task, first combine the latest userRequest with messageHistory. Require a clear title/activity and either a concrete date/time, an availabilityWindow match when provided, or enough weekly-block information.
             - For update/move/delete, require exactly one matching existing event/task/block from context.
             - For random text, greetings, explanations, or non-schedule requests, use action explain_only, targetType none, confidence <= 0.4.
             - For a plausible schedule request missing date, time, duration, or target identity, set repairable=true, list missingFields, and ask one short Korean clarification.
@@ -121,7 +129,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
             Required action values: create, update, move, delete, request_reschedule, run_sync, explain_only.
             Required targetType values: event, task, none.
             For update/move/delete, include an existing targetId only if the request clearly identifies exactly one item from context.
-            For create, include title/activity and explicit time/date fields when present.
+            For create, targetId must be null; include title/activity and explicit time/date fields when present.
             Confidence is 0.0..1.0. Use >=0.78 only when action, target, time, and intent are explicit.
 
             Return:
@@ -541,8 +549,19 @@ public class AiRescheduleClient implements AiAgentStageClient {
             RequestContext request,
             List<ScheduleBlockContext> weeklyBlocks,
             List<EventContext> events,
-            List<TaskContext> tasks
+            List<TaskContext> tasks,
+            List<MessageHistoryContext> messageHistory,
+            List<AvailabilityWindowContext> availabilityWindows
     ) {
+        public RescheduleAiContext(
+                UserContext user,
+                RequestContext request,
+                List<ScheduleBlockContext> weeklyBlocks,
+                List<EventContext> events,
+                List<TaskContext> tasks
+        ) {
+            this(user, request, weeklyBlocks, events, tasks, List.of(), List.of());
+        }
     }
 
     public record UserContext(
@@ -555,7 +574,35 @@ public class AiRescheduleClient implements AiAgentStageClient {
             String triggerType,
             String reason,
             String targetRangeStart,
-            String targetRangeEnd
+            String targetRangeEnd,
+            String resolvedRangeStart,
+            String resolvedRangeEnd
+    ) {
+        public RequestContext(
+                String triggerType,
+                String reason,
+                String targetRangeStart,
+                String targetRangeEnd
+        ) {
+            this(triggerType, reason, targetRangeStart, targetRangeEnd, targetRangeStart, targetRangeEnd);
+        }
+    }
+
+    public record MessageHistoryContext(
+            String createdAt,
+            String status,
+            String userRequest,
+            String assistantSummary,
+            String assistantExplanation
+    ) {
+    }
+
+    public record AvailabilityWindowContext(
+            String startAt,
+            String endAt,
+            String localLabel,
+            long durationMinutes,
+            String source
     ) {
     }
 

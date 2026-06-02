@@ -1815,6 +1815,41 @@ button.current-schedule-card:hover {
   line-height: 0.9;
 }
 
+.timer-value,
+.timer-context,
+.focus-time-range,
+.focus-rail-card .event-time {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-value,
+.timer-context {
+  width: 100%;
+}
+
+.timer-value {
+  letter-spacing: -0.07em;
+}
+
+.timer-value-compact {
+  font-size: clamp(1.8rem, 4.2vw, 3.55rem);
+  letter-spacing: -0.08em;
+}
+
+.timer-context {
+  color: var(--muted);
+  font-size: clamp(0.82rem, 1.7vw, 0.98rem);
+  line-height: 1.15;
+  margin: 0;
+}
+
 .focus-action-stack {
   display: grid;
   gap: 10px;

@@ -35,16 +35,21 @@ import java.io.IOException;
 import java.time.DateTimeException;
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,6 +60,10 @@ public class RescheduleSuggestionService {
 
     private static final String PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL = "Google 쓰기는 재연동 후 처리됩니다.";
     private static final String PROVIDER_WRITE_NO_CONNECTION_DETAIL = "Google 연동이 없어 Google에는 반영되지 않았습니다.";
+    private static final int AI_MESSAGE_HISTORY_LIMIT = 5;
+    private static final int DEFAULT_AI_FUTURE_CALENDAR_DAYS = 3;
+    private static final int MIN_AVAILABILITY_WINDOW_MINUTES = 30;
+    private static final int MAX_AVAILABILITY_WINDOWS = 24;
 
     private final RescheduleSuggestionRepository rescheduleSuggestionRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
@@ -1075,14 +1084,20 @@ public class RescheduleSuggestionService {
     }
 
     private AiRescheduleClient.RescheduleAiContext buildAiContext(AppUser user, ManualRescheduleRequest request) {
-        List<Event> events = (request.targetRangeStart() != null && request.targetRangeEnd() != null)
-                ? eventRepository.findByUserIdAndStatusNotAndStartAtBetweenOrderByStartAtAsc(
+        ZoneId userZone = AiLocalDateTimeParser.resolveUserZone(user.getTimezone());
+        PlanningRange planningRange = resolvePlanningRange(request, userZone);
+        List<Event> events = eventRepository.findByUserIdAndStatusNotAndStartAtBeforeAndEndAtAfterOrderByStartAtAsc(
                 user.getId(),
                 EventStatus.CANCELLED,
-                request.targetRangeStart(),
-                request.targetRangeEnd()
-        )
-                : eventRepository.findByUserIdOrderByStartAtAsc(user.getId());
+                planningRange.endAt(),
+                planningRange.startAt()
+        );
+        List<ScheduleBlock> scheduleBlocks = scheduleBlockRepository.findByUserId(user.getId());
+        List<AiRescheduleClient.MessageHistoryContext> messageHistory = buildMessageHistory(user.getId());
+        List<AiRescheduleClient.AvailabilityWindowContext> availabilityWindows =
+                shouldIncludeAvailabilityWindows(request)
+                        ? buildAvailabilityWindows(scheduleBlocks, events, planningRange, userZone)
+                        : List.of();
 
         return new AiRescheduleClient.RescheduleAiContext(
                 new AiRescheduleClient.UserContext(
@@ -1093,9 +1108,11 @@ public class RescheduleSuggestionService {
                         request.triggerType(),
                         request.reason(),
                         request.targetRangeStart() == null ? null : request.targetRangeStart().toString(),
-                        request.targetRangeEnd() == null ? null : request.targetRangeEnd().toString()
+                        request.targetRangeEnd() == null ? null : request.targetRangeEnd().toString(),
+                        planningRange.startAt().toString(),
+                        planningRange.endAt().toString()
                 ),
-                scheduleBlockRepository.findByUserId(user.getId()).stream()
+                scheduleBlocks.stream()
                         .limit(80)
                         .map(this::toAiScheduleBlock)
                         .toList(),
@@ -1109,8 +1126,184 @@ public class RescheduleSuggestionService {
                         ).stream()
                         .limit(120)
                         .map(this::toAiTask)
-                        .toList()
+                        .toList(),
+                messageHistory,
+                availabilityWindows
         );
+    }
+
+    private PlanningRange resolvePlanningRange(ManualRescheduleRequest request, ZoneId userZone) {
+        if (request.targetRangeStart() != null && request.targetRangeEnd() != null
+                && request.targetRangeEnd().isAfter(request.targetRangeStart())) {
+            return new PlanningRange(request.targetRangeStart(), request.targetRangeEnd());
+        }
+
+        ZonedDateTime currentMinute = ZonedDateTime.now(userZone).truncatedTo(ChronoUnit.MINUTES);
+        ZonedDateTime endAfterFutureDays = currentMinute.toLocalDate()
+                .plusDays(DEFAULT_AI_FUTURE_CALENDAR_DAYS + 1L)
+                .atStartOfDay(userZone);
+        return new PlanningRange(
+                currentMinute.toInstant(),
+                endAfterFutureDays.toInstant()
+        );
+    }
+
+    private List<AiRescheduleClient.MessageHistoryContext> buildMessageHistory(UUID userId) {
+        List<AiRescheduleClient.MessageHistoryContext> newestFirst = rescheduleSuggestionRepository
+                .findByUserIdAndStatusInOrderByCreatedAtDesc(
+                        userId,
+                        List.of(
+                                RescheduleSuggestionStatus.PENDING,
+                                RescheduleSuggestionStatus.APPLIED,
+                                RescheduleSuggestionStatus.REJECTED
+                        ),
+                        PageRequest.of(0, AI_MESSAGE_HISTORY_LIMIT)
+                )
+                .stream()
+                .map(suggestion -> new AiRescheduleClient.MessageHistoryContext(
+                        suggestion.getCreatedAt() == null ? null : suggestion.getCreatedAt().toString(),
+                        suggestion.getStatus().wireValue(),
+                        suggestion.getReason(),
+                        suggestion.getSummary(),
+                        null
+                ))
+                .toList();
+        List<AiRescheduleClient.MessageHistoryContext> oldestFirst = new ArrayList<>(newestFirst);
+        java.util.Collections.reverse(oldestFirst);
+        return oldestFirst;
+    }
+
+    private boolean shouldIncludeAvailabilityWindows(ManualRescheduleRequest request) {
+        if (request.targetRangeStart() != null && request.targetRangeEnd() != null) {
+            return true;
+        }
+        String normalized = (request.reason() == null ? "" : request.reason()).toLowerCase();
+        if (normalized.matches(".*\\d{1,2}\\s*(시|:).*")) {
+            return true;
+        }
+        return List.of(
+                "추가", "시간", "언제", "빈", "비어", "가능", "가용", "넣", "잡", "배치",
+                "오전", "오후", "내일", "오늘", "모레", "다음",
+                "add", "time", "slot", "free", "available", "availability", "schedule"
+        ).stream().anyMatch(normalized::contains);
+    }
+
+    private List<AiRescheduleClient.AvailabilityWindowContext> buildAvailabilityWindows(
+            List<ScheduleBlock> scheduleBlocks,
+            List<Event> events,
+            PlanningRange planningRange,
+            ZoneId userZone
+    ) {
+        List<BusyWindow> busyWindows = new ArrayList<>();
+        scheduleBlocks.forEach(block -> busyWindows.addAll(scheduleBlockBusyWindows(block, planningRange, userZone)));
+        events.forEach(event -> busyWindows.add(new BusyWindow(event.getStartAt(), event.getEndAt())));
+
+        List<BusyWindow> mergedBusyWindows = busyWindows.stream()
+                .map(window -> window.clip(planningRange))
+                .filter(window -> window.endAt().isAfter(window.startAt()))
+                .sorted(Comparator.comparing(BusyWindow::startAt))
+                .toList();
+
+        List<AiRescheduleClient.AvailabilityWindowContext> windows = new ArrayList<>();
+        Instant cursor = planningRange.startAt();
+        List<BusyWindow> mergedBusyWindowList = new ArrayList<>();
+        mergedBusyWindows.forEach(window -> mergeBusyWindow(mergedBusyWindowList, window));
+        for (BusyWindow busy : mergedBusyWindowList) {
+            if (busy.startAt().isAfter(cursor)) {
+                addAvailabilityWindow(windows, cursor, busy.startAt(), userZone);
+                if (windows.size() >= MAX_AVAILABILITY_WINDOWS) {
+                    return windows;
+                }
+            }
+            if (busy.endAt().isAfter(cursor)) {
+                cursor = busy.endAt();
+            }
+        }
+        if (planningRange.endAt().isAfter(cursor)) {
+            addAvailabilityWindow(windows, cursor, planningRange.endAt(), userZone);
+        }
+        return windows.size() > MAX_AVAILABILITY_WINDOWS ? windows.subList(0, MAX_AVAILABILITY_WINDOWS) : windows;
+    }
+
+    private List<BusyWindow> scheduleBlockBusyWindows(
+            ScheduleBlock block,
+            PlanningRange planningRange,
+            ZoneId userZone
+    ) {
+        List<BusyWindow> windows = new ArrayList<>();
+        LocalDate cursor = planningRange.startAt().atZone(userZone).toLocalDate();
+        LocalDate endDate = planningRange.endAt().atZone(userZone).toLocalDate();
+        while (!cursor.isAfter(endDate)) {
+            if (cursor.getDayOfWeek() == block.getDayOfWeek()) {
+                ZonedDateTime start = ZonedDateTime.of(cursor, block.getStartTime(), userZone);
+                ZonedDateTime end = ZonedDateTime.of(cursor, block.getEndTime(), userZone);
+                if (!block.getEndTime().isAfter(block.getStartTime())) {
+                    end = end.plusDays(1);
+                }
+                windows.add(new BusyWindow(start.toInstant(), end.toInstant()));
+            }
+            cursor = cursor.plusDays(1);
+        }
+        return windows;
+    }
+
+    private void mergeBusyWindow(List<BusyWindow> merged, BusyWindow next) {
+        if (merged.isEmpty()) {
+            merged.add(next);
+            return;
+        }
+        BusyWindow last = merged.getLast();
+        if (next.startAt().isAfter(last.endAt())) {
+            merged.add(next);
+            return;
+        }
+        if (next.endAt().isAfter(last.endAt())) {
+            merged.set(merged.size() - 1, new BusyWindow(last.startAt(), next.endAt()));
+        }
+    }
+
+    private void addAvailabilityWindow(
+            List<AiRescheduleClient.AvailabilityWindowContext> windows,
+            Instant startAt,
+            Instant endAt,
+            ZoneId userZone
+    ) {
+        long minutes = ChronoUnit.MINUTES.between(startAt, endAt);
+        if (minutes < MIN_AVAILABILITY_WINDOW_MINUTES) {
+            return;
+        }
+        windows.add(new AiRescheduleClient.AvailabilityWindowContext(
+                startAt.toString(),
+                endAt.toString(),
+                formatLocalAvailabilityLabel(startAt, endAt, userZone),
+                minutes,
+                "computed_empty_slot"
+        ));
+    }
+
+    private String formatLocalAvailabilityLabel(Instant startAt, Instant endAt, ZoneId userZone) {
+        ZonedDateTime start = startAt.atZone(userZone);
+        ZonedDateTime end = endAt.atZone(userZone);
+        String endLabel = start.toLocalDate().equals(end.toLocalDate())
+                ? "%02d:%02d".formatted(end.getHour(), end.getMinute())
+                : "%s %02d:%02d".formatted(end.toLocalDate(), end.getHour(), end.getMinute());
+        return "%s %02d:%02d-%s".formatted(
+                start.toLocalDate(),
+                start.getHour(),
+                start.getMinute(),
+                endLabel
+        );
+    }
+
+    private record PlanningRange(Instant startAt, Instant endAt) {
+    }
+
+    private record BusyWindow(Instant startAt, Instant endAt) {
+        BusyWindow clip(PlanningRange range) {
+            Instant clippedStart = startAt.isBefore(range.startAt()) ? range.startAt() : startAt;
+            Instant clippedEnd = endAt.isAfter(range.endAt()) ? range.endAt() : endAt;
+            return new BusyWindow(clippedStart, clippedEnd);
+        }
     }
 
     private AiRescheduleClient.ScheduleBlockContext toAiScheduleBlock(ScheduleBlock block) {

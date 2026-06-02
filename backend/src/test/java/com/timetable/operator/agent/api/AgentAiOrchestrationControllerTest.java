@@ -2,6 +2,7 @@ package com.timetable.operator.agent.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -10,15 +11,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.timetable.operator.agent.application.AiAgentInterpretation;
+import com.timetable.operator.agent.application.AiAgentRequest;
 import com.timetable.operator.agent.application.AiAgentStageClient;
+import com.timetable.operator.agent.application.AiRescheduleClient;
 import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
+import com.timetable.operator.agent.domain.RescheduleSuggestion;
 import com.timetable.operator.agent.domain.RescheduleSuggestionStatus;
+import com.timetable.operator.agent.domain.RescheduleSuggestionTriggerType;
 import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
 import com.timetable.operator.agent.infrastructure.RescheduleSuggestionRepository;
 import com.timetable.operator.auth.domain.AppUser;
 import com.timetable.operator.auth.infrastructure.AppUserRepository;
+import com.timetable.operator.events.domain.Event;
+import com.timetable.operator.events.domain.EventSourceType;
+import com.timetable.operator.events.domain.EventStatus;
 import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleBlock;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
@@ -26,11 +34,16 @@ import com.timetable.operator.schedule.domain.ScheduleSourceType;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
 import com.timetable.operator.tasks.infrastructure.TaskRepository;
 import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -311,6 +324,147 @@ class AgentAiOrchestrationControllerTest {
         assertThat(scheduleBlockRepository.countByUserId(user.getId())).isEqualTo(beforeCount);
     }
 
+    @Test
+    void manualAiRequestContextIncludesRecentHistoryAndAvailabilityWindows() throws Exception {
+        ZoneId userZone = ZoneId.of("Asia/Seoul");
+        LocalDate today = LocalDate.now(userZone);
+        seedHistory("근무 히스토리 1", "근무 요약 1", RescheduleSuggestionStatus.PENDING);
+        seedHistory("근무 히스토리 2", "근무 요약 2", RescheduleSuggestionStatus.APPLIED);
+        seedHistory("근무 히스토리 3", "근무 요약 3", RescheduleSuggestionStatus.PENDING);
+        seedHistory("거절된 요청", "거절된 요약", RescheduleSuggestionStatus.REJECTED);
+        seedHistory("근무 히스토리 4", "근무 요약 4", RescheduleSuggestionStatus.APPLIED);
+        seedHistory("근무 히스토리 5", "근무 요약 5", RescheduleSuggestionStatus.PENDING);
+        seedHistory("근무 히스토리 6", "근무 요약 6", RescheduleSuggestionStatus.APPLIED);
+        seedScheduleBlock(today.getDayOfWeek(), LocalTime.of(9, 0), LocalTime.of(10, 0), "기존 근무");
+        seedEvent(
+                "팀 회의",
+                ZonedDateTime.of(today, LocalTime.of(11, 0), userZone).toInstant(),
+                ZonedDateTime.of(today, LocalTime.of(12, 0), userZone).toInstant()
+        );
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create",
+                "event",
+                null,
+                "근무 일정",
+                null,
+                null,
+                null,
+                ZonedDateTime.of(today.plusDays(1), LocalTime.of(9, 0), userZone).toInstant().toString(),
+                ZonedDateTime.of(today.plusDays(1), LocalTime.of(10, 0), userZone).toInstant().toString(),
+                null,
+                List.of(),
+                List.of(),
+                0.92,
+                true,
+                ""
+        ));
+        when(aiAgentStageClient.draft(any(), any())).thenReturn(new StructuredAiCommandBatch(
+                "근무 일정 추가",
+                "최근 대화의 근무 일정 요청과 새 시간 답변을 합쳐 제안합니다.",
+                List.of(new StructuredAiCommand(
+                        AgentCommandActionType.CREATE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        null,
+                        Map.of(
+                                "title", "근무 일정",
+                                "startAt", ZonedDateTime.of(today.plusDays(1), LocalTime.of(9, 0), userZone).toInstant().toString(),
+                                "endAt", ZonedDateTime.of(today.plusDays(1), LocalTime.of(10, 0), userZone).toInstant().toString(),
+                                "category", ScheduleCategory.WORK.name()
+                        ),
+                        "최근 대화 이력을 반영",
+                        true
+                ))
+        ));
+
+        mockMvc.perform(post("/api/agent/reschedule")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "triggerType": "manual_request",
+                                  "reason": "내일 오전 9시"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary").value("근무 일정 추가"));
+
+        ArgumentCaptor<AiAgentRequest> captor = ArgumentCaptor.forClass(AiAgentRequest.class);
+        verify(aiAgentStageClient).interpret(captor.capture());
+        AiAgentRequest capturedRequest = captor.getValue();
+
+        assertThat(capturedRequest.context().messageHistory())
+                .extracting(AiRescheduleClient.MessageHistoryContext::userRequest)
+                .containsExactly("근무 히스토리 3", "거절된 요청", "근무 히스토리 4", "근무 히스토리 5", "근무 히스토리 6");
+        assertThat(capturedRequest.context().messageHistory())
+                .extracting(AiRescheduleClient.MessageHistoryContext::status)
+                .containsExactly("pending", "rejected", "applied", "pending", "applied");
+        assertThat(capturedRequest.context().messageHistory().getLast().assistantSummary())
+                .isEqualTo("근무 요약 6");
+        assertThat(capturedRequest.context().messageHistory())
+                .extracting(AiRescheduleClient.MessageHistoryContext::assistantExplanation)
+                .containsOnlyNulls();
+        Instant resolvedRangeStart = Instant.parse(capturedRequest.context().request().resolvedRangeStart());
+        Instant resolvedRangeEnd = Instant.parse(capturedRequest.context().request().resolvedRangeEnd());
+        assertThat(resolvedRangeStart.atZone(userZone).toLocalDate()).isEqualTo(today);
+        assertThat(resolvedRangeEnd.atZone(userZone).toLocalDate()).isEqualTo(today.plusDays(4));
+        assertThat(resolvedRangeEnd.atZone(userZone).toLocalTime()).isEqualTo(LocalTime.MIDNIGHT);
+        assertThat(capturedRequest.context().availabilityWindows())
+                .isNotEmpty()
+                .allSatisfy(window -> {
+                    assertThat(window.durationMinutes()).isGreaterThanOrEqualTo(30);
+                    assertThat(window.source()).isEqualTo("computed_empty_slot");
+                    assertThat(window.localLabel()).contains("-");
+                });
+    }
+
+    @Test
+    void manualAiRequestSkipsAvailabilityWindowsWhenNoTimeSlotReasoningIsNeeded() throws Exception {
+        seedHistory("그 시간은 싫어", "사용자가 이전 제안을 거절했습니다.", RescheduleSuggestionStatus.REJECTED);
+        seedScheduleBlock(DayOfWeek.MONDAY, LocalTime.of(9, 0), LocalTime.of(10, 0), "기존 근무");
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "explain_only",
+                "none",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of("time"),
+                List.of(),
+                0.2,
+                true,
+                "어떤 방향으로 다시 제안할까요?"
+        ));
+
+        mockMvc.perform(post("/api/agent/reschedule")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "triggerType": "manual_request",
+                                  "reason": "그건 싫어 다른 제안 줘"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<AiAgentRequest> captor = ArgumentCaptor.forClass(AiAgentRequest.class);
+        verify(aiAgentStageClient).interpret(captor.capture());
+        AiAgentRequest capturedRequest = captor.getValue();
+
+        assertThat(capturedRequest.context().messageHistory())
+                .extracting(AiRescheduleClient.MessageHistoryContext::status)
+                .containsExactly("rejected");
+        assertThat(capturedRequest.context().messageHistory().getFirst().assistantSummary())
+                .isEqualTo("사용자가 이전 제안을 거절했습니다.");
+        assertThat(capturedRequest.context().messageHistory().getFirst().assistantExplanation()).isNull();
+        assertThat(capturedRequest.context().availabilityWindows()).isEmpty();
+    }
+
     private static StructuredAiCommand scheduleCreate(String day, String start, String end, String activity) {
         return new StructuredAiCommand(
                 AgentCommandActionType.CREATE_EVENT.wireValue(),
@@ -327,5 +481,49 @@ class AgentAiOrchestrationControllerTest {
                 "fake LLM scripted response",
                 true
         );
+    }
+
+    private void seedHistory(String reason, String summary, RescheduleSuggestionStatus status) {
+        RescheduleSuggestion suggestion = new RescheduleSuggestion();
+        suggestion.setUserId(user.getId());
+        suggestion.setTriggerType(RescheduleSuggestionTriggerType.MANUAL_REQUEST);
+        suggestion.setStatus(status);
+        suggestion.setReason(reason);
+        suggestion.setSummary(summary);
+        suggestion.setExplanation("테스트 대화 이력");
+        suggestion.setSuggestionPayload("""
+                {"summary":"%s","explanation":"테스트 대화 이력","commands":[{"action_type":"explain_only","target_type":"none","target_id":null,"payload":{},"reason":"clarification","requires_confirmation":false}]}
+                """.formatted(summary));
+        rescheduleSuggestionRepository.saveAndFlush(suggestion);
+        try {
+            Thread.sleep(2);
+        } catch (InterruptedException interruptedException) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while spacing seeded history timestamps", interruptedException);
+        }
+    }
+
+    private void seedScheduleBlock(DayOfWeek dayOfWeek, LocalTime startTime, LocalTime endTime, String activity) {
+        ScheduleBlock block = new ScheduleBlock();
+        block.setUserId(user.getId());
+        block.setDayOfWeek(dayOfWeek);
+        block.setStartTime(startTime);
+        block.setEndTime(endTime);
+        block.setActivity(activity);
+        block.setCategory(ScheduleCategory.WORK);
+        block.setSourceType(ScheduleSourceType.MANUAL);
+        scheduleBlockRepository.save(block);
+    }
+
+    private void seedEvent(String title, Instant startAt, Instant endAt) {
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle(title);
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(startAt);
+        event.setEndAt(endAt);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        eventRepository.save(event);
     }
 }

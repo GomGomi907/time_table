@@ -317,6 +317,8 @@ export function FocusView() {
     timezone: session?.timezone,
     formatClock,
   });
+  const timerValueClassName =
+    timerPresentation.value.length > 4 ? "timer-value timer-value-compact" : "timer-value";
 
   function handleDeleteCurrentItem() {
     if (!currentItem) {
@@ -428,8 +430,8 @@ export function FocusView() {
               <div className="timer-ring">
                 <div className="timer-inner">
                   <span className="timer-label">{timerPresentation.label}</span>
-                  <strong>{timerPresentation.value}</strong>
-                  <p>{timerPresentation.context}</p>
+                  <strong className={timerValueClassName}>{timerPresentation.value}</strong>
+                  <p className="timer-context">{timerPresentation.context}</p>
                 </div>
               </div>
 
