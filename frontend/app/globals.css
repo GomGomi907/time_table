@@ -1495,6 +1495,112 @@ summary,
   min-width: 0;
 }
 
+.agenda-stream-card {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 18px;
+}
+
+.agenda-stream-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agenda-stream-head h2 {
+  margin-top: 4px;
+}
+
+.agenda-stream-head p {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.agenda-stream-head > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 7px 10px;
+}
+
+.agenda-stream-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.agenda-day-group {
+  display: grid;
+  gap: 8px;
+}
+
+.agenda-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.agenda-day-head strong {
+  color: var(--ink);
+}
+
+.agenda-occurrence-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-occurrence {
+  --tone: var(--meeting);
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--tone) 22%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 11%, white), #fff);
+  padding: 12px;
+}
+
+.agenda-occurrence.deep { --tone: var(--deep); }
+.agenda-occurrence.routine { --tone: var(--routine); }
+.agenda-occurrence.meeting { --tone: var(--meeting); }
+
+.agenda-occurrence-time {
+  color: color-mix(in srgb, var(--tone) 62%, var(--ink));
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.agenda-occurrence div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.agenda-occurrence strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agenda-occurrence div span,
+.agenda-stream-empty {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .week-planner-head {
   align-items: center;
 }
