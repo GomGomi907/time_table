@@ -1644,6 +1644,36 @@ summary,
   font-weight: 800;
 }
 
+.selected-day-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.selected-day-range {
+  display: grid;
+  gap: 10px;
+  border: 1px dashed rgba(29, 78, 216, 0.22);
+  border-radius: 18px;
+  background: rgba(239, 246, 255, 0.48);
+  padding: 12px;
+}
+
+.selected-day-range-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.selected-day-range-head strong {
+  color: var(--ink);
+}
+
 .monthly-mosaic-head > span {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -1773,7 +1803,8 @@ summary,
   color: var(--ink);
 }
 
-.agenda-occurrence-list {
+.agenda-occurrence-list,
+.selected-day-occurrence-list {
   display: grid;
   gap: 8px;
   margin: 0;
@@ -1781,7 +1812,8 @@ summary,
   list-style: none;
 }
 
-.agenda-occurrence {
+.agenda-occurrence,
+.selected-day-occurrence {
   --tone: var(--meeting);
   display: grid;
   grid-template-columns: 72px minmax(0, 1fr);
@@ -1792,9 +1824,12 @@ summary,
   padding: 12px;
 }
 
-.agenda-occurrence.deep { --tone: var(--deep); }
-.agenda-occurrence.routine { --tone: var(--routine); }
-.agenda-occurrence.meeting { --tone: var(--meeting); }
+.agenda-occurrence.deep,
+.selected-day-occurrence.deep { --tone: var(--deep); }
+.agenda-occurrence.routine,
+.selected-day-occurrence.routine { --tone: var(--routine); }
+.agenda-occurrence.meeting,
+.selected-day-occurrence.meeting { --tone: var(--meeting); }
 
 .agenda-occurrence-time {
   color: color-mix(in srgb, var(--tone) 62%, var(--ink));
@@ -1802,18 +1837,21 @@ summary,
   font-weight: 900;
 }
 
-.agenda-occurrence div {
+.agenda-occurrence div,
+.selected-day-occurrence div {
   display: grid;
   min-width: 0;
   gap: 3px;
 }
 
-.agenda-occurrence strong {
+.agenda-occurrence strong,
+.selected-day-occurrence strong {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
 .agenda-occurrence div span,
+.selected-day-occurrence div span,
 .agenda-stream-empty {
   color: var(--muted);
   font-size: 0.84rem;

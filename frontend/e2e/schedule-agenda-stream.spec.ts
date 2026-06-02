@@ -50,13 +50,14 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
           timezone: "Asia/Seoul",
           occurrences: [
             agendaOccurrence("event-late", "오전 제품 리뷰", "2026-01-02T01:00:00.000Z", "2026-01-02T02:00:00.000Z"),
+            agendaOccurrence("multi-day-release", "밤샘 출시 점검", "2026-01-02T14:00:00.000Z", "2026-01-03T02:00:00.000Z"),
             agendaOccurrence("task-next-day", "다음날 성장 과제", "2026-01-03T00:00:00.000Z", "2026-01-03T00:30:00.000Z", "TASK"),
             agendaOccurrence("routine-early", "아침 루틴 정리", "2026-01-01T23:00:00.000Z", "2026-01-01T23:30:00.000Z", "ROUTINE_BLOCK"),
           ],
           instrumentation: {
             repositoryGroupCount: 3,
             repositoryGroups: ["events", "tasks", "routineBlocks"],
-            occurrenceCount: 3,
+            occurrenceCount: 4,
             rangeDays: 14,
           },
         },
@@ -72,12 +73,20 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
   await expect(groups).toHaveCount(2);
   await expect(groups.nth(0)).toContainText("아침 루틴 정리");
   await expect(groups.nth(0)).toContainText("오전 제품 리뷰");
+  await expect(groups.nth(0)).toContainText("밤샘 출시 점검");
+  await expect(groups.nth(1)).toContainText("밤샘 출시 점검");
   await expect(groups.nth(1)).toContainText("다음날 성장 과제");
+  await expect(page.getByTestId("agenda-occurrence")).toHaveCount(5);
 
   const orderedTitles = await page.getByTestId("agenda-occurrence").evaluateAll((items) =>
     items.map((item) => item.textContent ?? ""),
   );
-  expect(orderedTitles.join("\n")).toMatch(/아침 루틴 정리[\s\S]*오전 제품 리뷰[\s\S]*다음날 성장 과제/);
+  expect(orderedTitles.join("\n")).toMatch(/아침 루틴 정리[\s\S]*오전 제품 리뷰[\s\S]*밤샘 출시 점검[\s\S]*밤샘 출시 점검[\s\S]*다음날 성장 과제/);
+
+  await groups.nth(0).locator("button").click();
+  await expect(page.getByTestId("selected-day-timeline")).toBeVisible();
+  await expect(page.getByTestId("schedule-view-option-day")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("selected-day-occurrence")).toContainText(["아침 루틴 정리", "오전 제품 리뷰", "밤샘 출시 점검"]);
 });
 
 
@@ -133,4 +142,5 @@ test("schedule monthly mosaic summarizes range days and hands selected date to d
   await page.getByTestId("monthly-mosaic-day").filter({ hasText: "월간 핵심 집중" }).click();
   await expect(page.getByTestId("selected-day-timeline")).toBeVisible();
   await expect(page.getByTestId("schedule-view-option-day")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("selected-day-occurrence")).toContainText("월간 핵심 집중");
 });
