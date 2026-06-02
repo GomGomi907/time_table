@@ -1203,6 +1203,59 @@ summary,
   gap: 6px;
 }
 
+.schedule-view-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.schedule-view-toolbar h2 {
+  margin: 4px 0 0;
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  letter-spacing: -0.04em;
+}
+
+.schedule-view-switcher {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  gap: 8px;
+  min-width: min(100%, 460px);
+}
+
+.schedule-view-option {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  cursor: pointer;
+  padding: 10px 12px;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.schedule-view-option:hover {
+  border-color: rgba(29, 78, 216, 0.36);
+  transform: translateY(-1px);
+}
+
+.schedule-view-option.active {
+  border-color: rgba(29, 78, 216, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.22), 0 16px 34px rgba(59, 130, 246, 0.14);
+}
+
+.schedule-view-option span {
+  font-weight: 900;
+}
+
+.schedule-view-option small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
 .dot {
   display: inline-block;
   width: 9px;
@@ -2069,6 +2122,16 @@ button.current-schedule-card:hover {
   .schedule-mobile-action-strip {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-view-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-view-switcher {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
   }
 }
 

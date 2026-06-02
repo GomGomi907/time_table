@@ -48,6 +48,23 @@ const DEFAULT_FORM = {
   note: "",
 };
 const SCHEDULE_MUTATION_TIMEOUT_MS = 10_000;
+const SCHEDULE_TIMELINE_VIEWS = ["month", "week", "day", "agenda"] as const;
+
+type ScheduleTimelineView = (typeof SCHEDULE_TIMELINE_VIEWS)[number];
+
+const SCHEDULE_TIMELINE_VIEW_LABELS: Record<ScheduleTimelineView, string> = {
+  month: "월",
+  week: "주",
+  day: "일",
+  agenda: "목록",
+};
+
+const SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS: Record<ScheduleTimelineView, string> = {
+  month: "월간 모자이크",
+  week: "주간 스택",
+  day: "선택한 하루",
+  agenda: "시간순 목록",
+};
 
 interface ScheduleData {
   week: WeekScheduleResponse | null;
@@ -652,6 +669,7 @@ export function ScheduleView() {
   const [editingBlock, setEditingBlock] = useState<EditableScheduleBlock | null>(null);
   const [deleteCandidate, setDeleteCandidate] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [timelineView, setTimelineView] = useState<ScheduleTimelineView>("week");
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
   const aiThreadRef = useRef<HTMLDivElement | null>(null);
@@ -1237,6 +1255,31 @@ export function ScheduleView() {
       {data.week ? (
         <section className="planner-layout schedule-layout">
           <article className="planner-board schedule-main-board">
+            <div className="schedule-view-toolbar" aria-label="일정 보기 전환">
+              <div>
+                <p className="panel-kicker">보기</p>
+                <h2>{SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS[timelineView]}</h2>
+              </div>
+              <div className="schedule-view-switcher" role="group" aria-label="타임라인 보기">
+                {SCHEDULE_TIMELINE_VIEWS.map((view) => {
+                  const isActive = timelineView === view;
+                  return (
+                    <button
+                      aria-pressed={isActive}
+                      className={`schedule-view-option ${isActive ? "active" : ""}`}
+                      data-testid={`schedule-view-option-${view}`}
+                      key={view}
+                      type="button"
+                      onClick={() => setTimelineView(view)}
+                    >
+                      <span>{SCHEDULE_TIMELINE_VIEW_LABELS[view]}</span>
+                      <small>{SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS[view]}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="schedule-mobile-action-strip" aria-label="주간 일정 빠른 작업">
               <button
                 className="ghost-btn"
@@ -1259,7 +1302,11 @@ export function ScheduleView() {
             </div>
 
             <div className="schedule-device-layout">
-              <section className="schedule-calendar-panel" aria-label="반응형 주간 일정">
+              <section
+                className="schedule-calendar-panel"
+                aria-label={`${SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS[timelineView]} 일정`}
+                data-active-view={timelineView}
+              >
                 <WeeklyStack
                   week={data.week}
                   onBlockSelect={(block) => void openEditModal(block)}
