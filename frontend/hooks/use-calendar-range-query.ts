@@ -12,7 +12,6 @@ export interface CalendarRangeQueryInput {
   end: string;
   view: CalendarRangeView;
   timezone?: string;
-  enabled?: boolean;
 }
 
 export interface CalendarRangeQueryOptions {
@@ -35,7 +34,7 @@ export function useCalendarRangeQuery(input: CalendarRangeQueryInput, options: C
   return useQuery({
     queryKey: calendarRangeQueryKey(input),
     queryFn: ({ signal }) => api.getCalendarRange(input, signal).then((response) => response.data),
-    enabled: input.enabled ?? true,
+    enabled: options.enabled ?? true,
     placeholderData: (previousData) => previousData,
   });
 }

@@ -531,11 +531,6 @@ function buildAgendaRangeWindow(timeZoneInput: string | null | undefined) {
     timeZone,
   };
 }
-function addMonthsToDateKey(dateKey: string, monthsToAdd: number) {
-  const [year, month] = dateKey.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1 + monthsToAdd, 1, 0, 0, 0, 0)).toISOString().slice(0, 10);
-}
-
 function monthStartDateKey(dateKey: string) {
   const [year, month] = dateKey.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0)).toISOString().slice(0, 10);
@@ -633,159 +628,6 @@ function scheduleBlockActionLabel(dayOfWeek: string, block: ScheduleBlock, state
   ].filter(Boolean);
   const note = visibleScheduleNote(block.note);
   return `${pieces.join(", ")}. ${note ? `메모: ${note}. ` : ""}선택하면 일정 편집 창을 엽니다.`;
-}
-
-function occurrenceDateKey(occurrence: CalendarOccurrence, timeZone: string) {
-  if (!occurrence.startAt) {
-    return null;
-  }
-  const startAt = new Date(occurrence.startAt);
-  if (Number.isNaN(startAt.getTime())) {
-    return null;
-  }
-  return zonedDateKey(startAt, timeZone);
-}
-
-function compareOccurrences(left: CalendarOccurrence, right: CalendarOccurrence) {
-  const leftStart = left.startAt ?? "";
-  const rightStart = right.startAt ?? "";
-  if (leftStart !== rightStart) {
-    return leftStart.localeCompare(rightStart);
-  }
-  return left.priorityTier - right.priorityTier || left.title.localeCompare(right.title);
-}
-
-function getMonthGridStart(monthStartKey: string) {
-  const dayIndex = DAY_ORDER.indexOf(dayOfWeekFromDateKey(monthStartKey) as (typeof DAY_ORDER)[number]);
-  return addDaysToDateKey(monthStartKey, dayIndex === -1 ? 0 : -dayIndex);
-}
-
-function formatMonthTitle(monthStartKey: string) {
-  const [year, month] = monthStartKey.split("-").map(Number);
-  return `${year}년 ${month}월`;
-}
-
-function formatOccurrenceTime(occurrence: CalendarOccurrence, timeZone: string) {
-  if (!occurrence.startAt) {
-    return "종일";
-  }
-  const startAt = new Date(occurrence.startAt);
-  if (Number.isNaN(startAt.getTime())) {
-    return "시간 미정";
-  }
-  const parts = getZonedDateTimeParts(startAt, timeZone);
-  return `${padDatePart(parts.hour)}:${padDatePart(parts.minute)}`;
-}
-
-function summarizeMonthlyDay(occurrences: CalendarOccurrence[]) {
-  if (!occurrences.length) {
-    return "비어 있는 시간";
-  }
-  const protectedCount = occurrences.filter((occurrence) => occurrence.protectedWindow).length;
-  const externalCount = occurrences.filter((occurrence) => occurrence.providerAuthority === "REMOTE_FIXED").length;
-  const routineCount = occurrences.filter((occurrence) => occurrence.entityType === "ROUTINE_BLOCK").length;
-  const summaryParts = [
-    `${occurrences.length}개 일정`,
-    protectedCount ? `보호 ${protectedCount}` : null,
-    externalCount ? `외부 ${externalCount}` : null,
-    routineCount ? `루틴 ${routineCount}` : null,
-  ].filter(Boolean);
-  return summaryParts.join(" · ");
-}
-
-interface MonthlyMosaicProps {
-  range: CalendarRangeResponse | undefined;
-  monthStartKey: string;
-  timeZone: string;
-  isLoading: boolean;
-  isError: boolean;
-}
-
-function MonthlyMosaic({ range, monthStartKey, timeZone, isLoading, isError }: MonthlyMosaicProps) {
-  const cells = useMemo(() => {
-    const nextMonthStartKey = addMonthsToDateKey(monthStartKey, 1);
-    const gridStartKey = getMonthGridStart(monthStartKey);
-    const occurrenceGroups = new Map<string, CalendarOccurrence[]>();
-
-    for (const occurrence of range?.occurrences ?? []) {
-      const dateKey = occurrenceDateKey(occurrence, timeZone);
-      if (!dateKey || dateKey < monthStartKey || dateKey >= nextMonthStartKey) {
-        continue;
-      }
-      const current = occurrenceGroups.get(dateKey) ?? [];
-      current.push(occurrence);
-      occurrenceGroups.set(dateKey, current);
-    }
-
-    occurrenceGroups.forEach((occurrences) => occurrences.sort(compareOccurrences));
-
-    return Array.from({ length: 42 }, (_unused, index) => {
-      const dateKey = addDaysToDateKey(gridStartKey, index);
-      return {
-        dateKey,
-        isCurrentMonth: dateKey >= monthStartKey && dateKey < nextMonthStartKey,
-        occurrences: occurrenceGroups.get(dateKey) ?? [],
-      };
-    });
-  }, [monthStartKey, range?.occurrences, timeZone]);
-
-  return (
-    <article className="monthly-mosaic" data-testid="monthly-mosaic" aria-busy={isLoading}>
-      <div className="monthly-mosaic-head">
-        <div>
-          <p className="panel-kicker">월간 모자이크</p>
-          <h3>{formatMonthTitle(monthStartKey)}</h3>
-        </div>
-        <span className="accent-pill" data-testid="monthly-mosaic-range-count">
-          {range ? `${range.instrumentation.occurrenceCount}개` : isLoading ? "불러오는 중" : "0개"}
-        </span>
-      </div>
-
-      {isError ? (
-        <div className="inline-message error" role="alert">
-          <strong>월간 일정을 불러오지 못했습니다.</strong>
-          <p>주간 일정은 계속 사용할 수 있습니다. 잠시 후 다시 시도해 주세요.</p>
-        </div>
-      ) : null}
-
-      <div className="monthly-mosaic-weekdays" aria-hidden="true">
-        {DAY_ORDER.map((day) => (
-          <span key={day}>{DAY_FULL_LABELS[day].slice(0, 1)}</span>
-        ))}
-      </div>
-      <div className="monthly-mosaic-grid" aria-label={`${formatMonthTitle(monthStartKey)} 월간 일정 요약`}>
-        {cells.map((cell) => {
-          const topOccurrences = cell.occurrences.slice(0, 2);
-          const hiddenCount = Math.max(cell.occurrences.length - topOccurrences.length, 0);
-          return (
-            <section
-              className={`monthly-mosaic-day ${cell.isCurrentMonth ? "" : "outside-month"} ${cell.occurrences.length ? "has-events" : ""}`}
-              data-testid={`monthly-mosaic-day-${cell.dateKey}`}
-              key={cell.dateKey}
-              aria-label={`${cell.dateKey} ${summarizeMonthlyDay(cell.occurrences)}`}
-            >
-              <div className="monthly-mosaic-day-head">
-                <span>{Number(cell.dateKey.slice(-2))}</span>
-                <strong>{cell.occurrences.length ? `${cell.occurrences.length}개` : "여유"}</strong>
-              </div>
-              <p>{summarizeMonthlyDay(cell.occurrences)}</p>
-              {topOccurrences.length ? (
-                <ul>
-                  {topOccurrences.map((occurrence) => (
-                    <li className={categoryTone(occurrence.category ?? "MEETING")} key={occurrence.occurrenceId}>
-                      <span>{formatOccurrenceTime(occurrence, timeZone)}</span>
-                      <strong>{occurrence.title}</strong>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {hiddenCount ? <small>외 {hiddenCount}개</small> : null}
-            </section>
-          );
-        })}
-      </div>
-    </article>
-  );
 }
 
 function WeeklyStack({
@@ -1201,6 +1043,7 @@ export function ScheduleView() {
   const [deleteCandidate, setDeleteCandidate] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [timelineView, setTimelineView] = useState<ScheduleTimelineView>("week");
+  const [selectedDateKey, setSelectedDateKey] = useState(() => zonedDateKey(new Date(), safeTimeZone(session?.timezone)));
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
   const aiThreadRef = useRef<HTMLDivElement | null>(null);
@@ -1211,18 +1054,32 @@ export function ScheduleView() {
   const scheduleMutationActiveRef = useRef(false);
   const queryClient = useQueryClient();
   const scheduleTimeZone = safeTimeZone(session?.timezone);
-  const currentDateKey = zonedDateKey(new Date(), scheduleTimeZone);
-  const monthRange = useMemo(
-    () => getMonthRangeForDateKey(currentDateKey, scheduleTimeZone),
-    [currentDateKey, scheduleTimeZone],
+  const agendaRangeWindow = useMemo(
+    () => buildAgendaRangeWindow(session?.timezone),
+    [session?.timezone],
   );
-  const monthRangeQuery = useCalendarRangeQuery({
-    start: monthRange.start,
-    end: monthRange.end,
-    view: "month",
-    timezone: scheduleTimeZone,
-    enabled: Boolean(session?.authenticated),
-  });
+  const monthRangeWindow = useMemo(
+    () => buildMonthRangeWindow(selectedDateKey, session?.timezone),
+    [selectedDateKey, session?.timezone],
+  );
+  const agendaRangeQuery = useCalendarRangeQuery(
+    {
+      start: agendaRangeWindow.start,
+      end: agendaRangeWindow.end,
+      view: "agenda",
+      timezone: agendaRangeWindow.timeZone,
+    },
+    { enabled: Boolean(session?.authenticated) && timelineView === "agenda" },
+  );
+  const monthRangeQuery = useCalendarRangeQuery(
+    {
+      start: monthRangeWindow.start,
+      end: monthRangeWindow.end,
+      view: "month",
+      timezone: monthRangeWindow.timeZone,
+    },
+    { enabled: Boolean(session?.authenticated) && timelineView === "month" },
+  );
 
   async function runScheduleMutationExclusive<T>(operation: (signal: AbortSignal) => Promise<T>) {
     const previousMutation = scheduleMutationQueueRef.current;
@@ -1854,18 +1711,44 @@ export function ScheduleView() {
                 {timelineView === "month" ? (
                   <MonthlyMosaic
                     range={monthRangeQuery.data}
-                    monthStartKey={monthRange.monthStartKey}
-                    timeZone={scheduleTimeZone}
-                    isLoading={monthRangeQuery.isLoading}
+                    isLoading={monthRangeQuery.isLoading || monthRangeQuery.isFetching}
                     isError={monthRangeQuery.isError}
+                    selectedDateKey={selectedDateKey}
+                    monthDateKey={monthRangeWindow.startDateKey}
+                    timeZone={monthRangeWindow.timeZone}
+                    onSelectDate={(dateKey) => {
+                      setSelectedDateKey(dateKey);
+                      setTimelineView("day");
+                    }}
                   />
-                ) : (
+                ) : null}
+                {timelineView === "week" ? (
                   <WeeklyStack
                     week={data.week}
                     onBlockSelect={(block) => void openEditModal(block)}
                     timeZone={session?.timezone}
                   />
-                )}
+                ) : null}
+                {timelineView === "day" ? (
+                  <SelectedDayTimeline
+                    week={data.week}
+                    selectedDateKey={selectedDateKey}
+                    onBlockSelect={(block) => void openEditModal(block)}
+                    timeZone={session?.timezone}
+                  />
+                ) : null}
+                {timelineView === "agenda" ? (
+                  <AgendaStream
+                    range={agendaRangeQuery.data}
+                    isLoading={agendaRangeQuery.isLoading || agendaRangeQuery.isFetching}
+                    isError={agendaRangeQuery.isError}
+                    timeZone={agendaRangeWindow.timeZone}
+                    onSelectDate={(dateKey) => {
+                      setSelectedDateKey(dateKey);
+                      setTimelineView("day");
+                    }}
+                  />
+                ) : null}
               </section>
             </div>
           </article>
