@@ -4,6 +4,7 @@ import {
   backendFetch,
   clearScheduleBlocksForDay,
   completeOnboardingIfPresent,
+  createScheduleBlockViaApi,
   escapeRegExp,
   getCurrentBackendDay,
   loginAsUniqueMockUser,
@@ -273,6 +274,84 @@ test("schedule create blocks duplicate synchronous submits while the mutation is
 
   await page.unroute("**/api/schedule/blocks");
   await clearScheduleBlocksForDay(page, currentDay);
+});
+
+test("schedule edit and delete block duplicate synchronous submits while mutations are pending", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  await page.goto("/schedule");
+  await expect(page.getByTestId("schedule-add-button")).toBeVisible({
+    timeout: 30_000,
+  });
+  const currentDay = getCurrentBackendDay();
+  await clearScheduleBlocksForDay(page, currentDay);
+
+  const title = `E2E 수정 삭제 중복 방지 ${Date.now()}`;
+  const editedTitle = `${title} 수정`;
+  await createScheduleBlockViaApi(page, {
+    dayOfWeek: currentDay,
+    startTime: "13:20",
+    endTime: "13:50",
+    activity: title,
+    category: "GROWTH",
+    note: "Playwright duplicate mutation seed",
+  });
+
+  await page.reload();
+  const seededBlock = page.locator(".schedule-block").filter({ hasText: title }).first();
+  await expect(seededBlock).toBeVisible({ timeout: 15_000 });
+
+  let updateRequests = 0;
+  let deleteRequests = 0;
+  await page.route("**/api/schedule/blocks/*", async (route) => {
+    const method = route.request().method();
+    if (method === "PUT") {
+      updateRequests += 1;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (method === "DELETE") {
+      deleteRequests += 1;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    await route.fallback();
+  });
+
+  await seededBlock.click();
+  const editDialog = page.getByRole("dialog", { name: /일정 블록 수정/ });
+  await expect(editDialog).toBeVisible();
+  await editDialog.getByLabel("활동").fill(editedTitle);
+  const saveButton = editDialog.getByRole("button", { name: "변경 저장" });
+  await saveButton.evaluate((button) => {
+    const element = button as HTMLButtonElement;
+    element.click();
+    element.click();
+  });
+  await expect(saveButton).toBeDisabled();
+
+  const editedBlock = page.locator(".schedule-block").filter({ hasText: editedTitle }).first();
+  await expect(editedBlock).toBeVisible({ timeout: 15_000 });
+  expect(updateRequests).toBe(1);
+
+  await editedBlock.click();
+  const reopenedEditDialog = page.getByRole("dialog", { name: /일정 블록 수정/ });
+  await expect(reopenedEditDialog).toBeVisible();
+  await reopenedEditDialog.getByRole("button", { name: "삭제" }).click();
+  const confirmDialog = page.getByRole("dialog", { name: /일정 블록을 삭제할까요/ });
+  await expect(confirmDialog).toBeVisible();
+  const deleteButton = confirmDialog.getByRole("button", { name: "삭제" });
+  await deleteButton.evaluate((button) => {
+    const element = button as HTMLButtonElement;
+    element.click();
+    element.click();
+  });
+  await expect(deleteButton).toBeDisabled();
+
+  await expect(confirmDialog).toHaveCount(0, { timeout: 15_000 });
+  expect(deleteRequests).toBe(1);
+  await expect(page.getByRole("button", { name: new RegExp(escapeRegExp(editedTitle)) })).toHaveCount(0);
+
+  await page.unroute("**/api/schedule/blocks/*");
 });
 
 function buildReadonlySuggestion(index: number, verbose = false) {
