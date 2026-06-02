@@ -1495,6 +1495,111 @@ summary,
   min-width: 0;
 }
 
+.monthly-mosaic-card,
+.selected-day-card {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 18px;
+}
+
+.monthly-mosaic-head,
+.selected-day-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.monthly-mosaic-head h2,
+.selected-day-head h2 {
+  margin-top: 4px;
+}
+
+.monthly-mosaic-head p,
+.selected-day-head p,
+.timeline-state-note {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.timeline-state-note.error {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.monthly-mosaic-head > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 7px 10px;
+}
+
+.monthly-weekday-row,
+.monthly-mosaic-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.monthly-weekday-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.monthly-mosaic-day {
+  display: grid;
+  min-height: 112px;
+  align-content: start;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 10px;
+  text-align: left;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.monthly-mosaic-day:hover,
+.monthly-mosaic-day.selected {
+  border-color: rgba(29, 78, 216, 0.42);
+  box-shadow: 0 14px 30px rgba(59, 130, 246, 0.13);
+  transform: translateY(-1px);
+}
+
+.monthly-mosaic-day.outside {
+  opacity: 0.46;
+}
+
+.monthly-day-number {
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.monthly-mosaic-day strong,
+.monthly-day-preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monthly-mosaic-day small,
+.monthly-day-preview {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .agenda-stream-card {
   display: grid;
   gap: 16px;

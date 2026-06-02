@@ -65,6 +65,7 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
   });
 
   await page.goto("/schedule");
+  await page.getByTestId("schedule-view-option-agenda").click();
   await expect(page.getByTestId("agenda-stream")).toBeVisible({ timeout: 30_000 });
 
   const groups = page.getByTestId("agenda-day-group");
@@ -77,4 +78,59 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
     items.map((item) => item.textContent ?? ""),
   );
   expect(orderedTitles.join("\n")).toMatch(/아침 루틴 정리[\s\S]*오전 제품 리뷰[\s\S]*다음날 성장 과제/);
+});
+
+
+test("schedule monthly mosaic summarizes range days and hands selected date to day view", async ({
+  page,
+}, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  await page.route("**/api/calendar/range**", async (route) => {
+    const url = new URL(route.request().url());
+    const view = url.searchParams.get("view")?.toUpperCase() ?? "MONTH";
+    const start = url.searchParams.get("start") ?? "2026-06-01T00:00:00.000Z";
+    const anchor = new Date(start);
+    anchor.setUTCDate(anchor.getUTCDate() + 1);
+    const end = new Date(anchor);
+    end.setUTCMinutes(end.getUTCMinutes() + 45);
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: {
+          start,
+          end: url.searchParams.get("end") ?? "2026-07-01T00:00:00.000Z",
+          view,
+          timezone: "Asia/Seoul",
+          occurrences: [
+            agendaOccurrence(
+              "monthly-focus",
+              "월간 핵심 집중",
+              anchor.toISOString(),
+              end.toISOString(),
+              "TASK",
+            ),
+          ],
+          instrumentation: {
+            repositoryGroupCount: 3,
+            repositoryGroups: ["events", "tasks", "routineBlocks"],
+            occurrenceCount: 1,
+            rangeDays: 31,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/schedule");
+  await page.getByTestId("schedule-view-option-month").click();
+  await expect(page.getByTestId("monthly-mosaic")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("monthly-mosaic")).toContainText("월간 핵심 집중");
+
+  await page.getByTestId("monthly-mosaic-day").filter({ hasText: "월간 핵심 집중" }).click();
+  await expect(page.getByTestId("selected-day-timeline")).toBeVisible();
+  await expect(page.getByTestId("schedule-view-option-day")).toHaveAttribute("aria-pressed", "true");
 });

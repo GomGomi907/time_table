@@ -514,6 +514,82 @@ function buildAgendaRangeWindow(timeZoneInput: string | null | undefined) {
     timeZone,
   };
 }
+function addMonthsToDateKey(dateKey: string, monthsToAdd: number) {
+  const [year, month] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1 + monthsToAdd, 1, 0, 0, 0, 0)).toISOString().slice(0, 10);
+}
+
+function monthStartDateKey(dateKey: string) {
+  const [year, month] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0)).toISOString().slice(0, 10);
+}
+
+function buildMonthRangeWindow(dateKey: string, timeZoneInput: string | null | undefined) {
+  const timeZone = safeTimeZone(timeZoneInput);
+  const startDateKey = monthStartDateKey(dateKey);
+  const endDateKey = addMonthsToDateKey(startDateKey, 1);
+  return {
+    start: toIsoAtZonedDate(startDateKey, "00:00", timeZone),
+    end: toIsoAtZonedDate(endDateKey, "00:00", timeZone),
+    startDateKey,
+    endDateKey,
+    timeZone,
+  };
+}
+
+function buildMonthGridDateKeys(monthDateKey: string) {
+  const startDateKey = monthStartDateKey(monthDateKey);
+  const firstDayIndex = DAY_ORDER.indexOf(dayOfWeekFromDateKey(startDateKey));
+  const gridStart = addDaysToDateKey(startDateKey, -firstDayIndex);
+  return Array.from({ length: 42 }, (_, index) => addDaysToDateKey(gridStart, index));
+}
+
+function isSameMonth(dateKey: string, monthDateKey: string) {
+  return dateKey.slice(0, 7) === monthDateKey.slice(0, 7);
+}
+
+function occurrenceDurationMinutes(occurrence: CalendarOccurrence) {
+  if (!occurrence.startAt || !occurrence.endAt) {
+    return 0;
+  }
+  const start = new Date(occurrence.startAt).getTime();
+  const end = new Date(occurrence.endAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
+    return 0;
+  }
+  return Math.round((end - start) / 60_000);
+}
+
+function groupOccurrencesByDate(range: CalendarRangeResponse | null | undefined, timeZone: string) {
+  const groups = new Map<string, CalendarOccurrence[]>();
+  range?.occurrences
+    .toSorted(compareCalendarOccurrences)
+    .forEach((occurrence) => {
+      const anchor = occurrence.startAt ?? occurrence.endAt;
+      if (!anchor) {
+        return;
+      }
+      const dateKey = zonedDateKey(new Date(anchor), timeZone);
+      const dayOccurrences = groups.get(dateKey) ?? [];
+      dayOccurrences.push(occurrence);
+      groups.set(dateKey, dayOccurrences);
+    });
+  return groups;
+}
+
+function filterWeekToDate(week: WeekScheduleResponse | null, dateKey: string): WeekScheduleResponse | null {
+  if (!week) {
+    return week;
+  }
+  const selectedDay = dayOfWeekFromDateKey(dateKey);
+  return {
+    week: week.week.map((day) => ({
+      ...day,
+      blocks: day.dayOfWeek === selectedDay ? day.blocks : [],
+    })),
+  };
+}
+
 
 function formatDurationLabel(totalMinutes: number) {
   const hours = Math.floor(totalMinutes / 60);
@@ -765,16 +841,115 @@ function WeeklyStack({
   );
 }
 
+function MonthlyMosaic({
+  range,
+  isLoading,
+  isError,
+  selectedDateKey,
+  monthDateKey,
+  timeZone,
+  onSelectDate,
+}: {
+  range: CalendarRangeResponse | null | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  selectedDateKey: string;
+  monthDateKey: string;
+  timeZone: string;
+  onSelectDate: (dateKey: string) => void;
+}) {
+  const monthDays = buildMonthGridDateKeys(monthDateKey);
+  const occurrencesByDate = groupOccurrencesByDate(range, timeZone);
+  const monthLabel = formatAgendaDateLabel(monthStartDateKey(monthDateKey)).replace(/\s*1일.*$/, "");
+
+  return (
+    <section className="monthly-mosaic-card" data-testid="monthly-mosaic" aria-label="월간 모자이크">
+      <div className="monthly-mosaic-head">
+        <div>
+          <p className="panel-kicker">Monthly Mosaic</p>
+          <h2>{monthLabel}</h2>
+          <p>기존 캘린더 range 응답을 날짜별 결정적 요약으로 압축합니다.</p>
+        </div>
+        <span>{range?.instrumentation.occurrenceCount ?? 0}개 항목</span>
+      </div>
+
+      {isLoading ? <p className="timeline-state-note">월간 데이터를 불러오는 중입니다.</p> : null}
+      {isError ? <p className="timeline-state-note error">월간 데이터를 불러오지 못했습니다. 주간 보기는 계속 사용할 수 있습니다.</p> : null}
+
+      <div className="monthly-weekday-row" aria-hidden="true">
+        {DAY_ORDER.map((day) => <span key={day}>{DAY_FULL_LABELS[day].slice(0, 1)}</span>)}
+      </div>
+      <div className="monthly-mosaic-grid">
+        {monthDays.map((dateKey) => {
+          const occurrences = occurrencesByDate.get(dateKey) ?? [];
+          const totalMinutes = occurrences.reduce((sum, occurrence) => sum + occurrenceDurationMinutes(occurrence), 0);
+          const isSelected = dateKey === selectedDateKey;
+          const isOutsideMonth = !isSameMonth(dateKey, monthDateKey);
+          return (
+            <button
+              aria-pressed={isSelected}
+              className={["monthly-mosaic-day", isSelected ? "selected" : "", isOutsideMonth ? "outside" : ""].filter(Boolean).join(" ")}
+              data-testid="monthly-mosaic-day"
+              key={dateKey}
+              type="button"
+              onClick={() => onSelectDate(dateKey)}
+            >
+              <span className="monthly-day-number">{Number(dateKey.slice(-2))}</span>
+              {occurrences.length ? (
+                <>
+                  <strong>{occurrences.length}개 일정</strong>
+                  <small>{formatDurationLabel(totalMinutes)}</small>
+                  <span className="monthly-day-preview">{formatServiceCopy(occurrences[0].title)}</span>
+                </>
+              ) : (
+                <small>비어 있음</small>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SelectedDayTimeline({
+  week,
+  selectedDateKey,
+  onBlockSelect,
+  timeZone,
+}: {
+  week: WeekScheduleResponse | null;
+  selectedDateKey: string;
+  onBlockSelect: (block: EditableScheduleBlock) => void;
+  timeZone?: string;
+}) {
+  const selectedWeek = filterWeekToDate(week, selectedDateKey);
+  return (
+    <section className="selected-day-card" data-testid="selected-day-timeline" aria-label="선택한 하루 일정">
+      <div className="selected-day-head">
+        <div>
+          <p className="panel-kicker">Selected Day</p>
+          <h2>{formatAgendaDateLabel(selectedDateKey)}</h2>
+          <p>월간/목록에서 고른 날짜를 5분 오케스트레이션의 일간 맥락으로 넘깁니다.</p>
+        </div>
+      </div>
+      <WeeklyStack week={selectedWeek} onBlockSelect={onBlockSelect} timeZone={timeZone} />
+    </section>
+  );
+}
+
 function AgendaStream({
   range,
   isLoading,
   isError,
   timeZone,
+  onSelectDate,
 }: {
   range: CalendarRangeResponse | null | undefined;
   isLoading: boolean;
   isError: boolean;
   timeZone: string;
+  onSelectDate: (dateKey: string) => void;
 }) {
   const groups = groupAgendaOccurrences(range, timeZone);
   const occurrenceCount = groups.reduce((sum, group) => sum + group.occurrences.length, 0);
@@ -806,10 +981,10 @@ function AgendaStream({
         <div className="agenda-stream-groups">
           {groups.map((group) => (
             <section className="agenda-day-group" key={group.dateKey} data-testid="agenda-day-group">
-              <div className="agenda-day-head">
+              <button className="agenda-day-head" type="button" onClick={() => onSelectDate(group.dateKey)}>
                 <strong>{formatAgendaDateLabel(group.dateKey)}</strong>
-                <span>{group.occurrences.length}개</span>
-              </div>
+                <span>{group.occurrences.length}개 · 일간 보기</span>
+              </button>
               <ol className="agenda-occurrence-list">
                 {group.occurrences.map((occurrence) => (
                   <li
@@ -856,6 +1031,7 @@ export function ScheduleView() {
   const [deleteCandidate, setDeleteCandidate] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [timelineView, setTimelineView] = useState<ScheduleTimelineView>("week");
+  const [selectedDateKey, setSelectedDateKey] = useState(() => zonedDateKey(new Date(), safeTimeZone(session?.timezone)));
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
   const aiThreadRef = useRef<HTMLDivElement | null>(null);
@@ -869,6 +1045,10 @@ export function ScheduleView() {
     () => buildAgendaRangeWindow(session?.timezone),
     [session?.timezone],
   );
+  const monthRangeWindow = useMemo(
+    () => buildMonthRangeWindow(selectedDateKey, session?.timezone),
+    [selectedDateKey, session?.timezone],
+  );
   const agendaRangeQuery = useCalendarRangeQuery(
     {
       start: agendaRangeWindow.start,
@@ -876,7 +1056,16 @@ export function ScheduleView() {
       view: "agenda",
       timezone: agendaRangeWindow.timeZone,
     },
-    { enabled: Boolean(session?.authenticated) },
+    { enabled: Boolean(session?.authenticated) && timelineView === "agenda" },
+  );
+  const monthRangeQuery = useCalendarRangeQuery(
+    {
+      start: monthRangeWindow.start,
+      end: monthRangeWindow.end,
+      view: "month",
+      timezone: monthRangeWindow.timeZone,
+    },
+    { enabled: Boolean(session?.authenticated) && timelineView === "month" },
   );
 
   async function runScheduleMutationExclusive<T>(operation: (signal: AbortSignal) => Promise<T>) {
@@ -1506,17 +1695,47 @@ export function ScheduleView() {
                 aria-label={`${SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS[timelineView]} 일정`}
                 data-active-view={timelineView}
               >
-                <WeeklyStack
-                  week={data.week}
-                  onBlockSelect={(block) => void openEditModal(block)}
-                  timeZone={session?.timezone}
-                />
-                <AgendaStream
-                  range={agendaRangeQuery.data}
-                  isLoading={agendaRangeQuery.isLoading || agendaRangeQuery.isFetching}
-                  isError={agendaRangeQuery.isError}
-                  timeZone={agendaRangeWindow.timeZone}
-                />
+                {timelineView === "month" ? (
+                  <MonthlyMosaic
+                    range={monthRangeQuery.data}
+                    isLoading={monthRangeQuery.isLoading || monthRangeQuery.isFetching}
+                    isError={monthRangeQuery.isError}
+                    selectedDateKey={selectedDateKey}
+                    monthDateKey={monthRangeWindow.startDateKey}
+                    timeZone={monthRangeWindow.timeZone}
+                    onSelectDate={(dateKey) => {
+                      setSelectedDateKey(dateKey);
+                      setTimelineView("day");
+                    }}
+                  />
+                ) : null}
+                {timelineView === "week" ? (
+                  <WeeklyStack
+                    week={data.week}
+                    onBlockSelect={(block) => void openEditModal(block)}
+                    timeZone={session?.timezone}
+                  />
+                ) : null}
+                {timelineView === "day" ? (
+                  <SelectedDayTimeline
+                    week={data.week}
+                    selectedDateKey={selectedDateKey}
+                    onBlockSelect={(block) => void openEditModal(block)}
+                    timeZone={session?.timezone}
+                  />
+                ) : null}
+                {timelineView === "agenda" ? (
+                  <AgendaStream
+                    range={agendaRangeQuery.data}
+                    isLoading={agendaRangeQuery.isLoading || agendaRangeQuery.isFetching}
+                    isError={agendaRangeQuery.isError}
+                    timeZone={agendaRangeWindow.timeZone}
+                    onSelectDate={(dateKey) => {
+                      setSelectedDateKey(dateKey);
+                      setTimelineView("day");
+                    }}
+                  />
+                ) : null}
               </section>
             </div>
           </article>
