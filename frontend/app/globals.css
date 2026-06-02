@@ -1280,6 +1280,119 @@ summary,
   min-width: 0;
 }
 
+.monthly-mosaic {
+  display: grid;
+  gap: 14px;
+}
+
+.monthly-mosaic-head,
+.monthly-mosaic-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.monthly-mosaic-head h3 {
+  margin: 4px 0 0;
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  letter-spacing: -0.04em;
+}
+
+.monthly-mosaic-weekdays,
+.monthly-mosaic-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.monthly-mosaic-weekdays span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.monthly-mosaic-grid {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.monthly-mosaic-day {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 138px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 12px;
+}
+
+.monthly-mosaic-day.outside-month {
+  opacity: 0.48;
+}
+
+.monthly-mosaic-day.has-events {
+  border-color: rgba(29, 78, 216, 0.22);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.monthly-mosaic-day-head span {
+  font-weight: 900;
+}
+
+.monthly-mosaic-day-head strong {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.monthly-mosaic-day p {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.monthly-mosaic-day ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.monthly-mosaic-day li {
+  display: grid;
+  gap: 2px;
+  border-radius: 12px;
+  padding: 7px 8px;
+}
+
+.monthly-mosaic-day li.deep { background: rgba(255, 111, 97, 0.13); }
+.monthly-mosaic-day li.routine { background: rgba(245, 158, 11, 0.14); }
+.monthly-mosaic-day li.meeting { background: rgba(59, 130, 246, 0.13); }
+
+.monthly-mosaic-day li span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.monthly-mosaic-day li strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monthly-mosaic-day small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
 .ai-compose-card {
   display: grid;
   gap: 18px;
@@ -2343,6 +2456,11 @@ button.current-schedule-card:hover {
   .schedule-view-switcher {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     min-width: 0;
+  }
+
+  .monthly-mosaic-weekdays,
+  .monthly-mosaic-grid {
+    grid-template-columns: repeat(7, minmax(104px, 1fr));
   }
 }
 
