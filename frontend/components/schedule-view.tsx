@@ -1031,7 +1031,6 @@ export function ScheduleView() {
   const [deleteCandidate, setDeleteCandidate] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [timelineView, setTimelineView] = useState<ScheduleTimelineView>("week");
-  const [selectedDateKey, setSelectedDateKey] = useState(() => zonedDateKey(new Date(), safeTimeZone(session?.timezone)));
   const activityFieldRef = useRef<HTMLInputElement | null>(null);
   const requestInputRef = useRef<HTMLTextAreaElement | null>(null);
   const aiThreadRef = useRef<HTMLDivElement | null>(null);
@@ -1695,47 +1694,11 @@ export function ScheduleView() {
                 aria-label={`${SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS[timelineView]} 일정`}
                 data-active-view={timelineView}
               >
-                {timelineView === "month" ? (
-                  <MonthlyMosaic
-                    range={monthRangeQuery.data}
-                    isLoading={monthRangeQuery.isLoading || monthRangeQuery.isFetching}
-                    isError={monthRangeQuery.isError}
-                    selectedDateKey={selectedDateKey}
-                    monthDateKey={monthRangeWindow.startDateKey}
-                    timeZone={monthRangeWindow.timeZone}
-                    onSelectDate={(dateKey) => {
-                      setSelectedDateKey(dateKey);
-                      setTimelineView("day");
-                    }}
-                  />
-                ) : null}
-                {timelineView === "week" ? (
-                  <WeeklyStack
-                    week={data.week}
-                    onBlockSelect={(block) => void openEditModal(block)}
-                    timeZone={session?.timezone}
-                  />
-                ) : null}
-                {timelineView === "day" ? (
-                  <SelectedDayTimeline
-                    week={data.week}
-                    selectedDateKey={selectedDateKey}
-                    onBlockSelect={(block) => void openEditModal(block)}
-                    timeZone={session?.timezone}
-                  />
-                ) : null}
-                {timelineView === "agenda" ? (
-                  <AgendaStream
-                    range={agendaRangeQuery.data}
-                    isLoading={agendaRangeQuery.isLoading || agendaRangeQuery.isFetching}
-                    isError={agendaRangeQuery.isError}
-                    timeZone={agendaRangeWindow.timeZone}
-                    onSelectDate={(dateKey) => {
-                      setSelectedDateKey(dateKey);
-                      setTimelineView("day");
-                    }}
-                  />
-                ) : null}
+                <WeeklyStack
+                  week={data.week}
+                  onBlockSelect={(block) => void openEditModal(block)}
+                  timeZone={session?.timezone}
+                />
               </section>
             </div>
           </article>
