@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { Noto_Sans_KR, Space_Grotesk } from "next/font/google";
+import { Noto_Sans_KR } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { BodyScrollLockController } from "@/components/body-scroll-lock-controller";
 import { NoticeCenter } from "@/components/notice-center";
+import { QueryProvider } from "@/components/query-provider";
 
 import "./globals.css";
 
@@ -10,12 +12,6 @@ const bodyFont = Noto_Sans_KR({
   subsets: ["latin"],
   weight: ["400", "500", "700", "800"],
   variable: "--font-body",
-});
-
-const displayFont = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "700"],
-  variable: "--font-display",
 });
 
 export const metadata: Metadata = {
@@ -30,9 +26,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${bodyFont.variable} ${displayFont.variable}`}>
-        <NoticeCenter />
-        {children}
+      <body className={bodyFont.variable}>
+        <QueryProvider>
+          <BodyScrollLockController />
+          <NoticeCenter />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

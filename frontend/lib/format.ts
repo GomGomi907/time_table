@@ -19,7 +19,16 @@ function buildDateTimeFormatter(timeZone?: string) {
 }
 
 function normalizeTimeZone(timeZone?: string) {
-  return timeZone?.trim() || "UTC";
+  const normalized = timeZone?.trim();
+  if (!normalized) {
+    return "UTC";
+  }
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized }).format(new Date(0));
+    return normalized;
+  } catch {
+    return "UTC";
+  }
 }
 
 export function formatClockValue(
@@ -34,7 +43,11 @@ export function formatClockValue(
     return value.slice(0, 5);
   }
 
-  return buildTimeFormatter(timeZone).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+  return buildTimeFormatter(timeZone).format(date);
 }
 
 export function formatDateTime(
@@ -45,7 +58,11 @@ export function formatDateTime(
     return "기록 없음";
   }
 
-  return buildDateTimeFormatter(timeZone).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "기록 없음";
+  }
+  return buildDateTimeFormatter(timeZone).format(date);
 }
 
 export function formatRelativeMinutes(minutes: number | null | undefined) {

@@ -83,7 +83,16 @@ function getNowParts(timeZone?: string) {
 }
 
 function normalizeTimeZone(timeZone?: string) {
-  return timeZone?.trim() || "UTC";
+  const normalized = timeZone?.trim();
+  if (!normalized) {
+    return "UTC";
+  }
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized }).format(new Date(0));
+    return normalized;
+  } catch {
+    return "UTC";
+  }
 }
 
 export function minutesFromClock(value: string) {

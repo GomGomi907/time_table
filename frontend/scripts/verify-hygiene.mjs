@@ -78,6 +78,7 @@ if (fs.existsSync(apiModule)) {
     "completeOnboarding",
     "logout",
     "getWeekSchedule",
+    "getScheduleMutationPreflight",
     "createScheduleBlock",
     "updateScheduleBlock",
     "deleteScheduleBlock",

@@ -6,6 +6,7 @@ import com.timetable.operator.schedule.domain.ScheduleBlock;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.schedule.domain.ScheduleSourceType;
 import com.timetable.operator.schedule.infrastructure.ScheduleBlockRepository;
+import com.timetable.operator.sync.application.SyncConflictValidator;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -39,6 +40,7 @@ public class ScheduleService {
     private final CurrentUserProvider currentUserProvider;
     private final GeminiScheduleClient geminiScheduleClient;
     private final ScheduleBlockRules scheduleBlockRules;
+    private final SyncConflictValidator syncConflictValidator;
 
     @Transactional
     public WeekScheduleResponse getWeeklySchedule() {
@@ -46,8 +48,16 @@ public class ScheduleService {
         return WeekScheduleResponse.fromBlocks(scheduleBlockRepository.findByUserId(user.getId()));
     }
 
+    @Transactional(readOnly = true)
+    public ScheduleMutationPreflightResponse getMutationPreflight() {
+        SyncConflictValidator.PendingConflictStatus status =
+                syncConflictValidator.getCurrentUserPendingConflictStatus();
+        return new ScheduleMutationPreflightResponse(status.pending(), status.message());
+    }
+
     @Transactional
     public WeekScheduleResponse importSchedule(ImportScheduleRequest request) {
+        syncConflictValidator.assertCurrentUserHasNoPendingConflicts();
         AppUser user = currentUserProvider.getCurrentUser();
         List<GeminiScheduleClient.ImportedScheduleBlock> importedBlocks =
                 geminiScheduleClient.normalize(request.rawText().trim());
@@ -67,6 +77,7 @@ public class ScheduleService {
 
     @Transactional
     public TimeBlockResponse createBlock(ScheduleBlockWriteRequest request) {
+        syncConflictValidator.assertCurrentUserHasNoPendingConflicts();
         AppUser user = currentUserProvider.getCurrentUser();
         ScheduleBlock block = new ScheduleBlock();
         block.setUserId(user.getId());
@@ -77,6 +88,7 @@ public class ScheduleService {
 
     @Transactional
     public TimeBlockResponse updateBlock(UUID blockId, ScheduleBlockWriteRequest request) {
+        syncConflictValidator.assertCurrentUserHasNoPendingConflicts();
         AppUser user = currentUserProvider.getCurrentUser();
         ScheduleBlock block = scheduleBlockRepository.findByIdAndUserId(blockId, user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 일정 블록을 찾을 수 없습니다."));
@@ -87,6 +99,7 @@ public class ScheduleService {
 
     @Transactional
     public void deleteBlock(UUID blockId) {
+        syncConflictValidator.assertCurrentUserHasNoPendingConflicts();
         AppUser user = currentUserProvider.getCurrentUser();
         ScheduleBlock block = scheduleBlockRepository.findByIdAndUserId(blockId, user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 일정 블록을 찾을 수 없습니다."));
@@ -135,6 +148,12 @@ public class ScheduleService {
             @NotBlank @Size(max = 255) String activity,
             @NotNull ScheduleCategory category,
             @Size(max = 1000) String note
+    ) {
+    }
+
+    public record ScheduleMutationPreflightResponse(
+            boolean pending,
+            String message
     ) {
     }
 

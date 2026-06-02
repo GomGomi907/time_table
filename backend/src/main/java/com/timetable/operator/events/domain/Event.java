@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -66,4 +67,24 @@ public class Event extends AuditableEntity {
     private String externalEtag;
 
     private Instant lastSyncedAt;
+
+    @Column(columnDefinition = "text")
+    private String rrule;
+
+    @Column(columnDefinition = "text")
+    private String recurrenceJson;
+
+    private UUID recurringEventId;
+
+    private String providerRecurringEventId;
+
+    private Instant originalStartTime;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RecurrenceInstanceType recurrenceInstanceType = RecurrenceInstanceType.SINGLE;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 }

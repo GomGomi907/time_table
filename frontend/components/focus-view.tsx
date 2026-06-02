@@ -7,7 +7,8 @@ import { AppShell } from "@/components/app-shell";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { FocusActionBar } from "@/components/focus-action-bar";
 import { FocusRailCard } from "@/components/focus-rail-card";
-import { api } from "@/lib/api";
+import { api, isConflictError } from "@/lib/api";
+import { useClientClockFormat } from "@/hooks/use-client-clock-format";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
   formatClockValue,
@@ -116,6 +117,7 @@ function buildTimerPresentation({
   todayName,
   currentMinutes,
   timezone,
+  formatClock,
 }: {
   currentItem: FocusCurrentView["currentItem"];
   recommendedTask: FocusCurrentView["recommendedTasks"][number] | null;
@@ -124,13 +126,14 @@ function buildTimerPresentation({
   todayName: string;
   currentMinutes: number;
   timezone?: string;
+  formatClock: (value: string | null | undefined, timeZone?: string) => string;
 }) {
   if (currentItem) {
     const remainingMinutes = currentItem.remainingMinutes ?? focus?.remainingMinutes ?? 0;
     return {
       label: "남은 시간",
       value: formatRelativeMinutes(remainingMinutes),
-      context: `${formatClockValue(currentItem.startAt, timezone)} - ${formatClockValue(currentItem.endAt, timezone)}`,
+      context: `${formatClock(currentItem.startAt, timezone)} - ${formatClock(currentItem.endAt, timezone)}`,
     };
   }
 
@@ -169,6 +172,7 @@ function buildTimerPresentation({
 export function FocusView() {
   const { session, refreshSession } = useSessionBootstrap();
   const showNotice = useAppStore((state) => state.showNotice);
+  const formatClock = useClientClockFormat();
   const [data, setData] = useState<FocusData>({
     focus: null,
     week: null,
@@ -266,6 +270,15 @@ export function FocusView() {
       });
       await Promise.all([loadFocusPage(), refreshSession({ silent: true })]);
     } catch (mutationError) {
+      if (isConflictError(mutationError)) {
+        showNotice({
+          tone: "error",
+          title: "데이터가 먼저 변경되었습니다.",
+          detail: "방금 시도한 작업은 적용하지 않았습니다. 최신 상태를 다시 불러왔으니 현재 항목을 확인한 뒤 다시 실행하세요.",
+        });
+        await loadFocusPage();
+        return;
+      }
       showNotice({
         tone: "error",
         title: "집중 항목을 처리하지 못했습니다.",
@@ -302,6 +315,7 @@ export function FocusView() {
     todayName,
     currentMinutes,
     timezone: session?.timezone,
+    formatClock,
   });
 
   function handleDeleteCurrentItem() {
@@ -401,7 +415,7 @@ export function FocusView() {
               <h1>{formatServiceCopy(primaryTitle)}</h1>
               <p className="focus-copy">
                 {currentItem
-                  ? `${formatClockValue(currentItem.startAt, session?.timezone)}부터 진행 중이며, 남은 시간은 ${formatRelativeMinutes(
+                  ? `${formatClock(currentItem.startAt, session?.timezone)}부터 진행 중이며, 남은 시간은 ${formatRelativeMinutes(
                       currentItem.remainingMinutes,
                     )}입니다.`
                   : recommendedTask

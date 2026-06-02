@@ -37,7 +37,7 @@
   --z-modal: 40;
   --z-notice: 60;
   --font-sans: var(--font-body), "Noto Sans KR", "Apple SD Gothic Neo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: "Space Grotesk", "Noto Sans KR", system-ui, sans-serif;
+  --font-display: var(--font-body), "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
 }
 
 * {
@@ -336,6 +336,11 @@ summary,
   background: rgba(255, 244, 244, 0.9);
 }
 
+.conflict-resolution-message {
+  gap: 6px;
+  padding: 14px 16px;
+}
+
 .empty-state.subtle {
   border-style: dashed;
   background: var(--surface-muted);
@@ -442,8 +447,17 @@ summary,
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.app-frame.no-top-bar,
+.app-frame.with-right-rail.no-top-bar {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .app-frame.with-right-rail .side-nav {
   grid-row: 1 / span 2;
+}
+
+.app-frame.with-right-rail.no-top-bar .side-nav {
+  grid-row: 1;
 }
 
 .app-frame.with-right-rail .content-shell {
@@ -458,6 +472,11 @@ summary,
 .app-frame.with-right-rail .page-stack {
   grid-column: 2;
   grid-row: 2;
+}
+
+.app-frame.with-right-rail.no-top-bar .page-stack,
+.app-frame.with-right-rail.no-top-bar .app-right-rail {
+  grid-row: 1;
 }
 
 .side-nav {
@@ -542,6 +561,10 @@ summary,
   width: min(100%, var(--content-max));
   grid-template-rows: auto minmax(0, 1fr);
   justify-self: stretch;
+}
+
+.app-frame.no-top-bar .content-shell {
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .app-right-rail {
@@ -1641,6 +1664,18 @@ button.current-schedule-card:hover {
   font-size: 0.94rem;
 }
 
+.conflict-blocking-modal {
+  gap: 18px;
+  width: min(100%, 520px);
+}
+
+.modal-support-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.65;
+}
+
 .modal-form {
   display: grid;
   gap: 18px;
@@ -1879,6 +1914,11 @@ button.current-schedule-card:hover {
   border-radius: 20px;
   padding: 16px 18px;
   background: rgba(255,255,255,0.96);
+  animation: notice-enter 180ms ease-out both;
+}
+
+.notice-card.leaving {
+  animation: notice-exit 260ms ease-in forwards;
 }
 
 .notice-card.success {
@@ -1890,18 +1930,36 @@ button.current-schedule-card:hover {
   border-color: rgba(91, 110, 225, 0.2);
 }
 
+@keyframes notice-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes notice-exit {
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
 @media (max-width: 1320px) {
   :root {
     --content-max: 100%;
   }
 
   .app-frame {
-    grid-template-columns: 1fr;
+    grid-template-columns: 252px minmax(0, 1fr);
   }
 
   .app-frame.with-right-rail {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
+    grid-template-columns: 252px minmax(0, 1fr);
+    grid-template-rows: auto auto;
   }
 
   .app-frame.with-right-rail .content-shell {
@@ -1914,39 +1972,37 @@ button.current-schedule-card:hover {
     grid-row: auto;
   }
 
-  .content-shell {
-    grid-column: auto;
+  .app-frame.with-right-rail.no-top-bar .side-nav,
+  .app-frame.with-right-rail.no-top-bar .page-stack,
+  .app-frame.with-right-rail.no-top-bar .app-right-rail {
     grid-row: auto;
   }
 
+  .content-shell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
   .app-right-rail {
-    grid-column: auto;
-    grid-row: auto;
+    grid-column: 2;
+    grid-row: 2;
     position: static;
     max-height: none;
     margin-top: 0;
   }
 
   .side-nav {
-    grid-column: auto;
-    grid-row: auto;
-    position: static;
-    height: auto;
-    min-height: 0;
-    flex-direction: row;
-    align-items: center;
-    border-radius: var(--radius-lg);
+    grid-column: 1;
+    grid-row: 1 / span 2;
   }
 
   .nav-links {
-    display: flex;
-    flex: 1;
-    justify-content: center;
+    flex: initial;
   }
 
   .side-nav .wide-btn {
-    width: auto;
-    margin-top: 0;
+    width: 100%;
+    margin-top: auto;
   }
 
   .today-briefing-shell,
@@ -1986,6 +2042,20 @@ button.current-schedule-card:hover {
     font-size: clamp(1.9rem, 8.5vw, 3.3rem);
   }
 
+  .app-frame,
+  .app-frame.with-right-rail {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .app-frame.with-right-rail .side-nav,
+  .app-frame.with-right-rail.no-top-bar .side-nav,
+  .content-shell,
+  .app-right-rail {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .login-panel-rich,
   .login-panel,
   .onboarding-panel-wide {
@@ -2004,6 +2074,10 @@ button.current-schedule-card:hover {
   .side-nav {
     align-items: stretch;
     flex-direction: column;
+    position: static;
+    height: auto;
+    min-height: 0;
+    border-radius: var(--radius-lg);
   }
 
   .nav-links {

@@ -24,10 +24,17 @@ final class AiLocalDateTimeParser {
     }
 
     static Instant parseRequired(String value, ZoneId userZone) {
+        if (value == null || value.isBlank()) {
+            throw new AiDateTimeFormatException("AI datetime value is required.");
+        }
         try {
-            return Instant.parse(value);
-        } catch (DateTimeParseException exception) {
-            return LocalDateTime.parse(value).atZone(userZone).toInstant();
+            return Instant.parse(value.trim());
+        } catch (DateTimeParseException instantException) {
+            try {
+                return LocalDateTime.parse(value.trim()).atZone(userZone).toInstant();
+            } catch (DateTimeParseException localException) {
+                throw new AiDateTimeFormatException("AI datetime must be ISO-8601 instant or local datetime: " + value, localException);
+            }
         }
     }
 
@@ -35,10 +42,6 @@ final class AiLocalDateTimeParser {
         if (value == null || value.isBlank()) {
             return null;
         }
-        try {
-            return parseRequired(value.trim(), userZone);
-        } catch (DateTimeParseException exception) {
-            return null;
-        }
+        return parseRequired(value.trim(), userZone);
     }
 }

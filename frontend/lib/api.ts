@@ -2,6 +2,7 @@
 
 import {
   AuthSession,
+  CalendarRangeResponse,
   CsrfTokenResponse,
   CreateGoalRequest,
   CreateScheduleBlockRequest,
@@ -17,6 +18,8 @@ import {
   OnboardingCompletionResponse,
   OnboardingStatus,
   RescheduleSuggestion,
+  ScheduleBlock,
+  ScheduleMutationPreflightResponse,
   SettingsResponse,
   SettingsUpdateRequest,
   SyncStatusEnvelope,
@@ -34,6 +37,20 @@ interface ApiEnvelope<T> {
     code: string;
     message: string;
   };
+}
+
+export class ApiRequestError extends Error {
+    constructor(
+      message: string,
+      public readonly status: number,
+    ) {
+      super(message);
+      this.name = "ApiRequestError";
+    }
+}
+
+export function isConflictError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.status === 409;
 }
 
 function normalizeApiBaseUrl(value: string | undefined) {
@@ -121,6 +138,10 @@ function getErrorMessage(payload: unknown, status: number) {
     return "보안 확인에 실패했습니다. 잠시 후 다시 시도하거나 페이지를 새로고침하면 됩니다.";
   }
 
+  if (status === 409) {
+    return "다른 기기나 화면에서 데이터가 먼저 변경되었습니다. 최신 상태로 다시 불러옵니다.";
+  }
+
   return `요청에 실패했습니다. (${status})`;
 }
 
@@ -136,7 +157,7 @@ async function ensureCsrfToken(forceRefresh = false) {
 
   const payload = await parseResponse(response);
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, response.status));
+    throw new ApiRequestError(getErrorMessage(payload, response.status), response.status);
   }
 
   csrfTokenCache = payload as CsrfTokenResponse;
@@ -175,7 +196,7 @@ async function requestRaw<T>(
       csrfTokenCache = null;
       return requestRaw<T>(path, init, query, 1);
     }
-    throw new Error(getErrorMessage(payload, response.status));
+    throw new ApiRequestError(getErrorMessage(payload, response.status), response.status);
   }
 
   return payload as T;
@@ -256,23 +277,51 @@ export const api = {
     return requestRaw<WeekScheduleResponse>("/api/schedule/week", { signal });
   },
 
-  createScheduleBlock(request: CreateScheduleBlockRequest) {
-    return requestRaw("/api/schedule/blocks", {
+  getScheduleMutationPreflight(signal?: AbortSignal) {
+    return requestRaw<ScheduleMutationPreflightResponse>("/api/schedule/conflicts/preflight", { signal });
+  },
+
+  getCalendarRange(
+    request: {
+      start: string;
+      end: string;
+      view?: "day" | "week" | "month" | "agenda";
+      timezone?: string;
+    },
+    signal?: AbortSignal,
+  ) {
+    return requestEnvelope<CalendarRangeResponse>(
+      "/api/calendar/range",
+      { signal },
+      {
+        start: request.start,
+        end: request.end,
+        view: request.view ?? "week",
+        timezone: request.timezone,
+      },
+    );
+  },
+
+  createScheduleBlock(request: CreateScheduleBlockRequest, signal?: AbortSignal) {
+    return requestRaw<ScheduleBlock>("/api/schedule/blocks", {
       method: "POST",
+      signal,
       body: JSON.stringify(request),
     });
   },
 
-  updateScheduleBlock(blockId: string, request: CreateScheduleBlockRequest) {
-    return requestRaw(`/api/schedule/blocks/${blockId}`, {
+  updateScheduleBlock(blockId: string, request: CreateScheduleBlockRequest, signal?: AbortSignal) {
+    return requestRaw<ScheduleBlock>(`/api/schedule/blocks/${blockId}`, {
       method: "PUT",
+      signal,
       body: JSON.stringify(request),
     });
   },
 
-  deleteScheduleBlock(blockId: string) {
-    return requestRaw(`/api/schedule/blocks/${blockId}`, {
+  deleteScheduleBlock(blockId: string, signal?: AbortSignal) {
+    return requestRaw<void>(`/api/schedule/blocks/${blockId}`, {
       method: "DELETE",
+      signal,
     });
   },
 

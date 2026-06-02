@@ -24,6 +24,7 @@ interface AppShellProps {
   rightRail?: ReactNode;
   children: ReactNode;
   immersive?: boolean;
+  showTopBar?: boolean;
 }
 
 export function AppShell({
@@ -34,6 +35,7 @@ export function AppShell({
   rightRail,
   children,
   immersive = false,
+  showTopBar = true,
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -48,12 +50,6 @@ export function AppShell({
   const clearSession = useAppStore((state) => state.clearSession);
   const showNotice = useAppStore((state) => state.showNotice);
   const [isPending, startTransition] = useTransition();
-  const isDashboardPage = pathname === "/dashboard";
-  const isFocusPage = pathname === "/focus";
-
-  const primaryShortcut = isDashboardPage
-    ? { href: "/schedule", label: "주간 일정" }
-    : { href: "/dashboard", label: "오늘" };
   async function handleLogout() {
     try {
       await api.logout();
@@ -166,7 +162,7 @@ export function AppShell({
   }
 
   return (
-    <div className={`app-frame ${rightRail ? "with-right-rail" : ""}`}>
+    <div className={`app-frame ${rightRail ? "with-right-rail" : ""} ${showTopBar ? "" : "no-top-bar"}`}>
       <aside className="side-nav">
         <div className="brand-block">
           <span className="brand-mark">TT</span>
@@ -202,26 +198,20 @@ export function AppShell({
       </aside>
 
       <main className="content-shell">
-        <header className={`top-bar ${isDashboardPage ? "dashboard-top-bar" : ""}`}>
-          <div className="top-bar-copy">
-            <p className="eyebrow">{eyebrow}</p>
-            <h1 className="top-title">{title}</h1>
-            {description ? <p className="hero-copy compact">{description}</p> : null}
-          </div>
-          <div className="top-actions">
-            <Link className="ghost-btn link-btn" href={primaryShortcut.href}>
-              {primaryShortcut.label}
-            </Link>
-            {actions}
-            <Link
-              className={`solid-btn link-btn top-focus-entry ${isFocusPage ? "current" : ""}`}
-              href="/focus"
-              aria-current={isFocusPage ? "page" : undefined}
-            >
-              실행 모드
-            </Link>
-          </div>
-        </header>
+        {showTopBar ? (
+          <header className="top-bar">
+            <div className="top-bar-copy">
+              <p className="eyebrow">{eyebrow}</p>
+              <h1 className="top-title">{title}</h1>
+              {description ? <p className="hero-copy compact">{description}</p> : null}
+            </div>
+            {actions ? (
+              <div className="top-actions">
+                {actions}
+              </div>
+            ) : null}
+          </header>
+        ) : null}
 
         <div className="page-stack">{children}</div>
       </main>

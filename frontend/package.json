@@ -16,6 +16,7 @@
     "e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.100.14",
     "next": "^16.2.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

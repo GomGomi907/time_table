@@ -22,6 +22,7 @@ export function ConfirmDialog({
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
+  const panelRef = useRef<HTMLElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   useBodyScrollLock(true);
 
@@ -32,6 +33,28 @@ export function ConfirmDialog({
       if (event.key === "Escape" && !isPending) {
         event.stopPropagation();
         onCancel();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        const focusableElements = panelRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (!focusableElements?.length) {
+          return;
+        }
+
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+        if (event.shiftKey && document.activeElement === firstElement) {
+          event.preventDefault();
+          lastElement.focus();
+          return;
+        }
+        if (!event.shiftKey && document.activeElement === lastElement) {
+          event.preventDefault();
+          firstElement.focus();
+        }
       }
     }
 
@@ -42,6 +65,7 @@ export function ConfirmDialog({
   return (
     <div className="modal-backdrop" role="presentation" onClick={onCancel}>
       <section
+        ref={panelRef}
         className="modal-panel confirm-dialog-panel"
         role="dialog"
         aria-modal="true"

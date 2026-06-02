@@ -51,6 +51,9 @@ public class ReleaseRuntimeGuard implements InitializingBean {
         if (appProperties.ai() != null && appProperties.ai().enabled() && isBlank(appProperties.ai().apiKey())) {
             violations.add("APP_GEMINI_API_KEY is required when AI is enabled");
         }
+        if (appProperties.encryption() == null || isBlank(appProperties.encryption().key())) {
+            violations.add("APP_ENCRYPTION_KEY is required");
+        }
 
         if (!violations.isEmpty()) {
             throw new IllegalStateException("Unsafe " + releaseMode + " runtime configuration: " + String.join("; ", violations));

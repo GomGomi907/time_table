@@ -1,6 +1,8 @@
 package com.timetable.operator.schedule.infrastructure;
 
 import com.timetable.operator.schedule.domain.ScheduleBlock;
+import java.time.DayOfWeek;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +15,8 @@ public interface ScheduleBlockRepository extends JpaRepository<ScheduleBlock, UU
     long countByUserId(UUID userId);
 
     List<ScheduleBlock> findByUserId(UUID userId);
+
+    List<ScheduleBlock> findByUserIdAndDayOfWeekIn(UUID userId, Collection<DayOfWeek> dayOfWeeks);
 
     Optional<ScheduleBlock> findByIdAndUserId(UUID id, UUID userId);
 

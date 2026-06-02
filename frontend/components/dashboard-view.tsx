@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { SectionHeader } from "@/components/section-header";
 import { SuggestionReviewCard } from "@/components/suggestion-review-card";
-import { api } from "@/lib/api";
+import { api, isConflictError } from "@/lib/api";
 import { formatClockValue, formatServiceCopy, getSuggestionNoticeDetail } from "@/lib/format";
 import {
   CATEGORY_LABELS,
@@ -201,6 +201,15 @@ export function DashboardView() {
       });
       await Promise.all([loadDashboard(), refreshSession({ silent: true })]);
     } catch (mutationError) {
+      if (isConflictError(mutationError)) {
+        showNotice({
+          tone: "error",
+          title: "데이터가 먼저 변경되었습니다.",
+          detail: "방금 시도한 변경은 적용하지 않았습니다. 최신 데이터로 다시 불러왔으니 변경 내용을 확인한 뒤 다시 실행하세요.",
+        });
+        await loadDashboard();
+        return;
+      }
       showNotice({
         tone: "error",
         title: errorTitle,
@@ -247,11 +256,7 @@ export function DashboardView() {
       eyebrow="오늘"
       title="오늘 일정"
       description="오늘 일정과 바로 시작할 일을 한눈에 보여줍니다."
-      actions={
-        <button className="ghost-btn" disabled={status === "loading"} onClick={() => void loadDashboard()}>
-          {status === "loading" ? "새로고침 중..." : "새로고침"}
-        </button>
-      }
+      showTopBar={false}
     >
       {!data.week && !data.focus && data.goals.length === 0 && status === "loading" ? (
         <section className="surface-card empty-state">

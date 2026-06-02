@@ -97,6 +97,7 @@ public class FocusService {
         ).stream().filter(task -> task.getEventId() == null && task.getSyncState() != PlannerSyncState.DETACHED)
                 .toList();
         recommended = uniqueRecommendedTasks(recommended, 3);
+        Map<UUID, Goal> goalsById = loadGoals(todayEvents, activeTasks);
 
         if (currentEvents.size() > 1) {
             return new FocusCurrentView(
@@ -118,7 +119,7 @@ public class FocusService {
             long remainingMinutes = Math.max(0, Duration.between(now, effectiveEnd).toMinutes());
             return new FocusCurrentView(
                     state,
-                    toCurrentItem(event),
+                    toCurrentItem(event, goalsById),
                     nextEvent == null ? null : toNextItem(nextEvent),
                     scheduleContext,
                     preferenceContext,
@@ -133,7 +134,7 @@ public class FocusService {
             ActiveTaskWindow taskWindow = resolveTaskWindow(user, task, nextEvent, now);
             return new FocusCurrentView(
                     "ACTIVE_TASK",
-                    toCurrentTaskItem(task, taskWindow),
+                    toCurrentTaskItem(task, taskWindow, goalsById),
                     nextEvent == null ? null : toNextItem(nextEvent),
                     scheduleContext,
                     preferenceContext,
@@ -402,8 +403,27 @@ public class FocusService {
         return time.getHour() * 60 + time.getMinute();
     }
 
-    private CurrentItem toCurrentItem(Event event) {
-        Goal goal = event.getGoalId() == null ? null : goalRepository.findById(event.getGoalId()).orElse(null);
+    private Map<UUID, Goal> loadGoals(List<Event> events, List<Task> tasks) {
+        Map<UUID, Goal> goalsById = new LinkedHashMap<>();
+        for (Event event : events) {
+            if (event.getGoalId() != null) {
+                goalsById.putIfAbsent(event.getGoalId(), null);
+            }
+        }
+        for (Task task : tasks) {
+            if (task.getGoalId() != null) {
+                goalsById.putIfAbsent(task.getGoalId(), null);
+            }
+        }
+        if (goalsById.isEmpty()) {
+            return Map.of();
+        }
+        goalRepository.findAllById(goalsById.keySet()).forEach(goal -> goalsById.put(goal.getId(), goal));
+        return goalsById;
+    }
+
+    private CurrentItem toCurrentItem(Event event, Map<UUID, Goal> goalsById) {
+        Goal goal = event.getGoalId() == null ? null : goalsById.get(event.getGoalId());
         return new CurrentItem(
                 "event",
                 event.getId().toString(),
@@ -416,8 +436,8 @@ public class FocusService {
         );
     }
 
-    private CurrentItem toCurrentTaskItem(Task task, ActiveTaskWindow taskWindow) {
-        Goal goal = task.getGoalId() == null ? null : goalRepository.findById(task.getGoalId()).orElse(null);
+    private CurrentItem toCurrentTaskItem(Task task, ActiveTaskWindow taskWindow, Map<UUID, Goal> goalsById) {
+        Goal goal = task.getGoalId() == null ? null : goalsById.get(task.getGoalId());
         return new CurrentItem(
                 "task",
                 task.getId().toString(),

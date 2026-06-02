@@ -45,4 +45,5 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	systemProperty 'app.encryption.key', 'test-encryption-key-for-integration-tests'
 }

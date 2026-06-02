@@ -2,6 +2,7 @@ package com.timetable.operator.tasks.infrastructure;
 
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,13 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByUserIdAndStatusOrderByPriorityAscDueDateAsc(UUID userId, TaskStatus status);
 
     List<Task> findByUserIdAndStatusInOrderByPriorityAscDueDateAsc(UUID userId, List<TaskStatus> statuses);
+
+    List<Task> findByUserIdAndStatusInAndDueDateBetweenOrderByDueDateAsc(
+            UUID userId,
+            List<TaskStatus> statuses,
+            Instant from,
+            Instant to
+    );
 
     List<Task> findByUserIdAndGoalIdOrderByDueDateAsc(UUID userId, UUID goalId);
 

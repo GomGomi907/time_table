@@ -1,28 +1,23 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 
-let lockCount = 0;
-let previousOverflow = "";
+import { useAppStore } from "@/stores/app-store";
 
 export function useBodyScrollLock(locked: boolean) {
+  const id = useId();
+  const acquireBodyScrollLock = useAppStore((state) => state.acquireBodyScrollLock);
+  const releaseBodyScrollLock = useAppStore((state) => state.releaseBodyScrollLock);
+
   useEffect(() => {
     if (!locked) {
       return;
     }
 
-    if (lockCount === 0) {
-      previousOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-    }
-    lockCount += 1;
+    acquireBodyScrollLock(id);
 
     return () => {
-      lockCount = Math.max(0, lockCount - 1);
-      if (lockCount === 0) {
-        document.body.style.overflow = previousOverflow;
-        previousOverflow = "";
-      }
+      releaseBodyScrollLock(id);
     };
-  }, [locked]);
+  }, [acquireBodyScrollLock, id, locked, releaseBodyScrollLock]);
 }

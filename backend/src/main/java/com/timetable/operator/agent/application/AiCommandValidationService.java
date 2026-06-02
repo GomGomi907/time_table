@@ -231,8 +231,10 @@ public class AiCommandValidationService {
                     List.of("targetId"), List.of(command.targetId()), "task_target_not_found");
         }
         String rawDueDate = readString(command.payload(), "dueDate", "due_date");
-        Instant dueDate = readInstant(userZone, command.payload(), "dueDate", "due_date");
-        if (rawDueDate != null && dueDate == null) {
+        Instant dueDate;
+        try {
+            dueDate = readInstant(userZone, command.payload(), "dueDate", "due_date");
+        } catch (AiDateTimeFormatException exception) {
             return invalid("마감 시각 형식을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
                     List.of("dueDate"), List.of(), "invalid_task_due_date_format");
         }
@@ -266,8 +268,15 @@ public class AiCommandValidationService {
     private CommandValidation validateCreateEventOrSchedule(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         String rawStartAt = readString(command.payload(), "startAt", "start_at");
         String rawEndAt = readString(command.payload(), "endAt", "end_at");
-        Instant startAt = readInstant(userZone, command.payload(), "startAt", "start_at");
-        Instant endAt = readInstant(userZone, command.payload(), "endAt", "end_at");
+        Instant startAt;
+        Instant endAt;
+        try {
+            startAt = readInstant(userZone, command.payload(), "startAt", "start_at");
+            endAt = readInstant(userZone, command.payload(), "endAt", "end_at");
+        } catch (AiDateTimeFormatException exception) {
+            return invalid("일정 시작/종료 시각을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
+                    List.of("startAt", "endAt"), List.of(), "invalid_event_time_range");
+        }
         if (rawStartAt != null || rawEndAt != null || startAt != null || endAt != null) {
             if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
                 return invalid("일정 시작/종료 시각을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
@@ -359,9 +368,12 @@ public class AiCommandValidationService {
         if (requireMoveField) {
             String rawStartAt = readString(command.payload(), "startAt", "start_at");
             String rawEndAt = readString(command.payload(), "endAt", "end_at");
-            Instant startAt = readInstant(userZone, command.payload(), "startAt", "start_at");
-            Instant endAt = readInstant(userZone, command.payload(), "endAt", "end_at");
-            if ((rawStartAt != null && startAt == null) || (rawEndAt != null && endAt == null)) {
+            Instant startAt;
+            Instant endAt;
+            try {
+                startAt = readInstant(userZone, command.payload(), "startAt", "start_at");
+                endAt = readInstant(userZone, command.payload(), "endAt", "end_at");
+            } catch (AiDateTimeFormatException exception) {
                 return invalid("새 시간 형식을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
                         List.of("startAt", "endAt"), List.of(), "invalid_event_time_format");
             }

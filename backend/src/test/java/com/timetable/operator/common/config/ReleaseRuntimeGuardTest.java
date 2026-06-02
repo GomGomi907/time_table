@@ -141,7 +141,8 @@ class ReleaseRuntimeGuardTest {
                         2048,
                         0.0,
                         8
-                )
+                ),
+                new AppProperties.EncryptionProperties("test-encryption-key")
         );
     }
 }

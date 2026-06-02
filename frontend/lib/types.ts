@@ -173,6 +173,49 @@ export interface WeekScheduleResponse {
   week: DailyRoutine[];
 }
 
+export interface ScheduleMutationPreflightResponse {
+  pending: boolean;
+  message: string | null;
+}
+
+export interface CalendarRangeResponse {
+  start: string;
+  end: string;
+  view: "DAY" | "WEEK" | "MONTH" | "AGENDA";
+  timezone: string;
+  occurrences: CalendarOccurrence[];
+  instrumentation: CalendarQueryInstrumentation;
+}
+
+export interface CalendarOccurrence {
+  occurrenceId: string;
+  entityType: "EVENT" | "TASK" | "ROUTINE_BLOCK";
+  entityId: string;
+  seriesId: string;
+  startAt: string | null;
+  endAt: string | null;
+  title: string;
+  category: string | null;
+  sourceType: string;
+  syncState: string;
+  recurrenceInstanceType: string;
+  priorityTier: number;
+  collisionPolicy: "BLOCKS_LOWER" | "CAN_BE_SHADOWED" | "SANCTUARY_PROTECTED";
+  providerAuthority: "REMOTE_FIXED" | "LOCAL_CAN_WRITE" | "LOCAL_ROUTINE_ONLY";
+  shadowState: "NONE" | "SHADOWED_BY_EVENT" | "SHADOWED_BY_TASK" | "SANCTUARY_BLOCKED" | "USER_OVERRIDDEN";
+  shadowingEntityType: "EVENT" | "TASK" | "ROUTINE_BLOCK" | null;
+  shadowingEntityId: string | null;
+  protectedWindow: boolean;
+  synthetic: boolean;
+}
+
+export interface CalendarQueryInstrumentation {
+  repositoryGroupCount: number;
+  repositoryGroups: string[];
+  occurrenceCount: number;
+  rangeDays: number;
+}
+
 export interface DailyRoutine {
   dayOfWeek: string;
   blocks: ScheduleBlock[];

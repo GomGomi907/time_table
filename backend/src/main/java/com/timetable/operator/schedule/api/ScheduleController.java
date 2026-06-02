@@ -25,6 +25,11 @@ public class ScheduleController {
         return scheduleService.getWeeklySchedule();
     }
 
+    @GetMapping("/conflicts/preflight")
+    public ScheduleService.ScheduleMutationPreflightResponse getMutationPreflight() {
+        return scheduleService.getMutationPreflight();
+    }
+
     @PostMapping("/import")
     public ScheduleService.WeekScheduleResponse importSchedule(
             @Valid @RequestBody ScheduleService.ImportScheduleRequest request

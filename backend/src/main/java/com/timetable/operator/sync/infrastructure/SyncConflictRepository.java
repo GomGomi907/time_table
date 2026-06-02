@@ -11,6 +11,8 @@ public interface SyncConflictRepository extends JpaRepository<SyncConflict, UUID
 
     Optional<SyncConflict> findByIdAndUserId(UUID id, UUID userId);
 
+    Optional<SyncConflict> findFirstByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, SyncConflictStatus status);
+
     List<SyncConflict> findByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, SyncConflictStatus status);
 
     long countByUserIdAndStatus(UUID userId, SyncConflictStatus status);

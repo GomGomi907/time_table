@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.DayOfWeek;
 import java.time.LocalTime;
 import java.util.UUID;
@@ -46,4 +47,15 @@ public class ScheduleBlock extends AuditableEntity {
     private ScheduleSourceType sourceType;
 
     private String sourceRef;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private RoutineShadowPolicy shadowPolicy = RoutineShadowPolicy.AUTO_SHADOW;
+
+    @Column(nullable = false)
+    private boolean protectedWindow;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 }

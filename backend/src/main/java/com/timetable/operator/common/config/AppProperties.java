@@ -12,7 +12,8 @@ public record AppProperties(
         AuthProperties auth,
         CalendarProperties calendar,
         ScheduleProperties schedule,
-        AiProperties ai
+        AiProperties ai,
+        EncryptionProperties encryption
 ) {
     @ConstructorBinding
     public AppProperties {
@@ -22,13 +23,24 @@ public record AppProperties(
     }
 
     public AppProperties(
+            String releaseMode,
             String frontendBaseUrl,
             AuthProperties auth,
             CalendarProperties calendar,
             ScheduleProperties schedule,
             AiProperties ai
     ) {
-        this("local", frontendBaseUrl, auth, calendar, schedule, ai);
+        this(releaseMode, frontendBaseUrl, auth, calendar, schedule, ai, new EncryptionProperties(null));
+    }
+
+    public AppProperties(
+            String frontendBaseUrl,
+            AuthProperties auth,
+            CalendarProperties calendar,
+            ScheduleProperties schedule,
+            AiProperties ai
+    ) {
+        this("local", frontendBaseUrl, auth, calendar, schedule, ai, new EncryptionProperties(null));
     }
 
     public record AuthProperties(
@@ -67,6 +79,9 @@ public record AppProperties(
             double temperature,
             int timeoutSeconds
     ) {
+    }
+
+    public record EncryptionProperties(String key) {
     }
 
     public boolean googleOauthEnabled() {

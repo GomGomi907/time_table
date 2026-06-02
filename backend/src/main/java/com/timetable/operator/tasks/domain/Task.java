@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -65,4 +66,8 @@ public class Task extends AuditableEntity {
     private String externalEtag;
 
     private Instant lastSyncedAt;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 }

@@ -20,6 +20,8 @@ interface AppState {
   onboardingStatus: OnboardingStatus | null;
   onboardingError: string | null;
   notice: NoticeState | null;
+  bodyScrollLockIds: string[];
+  bodyScrollLockCount: number;
   setSessionPhase: (phase: SessionPhase) => void;
   setSession: (session: AuthSession | null) => void;
   setSessionError: (message: string | null) => void;
@@ -30,6 +32,8 @@ interface AppState {
   clearSession: () => void;
   showNotice: (notice: NoticeState) => void;
   clearNotice: () => void;
+  acquireBodyScrollLock: (id: string) => void;
+  releaseBodyScrollLock: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -40,6 +44,8 @@ export const useAppStore = create<AppState>((set) => ({
   onboardingStatus: null,
   onboardingError: null,
   notice: null,
+  bodyScrollLockIds: [],
+  bodyScrollLockCount: 0,
   setSessionPhase: (sessionPhase) => set({ sessionPhase }),
   setSession: (session) => set({ session, sessionPhase: "ready", sessionError: null }),
   setSessionError: (sessionError) => set({ sessionError, sessionPhase: "error" }),
@@ -64,4 +70,17 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   showNotice: (notice) => set({ notice }),
   clearNotice: () => set({ notice: null }),
+  acquireBodyScrollLock: (id) =>
+    set((state) => {
+      if (state.bodyScrollLockIds.includes(id)) {
+        return state;
+      }
+      const bodyScrollLockIds = [...state.bodyScrollLockIds, id];
+      return { bodyScrollLockIds, bodyScrollLockCount: bodyScrollLockIds.length };
+    }),
+  releaseBodyScrollLock: (id) =>
+    set((state) => {
+      const bodyScrollLockIds = state.bodyScrollLockIds.filter((lockId) => lockId !== id);
+      return { bodyScrollLockIds, bodyScrollLockCount: bodyScrollLockIds.length };
+    }),
 }));
