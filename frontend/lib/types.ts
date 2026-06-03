@@ -250,6 +250,43 @@ export interface Goal {
   priority: number;
 }
 
+
+export interface EventItem {
+  id: string;
+  title: string;
+  description: string | null;
+  startAt: string;
+  endAt: string;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
+  priority: number;
+  status: string;
+  category: string;
+  sourceType: string;
+  syncState: string;
+  goalId: string | null;
+  externalSourceId: string | null;
+}
+
+export interface EventWriteRequest {
+  title: string;
+  description?: string | null;
+  startAt: string;
+  endAt: string;
+  priority: number;
+  category: string;
+  goalId?: string | null;
+}
+
+export interface TaskWriteRequest {
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  estimatedMinutes: number;
+  priority: number;
+  goalId?: string | null;
+  category?: string | null;
+}
 export interface Task {
   id: string;
   title: string;

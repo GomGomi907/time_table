@@ -11,6 +11,7 @@ import { calendarRangeQueryRootKey, useCalendarRangeQuery } from "@/hooks/use-ca
 import { api, isConflictError } from "@/lib/api";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
+  formatAiActionLabel,
   formatClockValue,
   formatServiceCopy,
   formatUserMemo,
@@ -46,6 +47,18 @@ const DEFAULT_FORM = {
   activity: "",
   category: "WORK",
   note: "",
+};
+
+const DEFAULT_OCCURRENCE_FORM = {
+  title: "",
+  description: "",
+  startAt: "",
+  endAt: "",
+  dueDate: "",
+  estimatedMinutes: "30",
+  priority: "3",
+  category: "WORK",
+  goalId: null,
 };
 const SCHEDULE_MUTATION_TIMEOUT_MS = 10_000;
 const SCHEDULE_TIMELINE_VIEWS = ["month", "week", "day", "agenda"] as const;
@@ -119,6 +132,17 @@ interface EditableScheduleBlock extends ScheduleBlock {
   dayOfWeek: string;
 }
 
+interface OccurrenceEditForm {
+  title: string;
+  description: string;
+  startAt: string;
+  endAt: string;
+  dueDate: string;
+  estimatedMinutes: string;
+  priority: string;
+  category: string;
+  goalId: string | null;
+}
 function categoryTone(category: string) {
   if (category === "WORK") {
     return "deep";
@@ -337,6 +361,25 @@ function toIsoAtZonedDate(dateKey: string, time: string, timeZone: string) {
   return new Date(localAsUtc.getTime() - secondOffset).toISOString();
 }
 
+function zonedDateTimeInputValue(isoValue: string | null | undefined, timeZone: string) {
+  if (!isoValue) {
+    return "";
+  }
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const parts = getZonedDateTimeParts(date, timeZone);
+  return `${parts.year}-${padDatePart(parts.month)}-${padDatePart(parts.day)}T${padDatePart(parts.hour)}:${padDatePart(parts.minute)}`;
+}
+
+function isoFromZonedDateTimeInput(value: string, timeZone: string) {
+  const [dateKey, time] = value.split("T");
+  if (!dateKey || !time) {
+    throw new Error("날짜와 시간을 모두 입력해 주세요.");
+  }
+  return toIsoAtZonedDate(dateKey, time, timeZone);
+}
 function projectOptimisticRoutineOccurrences(
   range: CalendarRangeResponse,
   dayOfWeek: string,
@@ -908,6 +951,116 @@ function WeeklyStack({
   );
 }
 
+interface AiDraftProjectionItem {
+  key: string;
+  actionType: string;
+  targetType: string;
+  title: string;
+  detail: string;
+  reason: string | null;
+  startAt: string | null;
+  endAt: string | null;
+}
+
+function payloadString(payload: Record<string, unknown> | undefined, ...keys: string[]) {
+  if (!payload) {
+    return null;
+  }
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return null;
+}
+
+function draftProjectionDetail(payload: Record<string, unknown> | undefined, timeZone: string) {
+  const dayOfWeek = payloadString(payload, "dayOfWeek", "day_of_week");
+  const startTime = payloadString(payload, "startTime", "start_time");
+  const endTime = payloadString(payload, "endTime", "end_time");
+  if (dayOfWeek && startTime && endTime) {
+    return `${dayOfWeek} ${startTime}-${endTime}`;
+  }
+  if (startTime && endTime) {
+    return `${startTime}-${endTime}`;
+  }
+
+  const startAt = payloadString(payload, "startAt", "start_at");
+  const endAt = payloadString(payload, "endAt", "end_at");
+  if (startAt && endAt) {
+    return `${formatOccurrenceClock(startAt, timeZone)}-${formatOccurrenceClock(endAt, timeZone)}`;
+  }
+
+  const shiftMinutes = payloadString(payload, "suggestedShiftMinutes", "suggested_shift_minutes");
+  if (shiftMinutes) {
+    return `${shiftMinutes}분 이동`;
+  }
+  return "시간 세부값은 제안 카드에서 확인";
+}
+
+function buildAiDraftProjectionItems(suggestions: RescheduleSuggestion[], timeZone: string) {
+  return suggestions
+    .filter((suggestion) => suggestion.status === "pending")
+    .flatMap((suggestion) =>
+      suggestion.commandBatch.commands
+        .filter((command) => command.executable && command.actionType !== "explain_only")
+        .map((command, index) => {
+          const payload = command.payload;
+          const title = payloadString(payload, "activity", "title", "summary")
+            ?? suggestion.previewItems.find((item) => item.executable && item.actionType === command.actionType)?.title
+            ?? suggestion.summary;
+          const startAt = payloadString(payload, "startAt", "start_at");
+          const endAt = payloadString(payload, "endAt", "end_at");
+          return {
+            key: `${suggestion.id}:${command.actionType}:${command.targetId ?? index}`,
+            actionType: command.actionType,
+            targetType: command.targetType,
+            title,
+            detail: draftProjectionDetail(payload, timeZone),
+            reason: command.reason ?? suggestion.reason,
+            startAt,
+            endAt,
+          } satisfies AiDraftProjectionItem;
+        }),
+    )
+    .slice(0, 6);
+}
+
+function AiDraftProjection({
+  draftItems,
+}: {
+  draftItems: AiDraftProjectionItem[];
+}) {
+  if (!draftItems.length) {
+    return null;
+  }
+
+  return (
+    <section className="ai-draft-projection" data-testid="ai-draft-projection" aria-label="AI 변경안 타임라인 투영">
+      <div className="ai-draft-projection-head">
+        <div>
+          <p className="panel-kicker">AI Draft Projection</p>
+          <strong>아직 적용 전인 변경안을 타임라인 위에서 먼저 확인합니다.</strong>
+        </div>
+        <span>{draftItems.length}개 Draft</span>
+      </div>
+      <ol className="ai-draft-projection-list">
+        {draftItems.map((item) => (
+          <li className="ai-draft-projection-item" key={item.key} data-testid="ai-draft-projection-item">
+            <span>{formatAiActionLabel(item.actionType)} · {item.targetType}</span>
+            <strong>{formatServiceCopy(item.title)}</strong>
+            <small>{item.detail}</small>
+            {item.reason ? <p>{formatServiceCopy(item.reason)}</p> : null}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
 function MonthlyMosaic({
   range,
   isLoading,
@@ -925,9 +1078,12 @@ function MonthlyMosaic({
   timeZone: string;
   onSelectDate: (dateKey: string) => void;
 }) {
-  const monthDays = buildMonthGridDateKeys(monthDateKey);
-  const occurrencesByDate = groupOccurrencesByDate(range, timeZone);
-  const monthLabel = formatAgendaDateLabel(monthStartDateKey(monthDateKey)).replace(/\s*1일.*$/, "");
+  const monthDays = useMemo(() => buildMonthGridDateKeys(monthDateKey), [monthDateKey]);
+  const occurrencesByDate = useMemo(() => groupOccurrencesByDate(range, timeZone), [range, timeZone]);
+  const monthLabel = useMemo(
+    () => formatAgendaDateLabel(monthStartDateKey(monthDateKey)).replace(/\s*1일.*$/, ""),
+    [monthDateKey],
+  );
 
   return (
     <section className="monthly-mosaic-card" data-testid="monthly-mosaic" aria-label="월간 모자이크">
@@ -982,13 +1138,49 @@ function MonthlyMosaic({
   );
 }
 
+
+function draftItemDateKeys(item: AiDraftProjectionItem, timeZone: string) {
+  if (!item.startAt && !item.endAt) {
+    return [];
+  }
+  const occurrence: CalendarOccurrence = {
+    occurrenceId: item.key,
+    entityType: item.targetType.toLowerCase() === "task" ? "TASK" : "EVENT",
+    entityId: item.key,
+    seriesId: item.key,
+    startAt: item.startAt,
+    endAt: item.endAt,
+    title: item.title,
+    category: null,
+    sourceType: "AI_DRAFT",
+    syncState: "DRAFT",
+    recurrenceInstanceType: "SINGLE",
+    priorityTier: 5,
+    collisionPolicy: "CAN_BE_SHADOWED",
+    providerAuthority: "LOCAL_CAN_WRITE",
+    shadowState: "NONE",
+    shadowingEntityType: null,
+    shadowingEntityId: null,
+    protectedWindow: false,
+    synthetic: true,
+  };
+  return occurrenceLocalDateKeys(occurrence, timeZone).filter(isCalendarDateKey);
+}
+
+function draftItemsForDate(items: AiDraftProjectionItem[], dateKey: string, timeZone: string) {
+  return items
+    .filter((item) => draftItemDateKeys(item, timeZone).includes(dateKey))
+    .toSorted((left, right) => (left.startAt ?? "").localeCompare(right.startAt ?? "") || left.title.localeCompare(right.title));
+}
 function SelectedDayTimeline({
   week,
   range,
   isRangeLoading,
   isRangeError,
   selectedDateKey,
+  draftItems,
   onBlockSelect,
+  onOccurrenceSelect,
   onReturnToAgenda,
   onReturnToMonth,
   timeZone,
@@ -998,13 +1190,22 @@ function SelectedDayTimeline({
   isRangeLoading: boolean;
   isRangeError: boolean;
   selectedDateKey: string;
+  draftItems: AiDraftProjectionItem[];
   onBlockSelect: (block: EditableScheduleBlock) => void;
+  onOccurrenceSelect: (occurrence: CalendarOccurrence) => void;
   onReturnToAgenda: () => void;
   onReturnToMonth: () => void;
   timeZone: string;
 }) {
-  const selectedWeek = filterWeekToDate(week, selectedDateKey);
-  const selectedOccurrences = getOccurrencesForDate(range, selectedDateKey, timeZone);
+  const selectedWeek = useMemo(() => filterWeekToDate(week, selectedDateKey), [week, selectedDateKey]);
+  const selectedOccurrences = useMemo(
+    () => getOccurrencesForDate(range, selectedDateKey, timeZone),
+    [range, selectedDateKey, timeZone],
+  );
+  const selectedDraftItems = useMemo(
+    () => draftItemsForDate(draftItems, selectedDateKey, timeZone),
+    [draftItems, selectedDateKey, timeZone],
+  );
   return (
     <section className="selected-day-card" data-testid="selected-day-timeline" aria-label="선택한 하루 일정">
       <div className="selected-day-head">
@@ -1022,11 +1223,26 @@ function SelectedDayTimeline({
       <section className="selected-day-range" aria-label="캘린더 range 항목">
         <div className="selected-day-range-head">
           <strong>Range spine 항목</strong>
-          <span>{selectedOccurrences.length}개</span>
+          <span>{selectedOccurrences.length + selectedDraftItems.length}개</span>
         </div>
         {isRangeLoading ? <p className="timeline-state-note">선택한 날짜의 캘린더 항목을 불러오는 중입니다.</p> : null}
         {isRangeError ? <p className="timeline-state-note error">선택한 날짜의 캘린더 항목을 불러오지 못했습니다. 로컬 주간 일정은 계속 표시합니다.</p> : null}
-        {!isRangeLoading && !isRangeError && selectedOccurrences.length === 0 ? (
+        {selectedDraftItems.length ? (
+          <ol className="selected-day-occurrence-list selected-day-draft-list" aria-label="AI Draft 시간 투영">
+            {selectedDraftItems.map((draft) => (
+              <li className="selected-day-occurrence ai-draft-occurrence" data-testid="selected-day-draft-occurrence" key={draft.key}>
+                <div className="occurrence-edit-trigger" aria-label={`${draft.title} draft`}>
+                  <span className="agenda-occurrence-time">{draft.detail}</span>
+                  <div>
+                    <strong>{formatServiceCopy(draft.title)}</strong>
+                    <span>AI Draft · 적용 전</span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : null}
+        {!isRangeLoading && !isRangeError && selectedOccurrences.length === 0 && selectedDraftItems.length === 0 ? (
           <p className="week-stack-empty">캘린더 range 항목이 없습니다.</p>
         ) : null}
         {selectedOccurrences.length ? (
@@ -1037,14 +1253,16 @@ function SelectedDayTimeline({
                 data-testid="selected-day-occurrence"
                 key={occurrence.occurrenceId}
               >
-                <span className="agenda-occurrence-time">{formatOccurrenceTimeRange(occurrence, timeZone)}</span>
-                <div>
-                  <strong>{formatServiceCopy(occurrence.title)}</strong>
-                  <span>
-                    {occurrenceKindLabel(occurrence)}
-                    {occurrence.synthetic ? " · 반복" : ""}
-                  </span>
-                </div>
+                <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(occurrence)}>
+                  <span className="agenda-occurrence-time">{formatOccurrenceTimeRange(occurrence, timeZone)}</span>
+                  <div>
+                    <strong>{formatServiceCopy(occurrence.title)}</strong>
+                    <span>
+                      {occurrenceKindLabel(occurrence)}
+                      {occurrence.synthetic ? " · 반복" : ""}
+                    </span>
+                  </div>
+                </button>
               </li>
             ))}
           </ol>
@@ -1062,15 +1280,20 @@ function AgendaStream({
   isError,
   timeZone,
   onSelectDate,
+  onOccurrenceSelect,
 }: {
   range: CalendarRangeResponse | null | undefined;
   isLoading: boolean;
   isError: boolean;
   timeZone: string;
   onSelectDate: (dateKey: string) => void;
+  onOccurrenceSelect: (occurrence: CalendarOccurrence) => void;
 }) {
-  const groups = groupAgendaOccurrences(range, timeZone);
-  const occurrenceCount = groups.reduce((sum, group) => sum + group.occurrences.length, 0);
+  const groups = useMemo(() => groupAgendaOccurrences(range, timeZone), [range, timeZone]);
+  const occurrenceCount = useMemo(
+    () => groups.reduce((sum, group) => sum + group.occurrences.length, 0),
+    [groups],
+  );
 
   return (
     <section className="agenda-stream-card" data-testid="agenda-stream" aria-label="아젠다 스트림">
@@ -1121,16 +1344,18 @@ function AgendaStream({
                     data-testid="agenda-occurrence"
                     key={occurrence.occurrenceId}
                   >
-                    <span className="agenda-occurrence-time">
-                      {formatOccurrenceTimeRange(occurrence, timeZone)}
-                    </span>
-                    <div>
-                      <strong>{formatServiceCopy(occurrence.title)}</strong>
-                      <span>
-                        {occurrenceKindLabel(occurrence)}
-                        {occurrence.synthetic ? " · 반복" : ""}
+                    <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(occurrence)}>
+                      <span className="agenda-occurrence-time">
+                        {formatOccurrenceTimeRange(occurrence, timeZone)}
                       </span>
-                    </div>
+                      <div>
+                        <strong>{formatServiceCopy(occurrence.title)}</strong>
+                        <span>
+                          {occurrenceKindLabel(occurrence)}
+                          {occurrence.synthetic ? " · 반복" : ""}
+                        </span>
+                      </div>
+                    </button>
                   </li>
                 ))}
               </ol>
@@ -1158,6 +1383,8 @@ export function ScheduleView() {
   const [blockingConflictMessage, setBlockingConflictMessage] = useState<string | null>(null);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [editingBlock, setEditingBlock] = useState<EditableScheduleBlock | null>(null);
+  const [editingOccurrence, setEditingOccurrence] = useState<CalendarOccurrence | null>(null);
+  const [occurrenceForm, setOccurrenceForm] = useState<OccurrenceEditForm>(DEFAULT_OCCURRENCE_FORM);
   const [deleteCandidate, setDeleteCandidate] = useState<EditableScheduleBlock | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [timelineView, setTimelineView] = useState<ScheduleTimelineView>("week");
@@ -1167,6 +1394,7 @@ export function ScheduleView() {
   const aiThreadRef = useRef<HTMLDivElement | null>(null);
   const aiThreadEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToAiThreadBottomRef = useRef(true);
+  const selectedDateTimeZoneRef = useRef<string | null>(null);
   const loadSequenceRef = useRef(0);
   const scheduleMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const scheduleMutationActiveRef = useRef(false);
@@ -1376,6 +1604,17 @@ export function ScheduleView() {
     if (!session?.authenticated) {
       return;
     }
+    if (selectedDateTimeZoneRef.current === scheduleTimeZone) {
+      return;
+    }
+    selectedDateTimeZoneRef.current = scheduleTimeZone;
+    setSelectedDateKey(zonedDateKey(new Date(), scheduleTimeZone));
+  }, [scheduleTimeZone, session?.authenticated]);
+
+  useEffect(() => {
+    if (!session?.authenticated) {
+      return;
+    }
 
     const controller = new AbortController();
     void loadSchedulePage(controller.signal);
@@ -1392,7 +1631,7 @@ export function ScheduleView() {
     aiThreadEndRef.current?.scrollIntoView({ block: "end" });
   }, [data.suggestions]);
 
-  useBodyScrollLock(isCreateModalOpen || Boolean(blockingConflictMessage));
+  useBodyScrollLock(isCreateModalOpen || Boolean(editingOccurrence) || Boolean(blockingConflictMessage));
 
 
   useEffect(() => {
@@ -1464,6 +1703,161 @@ export function ScheduleView() {
       note: block.note ?? "",
     });
     setCreateModalOpen(true);
+  }
+
+
+  async function openOccurrenceEditModal(occurrence: CalendarOccurrence) {
+    if (occurrence.entityType === "ROUTINE_BLOCK") {
+      showNotice({
+        tone: "error",
+        title: "보호 루틴은 여기서 직접 수정할 수 없습니다.",
+        detail: "루틴 블록은 주간 스택의 로컬 블록 편집에서 조정하세요.",
+      });
+      return;
+    }
+    if (occurrence.entityType !== "EVENT" && occurrence.entityType !== "TASK") {
+      showNotice({
+        tone: "error",
+        title: "편집할 수 없는 항목입니다.",
+      });
+      return;
+    }
+    if (!(await ensureNoPendingScheduleConflict())) {
+      return;
+    }
+
+    try {
+      setIsMutating(true);
+      const timeZone = safeTimeZone(session?.timezone);
+      if (occurrence.entityType === "EVENT") {
+        const response = await api.getEvent(occurrence.entityId);
+        const event = response.data;
+        setOccurrenceForm({
+          title: event.title,
+          description: event.description ?? "",
+          startAt: zonedDateTimeInputValue(event.startAt, timeZone),
+          endAt: zonedDateTimeInputValue(event.endAt, timeZone),
+          dueDate: "",
+          estimatedMinutes: "30",
+          priority: String(event.priority ?? 3),
+          category: event.category ?? occurrence.category ?? "WORK",
+          goalId: event.goalId,
+        });
+      } else {
+        const response = await api.getTask(occurrence.entityId);
+        const task = response.data;
+        setOccurrenceForm({
+          title: task.title,
+          description: task.description ?? "",
+          startAt: "",
+          endAt: "",
+          dueDate: zonedDateTimeInputValue(task.dueDate, timeZone),
+          estimatedMinutes: String(task.estimatedMinutes ?? 30),
+          priority: String(task.priority ?? 3),
+          category: task.category ?? occurrence.category ?? "WORK",
+          goalId: task.goalId,
+        });
+      }
+      setEditingOccurrence(occurrence);
+    } catch (openError) {
+      showNotice({
+        tone: "error",
+        title: "원본 항목을 불러오지 못했습니다.",
+        detail: mutationErrorDetail(openError),
+      });
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
+  function handleOccurrenceFormChange(
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) {
+    const { name, value } = event.target;
+    setOccurrenceForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+  }
+
+  async function handleSaveOccurrence(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingOccurrence || isMutating || scheduleMutationActiveRef.current) {
+      return;
+    }
+    if (!(await ensureNoPendingScheduleConflict())) {
+      return;
+    }
+
+    try {
+      scheduleMutationActiveRef.current = true;
+      setIsMutating(true);
+      const timeZone = safeTimeZone(session?.timezone);
+      const priority = Number(occurrenceForm.priority);
+      if (!Number.isFinite(priority) || priority < 1 || priority > 5) {
+        throw new Error("우선순위는 1부터 5 사이여야 합니다.");
+      }
+
+      if (editingOccurrence.entityType === "EVENT") {
+        const startAt = isoFromZonedDateTimeInput(occurrenceForm.startAt, timeZone);
+        const endAt = isoFromZonedDateTimeInput(occurrenceForm.endAt, timeZone);
+        if (new Date(endAt).getTime() <= new Date(startAt).getTime()) {
+          throw new Error("종료 시각은 시작 시각보다 늦어야 합니다.");
+        }
+        await runScheduleMutationExclusive((signal) =>
+          api.updateEvent(editingOccurrence.entityId, {
+            title: occurrenceForm.title,
+            description: occurrenceForm.description || null,
+            startAt,
+            endAt,
+            priority,
+            category: occurrenceForm.category,
+            goalId: occurrenceForm.goalId,
+          }, signal),
+        );
+      } else if (editingOccurrence.entityType === "TASK") {
+        const estimatedMinutes = Number(occurrenceForm.estimatedMinutes);
+        if (!Number.isFinite(estimatedMinutes) || estimatedMinutes < 0) {
+          throw new Error("예상 소요 시간은 0분 이상이어야 합니다.");
+        }
+        await runScheduleMutationExclusive((signal) =>
+          api.updateTask(editingOccurrence.entityId, {
+            title: occurrenceForm.title,
+            description: occurrenceForm.description || null,
+            dueDate: occurrenceForm.dueDate ? isoFromZonedDateTimeInput(occurrenceForm.dueDate, timeZone) : null,
+            estimatedMinutes,
+            priority,
+            goalId: occurrenceForm.goalId,
+            category: occurrenceForm.category || null,
+          }, signal),
+        );
+      }
+
+      setEditingOccurrence(null);
+      setOccurrenceForm(DEFAULT_OCCURRENCE_FORM);
+      showNotice({
+        tone: "success",
+        title: "캘린더 원본 항목을 수정했습니다.",
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: calendarRangeQueryRootKey }),
+        loadSchedulePage(),
+        refreshSession({ silent: true }),
+      ]);
+    } catch (saveError) {
+      if (isConflictError(saveError)) {
+        setBlockingConflictMessage(saveError.message);
+        await loadSchedulePage();
+      }
+      showNotice({
+        tone: "error",
+        title: "캘린더 원본 항목 수정에 실패했습니다.",
+        detail: mutationErrorDetail(saveError),
+      });
+    } finally {
+      scheduleMutationActiveRef.current = false;
+      setIsMutating(false);
+    }
   }
 
   function handleFormChange(
@@ -1660,6 +2054,10 @@ export function ScheduleView() {
 
 
   const pendingSuggestions = data.suggestions.filter((suggestion) => suggestion.status === "pending");
+  const pendingDraftItems = useMemo(
+    () => buildAiDraftProjectionItems(pendingSuggestions, scheduleTimeZone),
+    [pendingSuggestions, scheduleTimeZone],
+  );
   const conversationSuggestions = [...data.suggestions.slice(0, 8)].reverse();
   const aiRequestRail = (
     <section className="ai-compose-card ai-chat-card" data-testid="schedule-ai-right-rail" aria-label="일정 변경 요청 대화">
@@ -1799,6 +2197,7 @@ export function ScheduleView() {
               </div>
             </div>
 
+            <AiDraftProjection draftItems={pendingDraftItems} />
             <div className="schedule-mobile-action-strip" aria-label="주간 일정 빠른 작업">
               <button
                 className="ghost-btn"
@@ -1854,7 +2253,9 @@ export function ScheduleView() {
                     isRangeLoading={monthRangeQuery.isLoading || monthRangeQuery.isFetching}
                     isRangeError={monthRangeQuery.isError}
                     selectedDateKey={selectedDateKey}
+                    draftItems={pendingDraftItems}
                     onBlockSelect={(block) => void openEditModal(block)}
+                    onOccurrenceSelect={(occurrence) => void openOccurrenceEditModal(occurrence)}
                     onReturnToAgenda={() => setTimelineView("agenda")}
                     onReturnToMonth={() => setTimelineView("month")}
                     timeZone={monthRangeWindow.timeZone}
@@ -1870,12 +2271,175 @@ export function ScheduleView() {
                       setSelectedDateKey(dateKey);
                       setTimelineView("day");
                     }}
+                    onOccurrenceSelect={(occurrence) => void openOccurrenceEditModal(occurrence)}
                   />
                 ) : null}
               </section>
             </div>
           </article>
         </section>
+      ) : null}
+
+
+      {editingOccurrence ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            setEditingOccurrence(null);
+            setOccurrenceForm(DEFAULT_OCCURRENCE_FORM);
+          }}
+        >
+          <div
+            className="modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calendar-occurrence-edit-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <p className="panel-kicker">Range Spine 원본 편집</p>
+                <h2 id="calendar-occurrence-edit-title">
+                  {editingOccurrence.entityType === "EVENT" ? "캘린더 이벤트 수정" : "할 일 수정"}
+                </h2>
+              </div>
+              <button
+                className="ghost-btn secondary-action-btn"
+                type="button"
+                onClick={() => {
+                  setEditingOccurrence(null);
+                  setOccurrenceForm(DEFAULT_OCCURRENCE_FORM);
+                }}
+              >
+                닫기
+              </button>
+            </div>
+
+            <form className="modal-form" onSubmit={handleSaveOccurrence}>
+              <div className="modal-form-grid">
+                <div className="field modal-form-span-2">
+                  <label htmlFor="occurrence-title">제목</label>
+                  <input
+                    id="occurrence-title"
+                    name="title"
+                    type="text"
+                    value={occurrenceForm.title}
+                    onChange={handleOccurrenceFormChange}
+                    required
+                  />
+                </div>
+                {editingOccurrence.entityType === "EVENT" ? (
+                  <>
+                    <div className="field">
+                      <label htmlFor="occurrence-startAt">시작</label>
+                      <input
+                        id="occurrence-startAt"
+                        name="startAt"
+                        type="datetime-local"
+                        value={occurrenceForm.startAt}
+                        onChange={handleOccurrenceFormChange}
+                        required
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="occurrence-endAt">종료</label>
+                      <input
+                        id="occurrence-endAt"
+                        name="endAt"
+                        type="datetime-local"
+                        value={occurrenceForm.endAt}
+                        onChange={handleOccurrenceFormChange}
+                        required
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="field">
+                      <label htmlFor="occurrence-dueDate">마감</label>
+                      <input
+                        id="occurrence-dueDate"
+                        name="dueDate"
+                        type="datetime-local"
+                        value={occurrenceForm.dueDate}
+                        onChange={handleOccurrenceFormChange}
+                      />
+                    </div>
+                    <div className="field">
+                      <label htmlFor="occurrence-estimatedMinutes">예상 분</label>
+                      <input
+                        id="occurrence-estimatedMinutes"
+                        name="estimatedMinutes"
+                        type="number"
+                        min="0"
+                        value={occurrenceForm.estimatedMinutes}
+                        onChange={handleOccurrenceFormChange}
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="field">
+                  <label htmlFor="occurrence-priority">우선순위</label>
+                  <input
+                    id="occurrence-priority"
+                    name="priority"
+                    type="number"
+                    min="1"
+                    max="5"
+                    value={occurrenceForm.priority}
+                    onChange={handleOccurrenceFormChange}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="occurrence-category">카테고리</label>
+                  <select
+                    id="occurrence-category"
+                    name="category"
+                    value={occurrenceForm.category}
+                    onChange={handleOccurrenceFormChange}
+                  >
+                    {Object.keys(CATEGORY_LABELS).map((category) => (
+                      <option key={category} value={category}>
+                        {CATEGORY_LABELS[category] ?? category}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field modal-form-span-2">
+                  <label htmlFor="occurrence-description">설명</label>
+                  <textarea
+                    id="occurrence-description"
+                    name="description"
+                    value={occurrenceForm.description}
+                    onChange={handleOccurrenceFormChange}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <p className="modal-support-copy">
+                이 편집은 /api/calendar/range에 투영되는 EVENT/TASK 원본을 직접 갱신합니다. 루틴 보호 블록은 주간 스택에서 따로 수정합니다.
+              </p>
+              <div className="modal-actions">
+                <button
+                  className="ghost-btn"
+                  type="button"
+                  disabled={isMutating}
+                  onClick={() => {
+                    setEditingOccurrence(null);
+                    setOccurrenceForm(DEFAULT_OCCURRENCE_FORM);
+                  }}
+                >
+                  취소
+                </button>
+                <button className="solid-btn" disabled={isMutating} type="submit">
+                  원본 저장
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       ) : null}
 
       {isCreateModalOpen ? (

@@ -6,6 +6,8 @@ import {
   CsrfTokenResponse,
   CreateGoalRequest,
   CreateScheduleBlockRequest,
+  EventItem,
+  EventWriteRequest,
   DashboardSummaryResponse,
   FocusCurrentView,
   Goal,
@@ -26,6 +28,7 @@ import {
   SyncStatusMeta,
   SyncStatusResponse,
   Task,
+  TaskWriteRequest,
   WeekScheduleResponse,
 } from "@/lib/types";
 
@@ -406,6 +409,30 @@ export const api = {
         action: "continue",
         expectedExtraMinutes,
       }),
+    });
+  },
+
+  getEvent(eventId: string, signal?: AbortSignal) {
+    return requestEnvelope<EventItem>(`/api/events/${eventId}`, { signal });
+  },
+
+  updateEvent(eventId: string, request: EventWriteRequest, signal?: AbortSignal) {
+    return requestEnvelope<EventItem>(`/api/events/${eventId}`, {
+      method: "PATCH",
+      signal,
+      body: JSON.stringify(request),
+    });
+  },
+
+  getTask(taskId: string, signal?: AbortSignal) {
+    return requestEnvelope<Task>(`/api/tasks/${taskId}`, { signal });
+  },
+
+  updateTask(taskId: string, request: TaskWriteRequest, signal?: AbortSignal) {
+    return requestEnvelope<Task>(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      signal,
+      body: JSON.stringify(request),
     });
   },
 

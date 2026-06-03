@@ -2851,3 +2851,103 @@ button.current-schedule-card:hover {
     width: auto;
   }
 }
+
+.ai-draft-projection {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 16px;
+  border: 1px dashed rgba(91, 110, 225, 0.34);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(237, 240, 255, 0.78), rgba(255, 255, 255, 0.86));
+  padding: 14px;
+  word-break: keep-all;
+}
+
+.ai-draft-projection-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-draft-projection-head strong {
+  display: block;
+  margin-top: 3px;
+}
+
+.ai-draft-projection-head > span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(91, 110, 225, 0.13);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 6px 9px;
+}
+
+.ai-draft-projection-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-draft-projection-item {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid rgba(91, 110, 225, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 10px;
+}
+
+.ai-draft-projection-item span,
+.ai-draft-projection-item small,
+.ai-draft-projection-item p {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.ai-draft-projection-item strong,
+.agenda-occurrence strong,
+.selected-day-occurrence strong,
+.week-stack-block strong,
+.mobile-schedule-block strong {
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  text-wrap: pretty;
+}
+
+.occurrence-edit-trigger {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.occurrence-edit-trigger:focus-visible {
+  outline: 3px solid rgba(91, 110, 225, 0.36);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.selected-day-draft-list {
+  border-left: 3px solid rgba(91, 110, 225, 0.32);
+  padding-left: 10px;
+}
+
+.ai-draft-occurrence {
+  border-style: dashed;
+  background: linear-gradient(135deg, rgba(91, 110, 225, 0.12), rgba(255, 255, 255, 0.86));
+  opacity: 0.86;
+}
