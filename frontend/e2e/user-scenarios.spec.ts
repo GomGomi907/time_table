@@ -61,10 +61,8 @@ test.describe("핵심 사용자 시나리오", () => {
     });
 
     await page.getByRole("button", { name: "로그아웃" }).click();
-    const loginStart = page.getByRole("button", { name: "Google로 시작" });
-    if (!(await loginStart.isVisible({ timeout: 5_000 }).catch(() => false))) {
-      await page.goto("/login");
-    }
+    await expect(page).toHaveURL(/\/login/, { timeout: 30_000 });
+    const loginStart = page.getByRole("button", { name: /Google로 시작|로그인 준비 중/ });
     await expect(page.getByRole("heading", { name: "오늘 일정과 지금 할 일을 바로 보여줍니다." })).toBeVisible({
       timeout: 30_000,
     });
@@ -97,7 +95,7 @@ test.describe("핵심 사용자 시나리오", () => {
     await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", {
       timeout: 30_000,
     });
-    await expect(page.getByText("보류").first()).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "보류" })).toHaveCount(0, { timeout: 30_000 });
   });
 
   test("사용자는 할 일을 시작하고 완료할 수 있다", async ({ page }, testInfo) => {

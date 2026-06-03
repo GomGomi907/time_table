@@ -67,7 +67,10 @@ public class SecurityConfig {
                     }
                     authorize.anyRequest().authenticated();
                 })
-                .logout(logout -> logout.logoutUrl("/api/auth/logout"))
+                // `/api/auth/logout` is an API endpoint implemented by AuthController.
+                // Disable the default Spring Security logout filter so the controller
+                // can return the stable no-content contract used by the frontend.
+                .logout(logout -> logout.disable())
                 .httpBasic(httpBasic -> httpBasic.disable());
 
         if (appProperties.googleOauthEnabled()) {

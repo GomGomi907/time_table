@@ -61,7 +61,7 @@ export function AppShell({
         title: "세션을 종료했습니다.",
         detail: "로그인 화면에서 다시 시작할 수 있습니다.",
       });
-      router.push("/login");
+      window.location.assign("/login");
     } catch (error) {
       showNotice({
         tone: "error",
