@@ -73,7 +73,7 @@ const SCHEDULE_TIMELINE_VIEW_LABELS: Record<ScheduleTimelineView, string> = {
 };
 
 const SCHEDULE_TIMELINE_VIEW_DESCRIPTIONS: Record<ScheduleTimelineView, string> = {
-  month: "월간 모자이크",
+  month: "월간 보기",
   week: "주간 스택",
   day: "선택한 하루",
   agenda: "시간순 목록",
@@ -1101,12 +1101,12 @@ function MonthlyMosaic({
   );
 
   return (
-    <section className="monthly-mosaic-card" data-testid="monthly-mosaic" aria-label="월간 모자이크">
+    <section className="monthly-mosaic-card" data-testid="monthly-mosaic" aria-label="월간 보기">
       <div className="monthly-mosaic-head">
         <div>
-          <p className="panel-kicker">월간 모자이크</p>
+          <p className="panel-kicker">월간 보기</p>
           <h2>{monthLabel}</h2>
-          <p>기존 캘린더 range 응답을 날짜별 결정적 요약으로 압축합니다.</p>
+          <p>가져온 일정을 날짜별로 묶어 한 달 흐름을 보여줍니다.</p>
         </div>
         <span>{(range?.instrumentation.occurrenceCount ?? 0) + draftItems.length}개 항목</span>
       </div>
@@ -1239,9 +1239,9 @@ function SelectedDayTimeline({
     <section className="selected-day-card" data-testid="selected-day-timeline" aria-label="선택한 하루 일정">
       <div className="selected-day-head">
         <div>
-          <p className="panel-kicker">Selected Day</p>
+          <p className="panel-kicker">선택한 하루</p>
           <h2>{formatAgendaDateLabel(selectedDateKey)}</h2>
-          <p>월간/목록에서 고른 날짜를 5분 오케스트레이션의 일간 맥락으로 넘깁니다.</p>
+          <p>월간 보기나 목록에서 고른 날짜의 일정과 주간 블록을 함께 보여줍니다.</p>
         </div>
         <div className="selected-day-actions" aria-label="일간 보기 전환">
           <button type="button" className="ghost-btn" onClick={onReturnToMonth}>월간으로</button>
@@ -1249,9 +1249,9 @@ function SelectedDayTimeline({
         </div>
       </div>
 
-      <section className="selected-day-range" aria-label="캘린더 range 항목">
+      <section className="selected-day-range" aria-label="캘린더 일정 항목">
         <div className="selected-day-range-head">
-          <strong>Range spine 항목</strong>
+          <strong>캘린더 일정</strong>
           <span>{selectedOccurrences.length + selectedDraftItems.length}개</span>
         </div>
         {isRangeLoading ? <p className="timeline-state-note">선택한 날짜의 캘린더 항목을 불러오는 중입니다.</p> : null}
@@ -1260,7 +1260,7 @@ function SelectedDayTimeline({
           <ol className="selected-day-occurrence-list selected-day-draft-list" aria-label="AI 변경안 시간 투영">
             {selectedDraftItems.map((draft) => (
               <li className="selected-day-occurrence ai-draft-occurrence" data-testid="selected-day-draft-occurrence" key={draft.key}>
-                <div className="occurrence-edit-trigger" aria-label={`${draft.title} draft`}>
+                <div className="occurrence-edit-trigger" aria-label={`AI 변경안: ${formatServiceCopy(draft.title)}`}>
                   <span className="agenda-occurrence-time">{draft.detail}</span>
                   <div>
                     <strong>{formatServiceCopy(draft.title)}</strong>
@@ -1272,7 +1272,7 @@ function SelectedDayTimeline({
           </ol>
         ) : null}
         {!isRangeLoading && !isRangeError && selectedOccurrences.length === 0 && selectedDraftItems.length === 0 ? (
-          <p className="week-stack-empty">캘린더 range 항목이 없습니다.</p>
+          <p className="week-stack-empty">캘린더 일정 항목이 없습니다.</p>
         ) : null}
         {selectedOccurrences.length ? (
           <ol className="selected-day-occurrence-list">
@@ -1367,7 +1367,7 @@ function AgendaStream({
   );
 
   return (
-    <section className="agenda-stream-card" data-testid="agenda-stream" aria-label="아젠다 스트림">
+    <section className="agenda-stream-card" data-testid="agenda-stream" aria-label="시간순 일정 목록">
       <div className="agenda-stream-head">
         <div>
           <p className="panel-kicker">시간순 목록</p>
@@ -1378,15 +1378,15 @@ function AgendaStream({
       </div>
 
       {isLoading ? (
-        <p className="agenda-stream-empty">아젠다를 불러오는 중입니다.</p>
+        <p className="agenda-stream-empty">일정 목록을 불러오는 중입니다.</p>
       ) : null}
 
       {isError ? (
-        <p className="agenda-stream-empty">아젠다를 불러오지 못했습니다. 주간 일정은 계속 사용할 수 있습니다.</p>
+        <p className="agenda-stream-empty">일정 목록을 불러오지 못했습니다. 주간 일정은 계속 사용할 수 있습니다.</p>
       ) : null}
 
       {!isLoading && !isError && groups.length === 0 ? (
-        <p className="agenda-stream-empty">표시할 아젠다가 없습니다.</p>
+        <p className="agenda-stream-empty">표시할 일정이 없습니다.</p>
       ) : null}
 
       {!isLoading && !isError && groups.length > 0 ? (
@@ -1429,7 +1429,7 @@ function AgendaStream({
                       data-testid="agenda-draft-occurrence"
                       key={item.key}
                     >
-                      <div className="occurrence-edit-trigger" aria-label={`${item.draft.title} draft`}>
+                      <div className="occurrence-edit-trigger" aria-label={`AI 변경안: ${formatServiceCopy(item.draft.title)}`}>
                         <span className="agenda-occurrence-time">{item.draft.detail}</span>
                         <div>
                           <strong>{formatServiceCopy(item.draft.title)}</strong>
@@ -2416,7 +2416,7 @@ export function ScheduleView() {
           >
             <div className="modal-header">
               <div>
-                <p className="panel-kicker">Range Spine 원본 편집</p>
+                <p className="panel-kicker">캘린더 원본 편집</p>
                 <h2 id="calendar-occurrence-edit-title">
                   {editingOccurrence.entityType === "EVENT" ? "캘린더 이벤트 수정" : "할 일 수정"}
                 </h2>

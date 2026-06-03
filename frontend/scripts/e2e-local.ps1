@@ -85,8 +85,32 @@ function Assert-CommandSucceeded {
   }
 }
 
+function Enter-NamedMutex {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [int]$TimeoutSeconds = 300
+  )
+
+  $mutex = [System.Threading.Mutex]::new($false, $Name)
+  $acquired = $false
+  try {
+    $acquired = $mutex.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds))
+  } catch [System.Threading.AbandonedMutexException] {
+    $acquired = $true
+  }
+
+  if (-not $acquired) {
+    $mutex.Dispose()
+    throw "Timed out waiting for mutex $Name"
+  }
+
+  return $mutex
+}
+
 $backendProcess = $null
 $frontendProcess = $null
+$buildMutex = $null
+$buildMutexAcquired = $false
 $backendPort = Get-BindablePort -EnvValue $env:E2E_BACKEND_PORT
 $frontendPort = Get-BindablePort -EnvValue $env:E2E_FRONTEND_PORT
 if ($frontendPort -eq $backendPort) {
@@ -102,7 +126,7 @@ try {
   $env:APP_AI_ENABLED = "false"
   $env:SERVER_PORT = "$backendPort"
   $env:APP_FRONTEND_URL = "http://localhost:$frontendPort"
-  $e2eDbName = "timetable-e2e-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))"
+  $e2eDbName = "timetable-e2e-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))-$PID-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
   $e2eDbPath = (Join-Path $e2eDataDir $e2eDbName).Replace("\", "/")
   $env:APP_DB_URL = "jdbc:h2:file:$e2eDbPath;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
   $env:APP_DB_USERNAME = "sa"
@@ -124,12 +148,20 @@ try {
   $env:HOSTNAME = "127.0.0.1"
   $env:NEXT_PUBLIC_ENABLE_VISUAL_LOGIN = "true"
 
+  $buildMutex = Enter-NamedMutex -Name "Global\TimeTableE2ELocalNextBuild" -TimeoutSeconds 300
+  $buildMutexAcquired = $true
   Push-Location $frontendDir
   try {
     npm run build
     Assert-CommandSucceeded "frontend production build"
   } finally {
     Pop-Location
+    if ($buildMutexAcquired -and $null -ne $buildMutex) {
+      $buildMutex.ReleaseMutex()
+      $buildMutex.Dispose()
+      $buildMutex = $null
+      $buildMutexAcquired = $false
+    }
   }
 
   $frontendProcess = Start-Process `
@@ -156,6 +188,10 @@ try {
     Pop-Location
   }
 } finally {
+  if ($buildMutexAcquired -and $null -ne $buildMutex) {
+    $buildMutex.ReleaseMutex()
+    $buildMutex.Dispose()
+  }
   Stop-StartedProcess -Process $frontendProcess
   Stop-StartedProcess -Process $backendProcess
 }
