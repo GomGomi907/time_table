@@ -447,6 +447,14 @@ summary,
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.app-frame.wide-workspace {
+  width: min(100%, calc(var(--content-max) + 252px + 360px + (var(--shell-gap) * 2)));
+}
+
+.app-frame.wide-workspace .content-shell {
+  width: 100%;
+}
+
 .app-frame.no-top-bar,
 .app-frame.with-right-rail.no-top-bar {
   grid-template-rows: minmax(0, 1fr);

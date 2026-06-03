@@ -25,6 +25,7 @@ interface AppShellProps {
   children: ReactNode;
   immersive?: boolean;
   showTopBar?: boolean;
+  workspaceWidth?: "standard" | "wide";
 }
 
 export function AppShell({
@@ -36,6 +37,7 @@ export function AppShell({
   children,
   immersive = false,
   showTopBar = true,
+  workspaceWidth = "standard",
 }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -162,7 +164,11 @@ export function AppShell({
   }
 
   return (
-    <div className={`app-frame ${rightRail ? "with-right-rail" : ""} ${showTopBar ? "" : "no-top-bar"}`}>
+    <div
+      className={`app-frame ${rightRail ? "with-right-rail" : ""} ${
+        showTopBar ? "" : "no-top-bar"
+      } ${workspaceWidth === "wide" ? "wide-workspace" : ""}`}
+    >
       <aside className="side-nav">
         <div className="brand-block">
           <span className="brand-mark">TT</span>

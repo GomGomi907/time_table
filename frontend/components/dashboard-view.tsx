@@ -257,6 +257,7 @@ export function DashboardView() {
       title="오늘 일정"
       description="오늘 일정과 바로 시작할 일을 한눈에 보여줍니다."
       showTopBar={false}
+      workspaceWidth="wide"
     >
       {!data.week && !data.focus && data.goals.length === 0 && status === "loading" ? (
         <section className="surface-card empty-state">

@@ -69,16 +69,25 @@ async function expectVerticalOrder(page: Page, selectors: string[]) {
   }
 }
 
-async function expectDashboardContentWidthMatchesHeader(page: Page) {
-  const headerBox = await page.locator(".dashboard-top-bar").boundingBox();
-  const contentBox = await page.locator(".today-briefing-shell").boundingBox();
+async function expectDashboardContentWidthMatchesScheduleWorkspace(page: Page) {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const dashboardBox = await page.locator(".today-briefing-shell").boundingBox();
 
-  if (!headerBox || !contentBox) {
-    throw new Error("Dashboard header and content boxes must be visible for width alignment check.");
+  if (!dashboardBox) {
+    throw new Error("Dashboard today content must be visible for width alignment check.");
   }
 
-  expect(Math.abs(headerBox.x - contentBox.x)).toBeLessThanOrEqual(1);
-  expect(Math.abs(headerBox.width - contentBox.width)).toBeLessThanOrEqual(2);
+  await page.goto("/schedule");
+  const scheduleBoardBox = await page.locator(".schedule-main-board").boundingBox();
+  const scheduleRailBox = await page.locator("[data-testid='app-right-rail']").boundingBox();
+
+  if (!scheduleBoardBox || !scheduleRailBox) {
+    throw new Error("Schedule board and right rail must be visible for workspace width alignment check.");
+  }
+
+  const scheduleWorkspaceWidth = scheduleRailBox.x + scheduleRailBox.width - scheduleBoardBox.x;
+  expect(Math.abs(dashboardBox.x - scheduleBoardBox.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(dashboardBox.width - scheduleWorkspaceWidth)).toBeLessThanOrEqual(2);
 }
 
 async function expectPendingSuggestionAction(page: Page, suggestion: Pick<SuggestionResponse, "executable">) {
@@ -225,13 +234,13 @@ test("dashboard answers today's schedule before operational details", async ({ p
   await expect(page.getByRole("heading", { name: /오늘 일정은/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expectDashboardContentWidthMatchesHeader(page);
   await expect(page.getByRole("heading", { name: "오늘 일정 핵심", exact: true })).toBeVisible();
   const scheduleCardText = await page.locator(".today-schedule-card").innerText();
   expect(scheduleCardText).toMatch(/아침 계획 정리|제품 리뷰 회의|개발 집중 블록|오늘 할 일 정리|성장 과제|저녁 운동/);
   await expect(page.locator(".today-schedule-card").getByText(/나머지 \d+개 일정/)).toBeVisible();
   await expect(page.getByText(/승인 전에는|승인할 조정안은 없습니다|승인 전 안전/).first()).toHaveCount(0);
   await assertNoInternalUserCopy(page);
+  await expectDashboardContentWidthMatchesScheduleWorkspace(page);
 });
 
 test("dashboard shows clarification as a question instead of an approval task", async ({ page }, testInfo) => {
