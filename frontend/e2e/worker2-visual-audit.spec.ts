@@ -105,7 +105,8 @@ async function capture(page: Page, surface: string, viewportName: string) {
       ".schedule-view-toolbar",
       ".schedule-device-layout",
       ".schedule-calendar-panel",
-      ".week-stack-board",`n      ".mobile-week-agenda",
+      ".week-stack-board",
+      ".mobile-week-agenda",
       ".monthly-mosaic-card",
       ".selected-day-card",
       ".agenda-stream-card",
@@ -241,6 +242,7 @@ test("worker-2 visual ralph dashboard/schedule mode audit", async ({ page }, tes
   };
   fs.writeFileSync(path.join(ARTIFACT_DIR, "visual-ralph-task6-verdict.json"), JSON.stringify(artifact, null, 2), "utf8");
 });
+
 
 
 
