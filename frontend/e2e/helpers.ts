@@ -117,10 +117,12 @@ export async function completeOnboardingIfPresent(page: Page) {
   }
 
   await expect(
-    page.getByRole("button", { name: /오늘 일정표 보기|오늘 화면으로 이동|바로 시작하기|저장하고 계속|둘러보기|적용하고 시작/ }).first(),
+    page.getByRole("button", {
+      name: /답변 저장하고 계속|오늘 화면으로 이동|적용하지 않고 오늘 화면으로|추천 일정 적용하고 시작|바로 시작하기|둘러보기|적용하고 시작/,
+    }).first(),
   ).toBeVisible({ timeout: 45_000 });
 
-  const browseButton = page.getByRole("button", { name: /둘러보기|오늘 화면으로 이동/ }).first();
+  const browseButton = page.getByRole("button", { name: /둘러보기|오늘 화면으로 이동|적용하지 않고 오늘 화면으로/ }).first();
   if (await browseButton.isVisible({ timeout: 500 }).catch(() => false)) {
     await browseButton.click();
     await expect(page).toHaveURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });

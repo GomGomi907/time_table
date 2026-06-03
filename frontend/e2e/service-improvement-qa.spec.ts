@@ -85,7 +85,9 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
 
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
   if (new URL(page.url()).pathname.includes("/onboarding")) {
-    await expect(page.getByRole("button", { name: /오늘 일정표 보기|오늘 화면으로 이동|바로 시작하기|저장하고 계속|둘러보기|적용하고 시작/ }).first()).toBeVisible({
+    await expect(page.getByRole("button", {
+      name: /답변 저장하고 계속|오늘 화면으로 이동|적용하지 않고 오늘 화면으로|추천 일정 적용하고 시작|바로 시작하기|둘러보기|적용하고 시작/,
+    }).first()).toBeVisible({
       timeout: 45_000,
     });
     await assertNoInternalUserCopy(page);

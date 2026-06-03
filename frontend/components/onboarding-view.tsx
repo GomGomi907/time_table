@@ -96,6 +96,10 @@ export function OnboardingView() {
   const displayName = onboardingStatus?.displayName || session?.displayName || "새 사용자";
   const onboardingTimeZone = onboardingStatus?.timezone || session?.timezone;
   const suggestionId = onboardingStatus?.experience?.suggestion?.id;
+  const onboardingPreviewItems = onboardingStatus?.experience?.previewItems ?? [];
+  const visibleOnboardingPreviewItems = onboardingPreviewItems.slice(0, 3);
+  const hiddenOnboardingPreviewCount = Math.max(onboardingPreviewItems.length - visibleOnboardingPreviewItems.length, 0);
+  const canApplyOnboardingSuggestion = Boolean(suggestionId && onboardingPreviewItems.length > 0);
 
   const groupedQuestions = useMemo(
     () =>
@@ -196,10 +200,10 @@ export function OnboardingView() {
   const answerReadyLabel = canSubmitAnswers
     ? `${answeredCount}/${questions.length} 답변 완료`
     : `${answeredCount}/${questions.length} 답변`;
-  const primaryActionLabel = submitPhase === "loading" ? "오늘 화면 준비 중..." : "오늘 일정표 보기";
+  const primaryActionLabel = submitPhase === "loading" ? "답변 저장 중..." : "답변 저장하고 계속";
   const readinessStateCopy = canSubmitAnswers
-    ? "오늘 일정표를 바로 열 수 있습니다."
-    : "모두 고르면 오늘 일정표로 넘어갑니다.";
+    ? "답변을 저장하면 마지막 확인으로 넘어갑니다."
+    : "모두 고르면 마지막 확인으로 넘어갑니다.";
 
   async function handleBootstrapRetry() {
     try {
@@ -231,7 +235,7 @@ export function OnboardingView() {
       showNotice({
         tone: "success",
         title: "설정을 저장했습니다.",
-        detail: "오늘 일정 화면으로 이어집니다.",
+        detail: "마지막 확인으로 이어집니다.",
       });
     } catch (error) {
       setSubmitPhase("error");
@@ -475,10 +479,30 @@ export function OnboardingView() {
                 <p className="eyebrow">완료</p>
                 <h2>오늘 일정표를 바로 열 수 있습니다.</h2>
                 <p className="onboarding-card-intro">
-                  나중에 다시 바꿀 수 있습니다.
+                  {canApplyOnboardingSuggestion
+                    ? "추천 일정을 적용할지 선택한 뒤 오늘 화면으로 이동합니다."
+                    : "나중에 다시 바꿀 수 있습니다."}
                 </p>
               </div>
             </div>
+
+            {visibleOnboardingPreviewItems.length ? (
+              <ul className="suggestion-preview-list" aria-label="온보딩에서 적용될 추천 일정">
+                {visibleOnboardingPreviewItems.map((item, index) => (
+                  <li className="suggestion-preview-item" key={`${item.title}-${item.startTime}-${index}`}>
+                    <span>{item.category}</span>
+                    <strong>{formatServiceCopy(item.title)}</strong>
+                    <p>
+                      {item.days} · {item.startTime} - {item.endTime}
+                      {item.reason ? ` · ${item.reason}` : ""}
+                    </p>
+                  </li>
+                ))}
+                {hiddenOnboardingPreviewCount ? (
+                  <li className="suggestion-preview-more">외 {hiddenOnboardingPreviewCount}개 추천 일정</li>
+                ) : null}
+              </ul>
+            ) : null}
 
             <div className="onboarding-step-actions">
               <button
@@ -492,15 +516,15 @@ export function OnboardingView() {
 
               <div className="board-head-actions">
                 <button
-                  className="ghost-btn"
-                  data-testid={!suggestionId ? "onboarding-complete-primary" : undefined}
+                  className={canApplyOnboardingSuggestion ? "ghost-btn" : "solid-btn"}
+                  data-testid={!canApplyOnboardingSuggestion ? "onboarding-complete-primary" : undefined}
                   disabled={completionPhase === "loading"}
                   onClick={() => void handleComplete(false)}
                   type="button"
                 >
-                  오늘 화면으로 이동
+                  {canApplyOnboardingSuggestion ? "적용하지 않고 오늘 화면으로" : "오늘 화면으로 이동"}
                 </button>
-                {suggestionId ? (
+                {canApplyOnboardingSuggestion ? (
                   <button
                     className="solid-btn"
                     data-testid="onboarding-complete-primary"
@@ -508,7 +532,7 @@ export function OnboardingView() {
                     onClick={() => void handleComplete(true)}
                     type="button"
                   >
-                    {completionPhase === "loading" ? "오늘 화면 준비 중..." : "오늘 일정표 보기"}
+                    {completionPhase === "loading" ? "추천 일정 적용 중..." : "추천 일정 적용하고 시작"}
                   </button>
                 ) : null}
               </div>

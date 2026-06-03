@@ -210,7 +210,7 @@ test("captures core local visual QA surfaces", async ({ page }, testInfo) => {
     const onboardingPrimary = preferredAction(
       page,
       "onboarding-continue-button",
-      /오늘 일정표 보기|오늘 화면으로 이동|바로 시작하기|저장하고 계속|둘러보기|적용하고 시작/,
+      /답변 저장하고 계속|오늘 화면으로 이동|적용하지 않고 오늘 화면으로|추천 일정 적용하고 시작|바로 시작하기|둘러보기|적용하고 시작/,
     );
     await expect(onboardingPrimary).toBeVisible({ timeout: 45_000 });
     await captureResponsiveSurface(page, testInfo, "onboarding", async () => {
