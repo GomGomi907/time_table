@@ -78,8 +78,12 @@ async function expectDashboardContentWidthMatchesScheduleWorkspace(page: Page) {
   }
 
   await page.goto("/schedule");
-  const scheduleBoardBox = await page.locator(".schedule-main-board").boundingBox();
-  const scheduleRailBox = await page.locator("[data-testid='app-right-rail']").boundingBox();
+  const scheduleBoard = page.locator(".schedule-main-board");
+  const scheduleRail = page.locator("[data-testid='app-right-rail']");
+  await expect(scheduleBoard).toBeVisible({ timeout: 30_000 });
+  await expect(scheduleRail).toBeVisible();
+  const scheduleBoardBox = await scheduleBoard.boundingBox();
+  const scheduleRailBox = await scheduleRail.boundingBox();
 
   if (!scheduleBoardBox || !scheduleRailBox) {
     throw new Error("Schedule board and right rail must be visible for workspace width alignment check.");
