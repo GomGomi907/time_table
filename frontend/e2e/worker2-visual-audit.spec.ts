@@ -51,7 +51,7 @@ async function seedSchedule(page: Page) {
     startTime: "16:10",
     endTime: "16:40",
     activity: "다음날 회의 준비",
-    category: "MEETING",
+    category: "WORK",
     note: "agenda/day switch seed",
   });
   await createScheduleBlockViaApi(page, {
@@ -59,7 +59,7 @@ async function seedSchedule(page: Page) {
     startTime: "22:30",
     endTime: "23:20",
     activity: "늦은 시간 루틴 점검",
-    category: "ROUTINE",
+    category: "LIFE",
     note: "timezone edge visual seed",
   });
 }
@@ -225,3 +225,4 @@ test("worker-2 visual ralph dashboard/schedule mode audit", async ({ page }, tes
   };
   fs.writeFileSync(path.join(ARTIFACT_DIR, "visual-ralph-task6-verdict.json"), JSON.stringify(artifact, null, 2), "utf8");
 });
+
