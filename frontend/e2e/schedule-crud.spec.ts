@@ -50,8 +50,9 @@ test("schedule block can be created, edited, and deleted", async ({ page }, test
   await expect(editDialog).toBeVisible();
   await editDialog.getByLabel("활동").fill(editedTitle);
   await editDialog.getByRole("button", { name: "변경 저장" }).click();
+  await expect(editDialog).toHaveCount(0, { timeout: 15_000 });
 
-  const editedBlock = page.locator(".schedule-block").filter({ hasText: editedTitle }).first();
+  const editedBlock = page.getByRole("button", { name: editedTitlePattern }).first();
   await expect(editedBlock).toBeVisible({ timeout: 15_000 });
   await editedBlock.click();
 

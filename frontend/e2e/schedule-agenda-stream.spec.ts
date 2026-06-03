@@ -208,7 +208,7 @@ test("schedule renders pending AI draft projection above the timeline", async ({
                   targetType: "event",
                   targetId: null,
                   payload: {
-                    title: "AI Draft 집중 시간",
+                    title: "AI 변경안 집중 시간",
                     startAt: draftStart.toISOString(),
                     endAt: draftEnd.toISOString(),
                   },
@@ -222,7 +222,7 @@ test("schedule renders pending AI draft projection above the timeline", async ({
                 actionType: "create_event",
                 targetType: "event",
                 targetId: null,
-                title: "AI Draft 집중 시간",
+                title: "AI 변경안 집중 시간",
                 detail: "10:00-10:30",
                 reason: "가용 시간 확보",
                 executable: true,
@@ -243,17 +243,17 @@ test("schedule renders pending AI draft projection above the timeline", async ({
 
   await page.goto("/schedule");
   await expect(page.getByTestId("ai-draft-projection")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("ai-draft-projection")).toContainText("AI Draft 집중 시간");
+  await expect(page.getByTestId("ai-draft-projection")).toContainText("AI 변경안 집중 시간");
 
   await page.getByTestId("schedule-view-option-month").click();
-  await expect(page.getByTestId("monthly-draft-badge").first()).toContainText(/AI Draft|AI Draft 집중 시간/, { timeout: 30_000 });
+  await expect(page.getByTestId("monthly-draft-badge").first()).toContainText(/AI 변경안|AI 변경안 집중 시간/, { timeout: 30_000 });
 
   await page.getByTestId("schedule-view-option-agenda").click();
-  await expect(page.getByTestId("agenda-draft-occurrence")).toContainText("AI Draft 집중 시간", { timeout: 30_000 });
+  await expect(page.getByTestId("agenda-draft-occurrence")).toContainText("AI 변경안 집중 시간", { timeout: 30_000 });
 
   await page.getByTestId("schedule-view-option-day").click();
   await expect(page.getByTestId("selected-day-draft-occurrence")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("selected-day-draft-occurrence")).toContainText("AI Draft · 적용 전");
+  await expect(page.getByTestId("selected-day-draft-occurrence")).toContainText("AI 변경안 · 적용 전");
 });
 
 test("schedule range event occurrence can be opened and patched from the day timeline", async ({

@@ -1056,10 +1056,10 @@ function AiDraftProjection({
     <section className="ai-draft-projection" data-testid="ai-draft-projection" aria-label="AI 변경안 타임라인 투영">
       <div className="ai-draft-projection-head">
         <div>
-          <p className="panel-kicker">AI Draft Projection</p>
+          <p className="panel-kicker">AI 변경안 미리보기</p>
           <strong>아직 적용 전인 변경안을 타임라인 위에서 먼저 확인합니다.</strong>
         </div>
-        <span>{draftItems.length}개 Draft</span>
+        <span>{draftItems.length}개 변경안</span>
       </div>
       <ol className="ai-draft-projection-list">
         {draftItems.map((item) => (
@@ -1104,7 +1104,7 @@ function MonthlyMosaic({
     <section className="monthly-mosaic-card" data-testid="monthly-mosaic" aria-label="월간 모자이크">
       <div className="monthly-mosaic-head">
         <div>
-          <p className="panel-kicker">Monthly Mosaic</p>
+          <p className="panel-kicker">월간 모자이크</p>
           <h2>{monthLabel}</h2>
           <p>기존 캘린더 range 응답을 날짜별 결정적 요약으로 압축합니다.</p>
         </div>
@@ -1144,13 +1144,13 @@ function MonthlyMosaic({
                   <span className="monthly-day-preview">{formatServiceCopy(occurrences[0].title)}</span>
                   {drafts.length ? (
                     <span className="monthly-day-draft" data-testid="monthly-draft-badge">
-                      AI Draft {drafts.length}개
+                      AI 변경안 {drafts.length}개
                     </span>
                   ) : null}
                 </>
               ) : drafts.length ? (
                 <>
-                  <strong>{drafts.length}개 AI Draft</strong>
+                  <strong>{drafts.length}개 AI 변경안</strong>
                   <small>적용 전 변경안</small>
                   <span className="monthly-day-draft" data-testid="monthly-draft-badge">
                     {formatServiceCopy(drafts[0].title)}
@@ -1257,14 +1257,14 @@ function SelectedDayTimeline({
         {isRangeLoading ? <p className="timeline-state-note">선택한 날짜의 캘린더 항목을 불러오는 중입니다.</p> : null}
         {isRangeError ? <p className="timeline-state-note error">선택한 날짜의 캘린더 항목을 불러오지 못했습니다. 로컬 주간 일정은 계속 표시합니다.</p> : null}
         {selectedDraftItems.length ? (
-          <ol className="selected-day-occurrence-list selected-day-draft-list" aria-label="AI Draft 시간 투영">
+          <ol className="selected-day-occurrence-list selected-day-draft-list" aria-label="AI 변경안 시간 투영">
             {selectedDraftItems.map((draft) => (
               <li className="selected-day-occurrence ai-draft-occurrence" data-testid="selected-day-draft-occurrence" key={draft.key}>
                 <div className="occurrence-edit-trigger" aria-label={`${draft.title} draft`}>
                   <span className="agenda-occurrence-time">{draft.detail}</span>
                   <div>
                     <strong>{formatServiceCopy(draft.title)}</strong>
-                    <span>AI Draft · 적용 전</span>
+                    <span>AI 변경안 · 적용 전</span>
                   </div>
                 </div>
               </li>
@@ -1370,7 +1370,7 @@ function AgendaStream({
     <section className="agenda-stream-card" data-testid="agenda-stream" aria-label="아젠다 스트림">
       <div className="agenda-stream-head">
         <div>
-          <p className="panel-kicker">Agenda</p>
+          <p className="panel-kicker">시간순 목록</p>
           <h2>다가오는 일정 흐름</h2>
           <p>캘린더 범위 응답의 발생 항목을 현지 날짜별로 묶어 시간순으로 보여줍니다.</p>
         </div>
@@ -1433,7 +1433,7 @@ function AgendaStream({
                         <span className="agenda-occurrence-time">{item.draft.detail}</span>
                         <div>
                           <strong>{formatServiceCopy(item.draft.title)}</strong>
-                          <span>AI Draft · 적용 전</span>
+                          <span>AI 변경안 · 적용 전</span>
                         </div>
                       </div>
                     </li>
