@@ -231,7 +231,7 @@ test("schedule renders pending AI draft projection above the timeline", async ({
             executableCommandCount: 1,
             executable: true,
             executionSummary: null,
-            createdAt: "2026-06-02T00:00:00Z",
+            createdAt: new Date(Date.now() + 60_000).toISOString(),
             appliedAt: null,
             rejectedAt: null,
             revertedAt: null,

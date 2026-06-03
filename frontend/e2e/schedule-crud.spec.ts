@@ -82,16 +82,16 @@ test("schedule block can be created, edited, and deleted", async ({ page }, test
     }
 
     await new Promise((resolve) => setTimeout(resolve, 400));
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ ok: true }),
-    });
+    await route.fallback();
   });
   const pendingDelete = finalConfirmDialog.getByRole("button", { name: "삭제" });
+  const deleteResponse = page.waitForResponse((response) =>
+    response.url().includes("/api/schedule/blocks/") && response.request().method() === "DELETE",
+  );
   await pendingDelete.click();
   await expect(pendingDelete).toBeDisabled();
   await expect(finalConfirmDialog.getByRole("button", { name: "취소" })).toBeDisabled();
+  await deleteResponse;
   await page.unroute("**/api/schedule/blocks/*");
   await expect(finalConfirmDialog).toHaveCount(0);
 
@@ -160,6 +160,35 @@ test("schedule AI chat renders newest backend suggestions as chronological botto
   await page.unroute("**/api/agent/suggestions");
 });
 
+test("schedule AI chat starts blank when backend only returns stale suggestions from a previous page entry", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  const staleSuggestions = Array.from({ length: 3 }, (_value, index) =>
+    buildReadonlySuggestion(index + 1, false, "2026-06-02T00:00:00.000Z", "pending"),
+  ).reverse();
+  await page.route("**/api/agent/suggestions", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: staleSuggestions, meta: {} }),
+    });
+  });
+
+  await page.goto("/schedule");
+  const chatLog = page.getByRole("log", { name: "일정 변경 요청 대화" });
+  await expect(chatLog).toBeVisible({ timeout: 30_000 });
+  await expect(chatLog.locator(".ai-chat-turn")).toHaveCount(0);
+  await expect(chatLog.getByText("아직 대화가 없습니다.")).toBeVisible();
+  await expect(page.getByTestId("schedule-pending-count")).toHaveText("대기 없음");
+
+  await page.unroute("**/api/agent/suggestions");
+});
+
 test("schedule AI chat does not force-scroll when the user is reading older turns", async ({ page }, testInfo) => {
   await loginAsUniqueMockUser(page, testInfo);
   await completeOnboardingIfPresent(page);
@@ -181,7 +210,7 @@ test("schedule AI chat does not force-scroll when the user is reading older turn
       await route.fallback();
       return;
     }
-    const createdSuggestion = buildReadonlySuggestion(11, true);
+    const createdSuggestion = buildReadonlySuggestion(11, true, "2026-06-02T00:00:00.000Z");
     suggestions = [createdSuggestion, ...suggestions];
     await route.fulfill({
       status: 200,
@@ -331,7 +360,7 @@ test("schedule edit and delete block duplicate synchronous submits while mutatio
 
   const editedBlock = page.locator(".schedule-block").filter({ hasText: editedTitle }).first();
   await expect(editedBlock).toBeVisible({ timeout: 15_000 });
-  expect(updateRequests).toBe(1);
+  await expect.poll(() => updateRequests).toBe(1);
 
   await editedBlock.click();
   const reopenedEditDialog = page.getByRole("dialog", { name: /일정 블록 수정/ });
@@ -348,21 +377,26 @@ test("schedule edit and delete block duplicate synchronous submits while mutatio
   await expect(deleteButton).toBeDisabled();
 
   await expect(confirmDialog).toHaveCount(0, { timeout: 15_000 });
-  expect(deleteRequests).toBe(1);
+  await expect.poll(() => deleteRequests).toBe(1);
   await expect(page.getByRole("button", { name: new RegExp(escapeRegExp(editedTitle)) })).toHaveCount(0);
 
   await page.unroute("**/api/schedule/blocks/*");
 });
 
-function buildReadonlySuggestion(index: number, verbose = false) {
+function buildReadonlySuggestion(
+  index: number,
+  verbose = false,
+  createdAt?: string,
+  status: "pending" | "rejected" = "rejected",
+) {
   const paddedDetail = verbose
     ? ` ${"이전 대화 맥락을 읽는 중인 사용자의 스크롤 위치를 보존해야 합니다.".repeat(12)}`
     : "";
   return {
     id: `suggestion-${index}`,
     triggerType: "manual_request",
-    status: "rejected",
-    statusLabel: "보류됨",
+    status,
+    statusLabel: status === "pending" ? "검토 대기" : "보류됨",
     statusDetail: "테스트 읽기 전용 제안",
     summary: `답변 ${index}${paddedDetail}`,
     reason: `요청 ${index}${paddedDetail}`,
@@ -395,7 +429,7 @@ function buildReadonlySuggestion(index: number, verbose = false) {
     executableCommandCount: 0,
     executable: false,
     executionSummary: null,
-    createdAt: `2026-06-02T00:${String(index).padStart(2, "0")}:00Z`,
+    createdAt: createdAt ?? new Date(Date.now() + 60_000 + index * 1_000).toISOString(),
     appliedAt: null,
     rejectedAt: null,
     revertedAt: null,

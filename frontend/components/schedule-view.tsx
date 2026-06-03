@@ -1030,6 +1030,19 @@ function buildAiDraftProjectionItems(suggestions: RescheduleSuggestion[], timeZo
     .slice(0, 6);
 }
 
+function isSuggestionInCurrentPageSession(
+  suggestion: RescheduleSuggestion,
+  sessionStartedAt: number,
+  sessionSuggestionIds: ReadonlySet<string>,
+) {
+  if (sessionSuggestionIds.has(suggestion.id)) {
+    return true;
+  }
+
+  const createdAt = Date.parse(suggestion.createdAt);
+  return Number.isFinite(createdAt) && createdAt >= sessionStartedAt;
+}
+
 function AiDraftProjection({
   draftItems,
 }: {
@@ -1394,6 +1407,8 @@ export function ScheduleView() {
   const aiThreadRef = useRef<HTMLDivElement | null>(null);
   const aiThreadEndRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToAiThreadBottomRef = useRef(true);
+  const aiConversationStartedAtRef = useRef(Date.now());
+  const aiConversationSuggestionIdsRef = useRef<Set<string>>(new Set());
   const selectedDateTimeZoneRef = useRef<string | null>(null);
   const loadSequenceRef = useRef(0);
   const scheduleMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1577,14 +1592,21 @@ export function ScheduleView() {
       if (signal?.aborted || loadSequence !== loadSequenceRef.current) {
         return;
       }
-      if (mutationPreflight.pending) {
-        setBlockingConflictMessage(
-          mutationPreflight.message ?? "확인이 필요한 일정 충돌이 있습니다. 먼저 충돌 내용을 확인해 주세요.",
-        );
-      }
+      setBlockingConflictMessage(
+        mutationPreflight.pending
+          ? mutationPreflight.message ?? "확인이 필요한 일정 충돌이 있습니다. 먼저 충돌 내용을 확인해 주세요."
+          : null,
+      );
+      const currentPageSuggestions = suggestions.data.filter((suggestion) =>
+        isSuggestionInCurrentPageSession(
+          suggestion,
+          aiConversationStartedAtRef.current,
+          aiConversationSuggestionIdsRef.current,
+        ),
+      );
       setData({
         week,
-        suggestions: suggestions.data,
+        suggestions: currentPageSuggestions,
       });
       setStatus("ready");
       setError(null);
@@ -1988,7 +2010,8 @@ export function ScheduleView() {
 
     try {
       setIsMutating(true);
-      await api.requestManualReschedule(trimmedReason);
+      const response = await api.requestManualReschedule(trimmedReason);
+      aiConversationSuggestionIdsRef.current.add(response.data.id);
       setRequestReason("");
       showNotice({
         tone: "success",

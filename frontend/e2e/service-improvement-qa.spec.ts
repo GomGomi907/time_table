@@ -124,8 +124,11 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
   await assertSingleVisibleByTestId(page, "schedule-ai-request-input");
   await assertSingleVisibleByTestId(page, "schedule-ai-request-submit");
   await assertSingleLineBySelector(page, "[data-testid='schedule-pending-count']");
+  await expect(page.getByTestId("schedule-pending-count")).toHaveText("대기 없음");
   await assertSelectorTextDoesNotOverflow(page, ".ai-chat-thread");
-  await assertSelectorTextDoesNotOverflow(page, ".chat-bubble.user > p");
+  if (await page.locator(".chat-bubble.user > p").count()) {
+    await assertSelectorTextDoesNotOverflow(page, ".chat-bubble.user > p");
+  }
   await assertNoHorizontalOverflow(page);
   await expect(page.locator("body")).toContainText(/오늘 일정|이번 주|주간 일정/);
   await assertNoInternalUserCopy(page);

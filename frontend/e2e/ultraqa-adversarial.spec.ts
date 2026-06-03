@@ -54,7 +54,7 @@ function buildClarificationSuggestion(question: string) {
     executableCommandCount: 0,
     executable: false,
     executionSummary: null,
-    createdAt: new Date().toISOString(),
+    createdAt: new Date(Date.now() + 60_000).toISOString(),
     appliedAt: null,
     rejectedAt: null,
     revertedAt: null,
