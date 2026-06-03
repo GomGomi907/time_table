@@ -1044,7 +1044,98 @@ class AgentControllerTest {
     }
 
     @Test
-    void revertCanonicalEventApplyFailsClosedAndKeepsSuggestionApplied() throws Exception {
+    void applyCanonicalEventClampsAiGeneratedTitleToDatabaseLimit() throws Exception {
+        String longTitle = "AI제목".repeat(80);
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "긴 제목 일정 추가",
+                  "explanation": "AI가 긴 제목을 줘도 DB 한계를 넘기면 안 된다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "title": "%s",
+                        "startAt": "2026-05-16T19:10:00+09:00",
+                        "endAt": "2026-05-16T20:10:00+09:00",
+                        "category": "WORK"
+                      },
+                      "reason": "사용자가 새 일정을 요청했다.",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(longTitle));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "긴 제목 방어"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"));
+
+        Event created = eventRepository.findByUserIdOrderByStartAtAsc(savedUser.getId()).stream()
+                .filter(event -> event.getTitle().startsWith("AI제목"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(created.getTitle()).hasSize(255);
+    }
+
+    @Test
+    void applyScheduleBlockClampsAiGeneratedActivityWithoutBreakingEmoji() throws Exception {
+        String longEmojiActivity = "🙂".repeat(200);
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "긴 루틴 블록 추가",
+                  "explanation": "AI가 긴 activity를 줘도 DB 한계와 UTF-16 경계를 지켜야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "dayOfWeek": "TUESDAY",
+                        "startTime": "11:00",
+                        "endTime": "12:00",
+                        "activity": "%s",
+                        "category": "WORK"
+                      },
+                      "reason": "사용자가 루틴 블록을 요청했다.",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(longEmojiActivity));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "긴 activity 방어"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"));
+
+        ScheduleBlock created = scheduleBlockRepository.findByUserId(savedUser.getId()).stream()
+                .filter(block -> block.getStartTime().equals(LocalTime.of(11, 0)))
+                .findFirst()
+                .orElseThrow();
+        assertThat(created.getActivity().length()).isLessThanOrEqualTo(255);
+        assertThat(Character.isHighSurrogate(created.getActivity().charAt(created.getActivity().length() - 1)))
+                .isFalse();
+    }
+
+    @Test
+    void revertCanonicalEventApplyRestoresLocalStateAndQueuesProviderWrite() throws Exception {
         Event event = new Event();
         event.setUserId(savedUser.getId());
         event.setTitle("되돌리기 제한 Google 회의");
@@ -1061,7 +1152,7 @@ class AgentControllerTest {
         RescheduleSuggestion savedSuggestion = saveSuggestion("""
                 {
                   "summary": "canonical event 이동",
-                  "explanation": "canonical event 적용은 되돌리기를 fail-closed 해야 한다.",
+                  "explanation": "canonical event 적용은 원상 복구와 provider write 재예약을 지원해야 한다.",
                   "commands": [
                     {
                       "action_type": "move_event",
@@ -1097,19 +1188,20 @@ class AgentControllerTest {
                                   "reason": "canonical event 되돌리기"
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("reverted"));
 
         Event shifted = eventRepository.findById(savedEvent.getId()).orElseThrow();
-        assertThat(shifted.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:30:00Z"));
-        assertThat(shifted.getEndAt()).isEqualTo(Instant.parse("2026-05-15T02:30:00Z"));
-        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBeforeRevert);
+        assertThat(shifted.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:00:00Z"));
+        assertThat(shifted.getEndAt()).isEqualTo(Instant.parse("2026-05-15T02:00:00Z"));
+        assertThat(shifted.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
+        assertThat(providerWriteOutboxRepository.count()).isGreaterThanOrEqualTo(outboxBeforeRevert);
         assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
-                .isEqualTo(RescheduleSuggestionStatus.APPLIED);
+                .isEqualTo(RescheduleSuggestionStatus.REVERTED);
     }
 
     @Test
-    void revertCanonicalTaskApplyFailsClosedAndKeepsSuggestionApplied() throws Exception {
+    void revertCanonicalTaskApplyRestoresLocalStateAndQueuesProviderWrite() throws Exception {
         Task task = new Task();
         task.setUserId(savedUser.getId());
         task.setTitle("되돌리기 제한 Google 할 일");
@@ -1126,7 +1218,7 @@ class AgentControllerTest {
         RescheduleSuggestion savedSuggestion = saveSuggestion("""
                 {
                   "summary": "canonical task 이동",
-                  "explanation": "canonical task 적용은 되돌리기를 fail-closed 해야 한다.",
+                  "explanation": "canonical task 적용은 원상 복구와 provider write 재예약을 지원해야 한다.",
                   "commands": [
                     {
                       "action_type": "move_event",
@@ -1162,14 +1254,15 @@ class AgentControllerTest {
                                   "reason": "canonical task 되돌리기"
                                 }
                                 """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.status").value(409));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("reverted"));
 
         Task shifted = taskRepository.findById(savedTask.getId()).orElseThrow();
-        assertThat(shifted.getDueDate()).isEqualTo(Instant.parse("2026-05-15T03:30:00Z"));
-        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBeforeRevert);
+        assertThat(shifted.getDueDate()).isEqualTo(Instant.parse("2026-05-15T03:00:00Z"));
+        assertThat(shifted.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
+        assertThat(providerWriteOutboxRepository.count()).isGreaterThanOrEqualTo(outboxBeforeRevert);
         assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
-                .isEqualTo(RescheduleSuggestionStatus.APPLIED);
+                .isEqualTo(RescheduleSuggestionStatus.REVERTED);
     }
 
     private RescheduleSuggestion saveSuggestion(String payload) {

@@ -64,6 +64,7 @@ public class RescheduleSuggestionService {
     private static final int DEFAULT_AI_FUTURE_CALENDAR_DAYS = 3;
     private static final int MIN_AVAILABILITY_WINDOW_MINUTES = 30;
     private static final int MAX_AVAILABILITY_WINDOWS = 24;
+    private static final int CANONICAL_TITLE_MAX_LENGTH = 255;
 
     private final RescheduleSuggestionRepository rescheduleSuggestionRepository;
     private final ScheduleBlockRepository scheduleBlockRepository;
@@ -501,6 +502,10 @@ public class RescheduleSuggestionService {
                 command,
                 persisted.getId().toString(),
                 "create_event 제안을 canonical event에 반영했습니다.",
+                null,
+                snapshotEventRollback(persisted),
+                null,
+                null,
                 enqueueResult
         );
     }
@@ -531,6 +536,10 @@ public class RescheduleSuggestionService {
                     command,
                     event.getId().toString(),
                     "move_event 제안을 canonical event에 반영했습니다.",
+                    beforeState,
+                    snapshotEventRollback(event),
+                    null,
+                    null,
                     enqueueResult
             );
         } catch (RuntimeException exception) {
@@ -550,6 +559,10 @@ public class RescheduleSuggestionService {
                     command,
                     event.getId().toString(),
                     "update_event 제안을 canonical event에 반영했습니다.",
+                    beforeState,
+                    snapshotEventRollback(event),
+                    null,
+                    null,
                     enqueueResult
             );
         } catch (RuntimeException exception) {
@@ -568,6 +581,10 @@ public class RescheduleSuggestionService {
                     command,
                     event.getId().toString(),
                     "delete_event 제안을 canonical event 취소로 반영했습니다.",
+                    beforeState,
+                    snapshotEventRollback(event),
+                    null,
+                    null,
                     enqueueResult
             );
         } catch (RuntimeException exception) {
@@ -588,6 +605,10 @@ public class RescheduleSuggestionService {
                 command,
                 persisted.getId().toString(),
                 "할 일 제안을 canonical task에 반영했습니다.",
+                null,
+                null,
+                null,
+                snapshotTaskRollback(persisted),
                 enqueueResult
         );
     }
@@ -611,6 +632,10 @@ public class RescheduleSuggestionService {
                     command,
                     task.getId().toString(),
                     "move_event 제안을 canonical task 마감 조정으로 반영했습니다.",
+                    null,
+                    null,
+                    beforeState,
+                    snapshotTaskRollback(task),
                     enqueueResult
             );
         } catch (RuntimeException exception) {
@@ -630,6 +655,10 @@ public class RescheduleSuggestionService {
                     command,
                     task.getId().toString(),
                     "update_event 제안을 canonical task에 반영했습니다.",
+                    null,
+                    null,
+                    beforeState,
+                    snapshotTaskRollback(task),
                     enqueueResult
             );
         } catch (RuntimeException exception) {
@@ -649,6 +678,10 @@ public class RescheduleSuggestionService {
                     command,
                     task.getId().toString(),
                     "delete_event 제안을 canonical task 취소로 반영했습니다.",
+                    null,
+                    null,
+                    beforeState,
+                    snapshotTaskRollback(task),
                     enqueueResult
             );
         } catch (RuntimeException exception) {
@@ -661,6 +694,10 @@ public class RescheduleSuggestionService {
             StructuredAiCommand command,
             String targetId,
             String canonicalDetail,
+            EventRollbackState beforeEventState,
+            EventRollbackState afterEventState,
+            TaskRollbackState beforeTaskState,
+            TaskRollbackState afterTaskState,
             EnqueueResult enqueueResult
     ) {
         return new AppliedCommandSnapshot(
@@ -670,6 +707,10 @@ public class RescheduleSuggestionService {
                 null,
                 null,
                 canonicalDetail + " " + providerWriteDetail(enqueueResult),
+                beforeEventState,
+                afterEventState,
+                beforeTaskState,
+                afterTaskState,
                 enqueueResult
         );
     }
@@ -825,7 +866,11 @@ public class RescheduleSuggestionService {
     private void revertSnapshot(UUID userId, AppliedCommandSnapshot snapshot) {
         if ("applied".equals(snapshot.outcome())
                 && snapshot.beforeState() == null
-                && snapshot.afterState() == null) {
+                && snapshot.afterState() == null
+                && snapshot.beforeEventState() == null
+                && snapshot.afterEventState() == null
+                && snapshot.beforeTaskState() == null
+                && snapshot.afterTaskState() == null) {
             throw new UserActionRequiredException("이 변경은 자동 되돌리기를 지원하지 않습니다. 일정 화면에서 직접 확인해 주세요.");
         }
         AgentCommandActionType actionType = AgentCommandActionType.from(snapshot.actionType());
@@ -835,15 +880,67 @@ public class RescheduleSuggestionService {
                     scheduleBlockRepository.findByIdAndUserId(UUID.fromString(snapshot.afterState().id()), userId)
                             .ifPresent(scheduleBlockRepository::delete);
                 }
+                if (snapshot.afterEventState() != null) {
+                    cancelCanonicalEvent(userId, snapshot.afterEventState());
+                }
+                if (snapshot.afterTaskState() != null) {
+                    cancelCanonicalTask(userId, snapshot.afterTaskState());
+                }
             }
             case MOVE_EVENT, UPDATE_EVENT, DELETE_EVENT -> {
                 if (snapshot.beforeState() != null) {
                     restoreSnapshot(userId, snapshot.beforeState());
                 }
+                if (snapshot.beforeEventState() != null) {
+                    restoreEventSnapshot(userId, snapshot.beforeEventState());
+                }
+                if (snapshot.beforeTaskState() != null) {
+                    restoreTaskSnapshot(userId, snapshot.beforeTaskState());
+                }
             }
             default -> {
             }
         }
+    }
+
+    private void cancelCanonicalEvent(UUID userId, EventRollbackState snapshot) {
+        eventRepository.findByIdAndUserId(UUID.fromString(snapshot.id()), userId).ifPresent(event -> {
+            event.setStatus(EventStatus.CANCELLED);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.DELETE);
+            eventRepository.save(event);
+            log.debug("Reverted canonical event create by cancelling event {} ({})", snapshot.id(), enqueueResult);
+        });
+    }
+
+    private void cancelCanonicalTask(UUID userId, TaskRollbackState snapshot) {
+        taskRepository.findByIdAndUserId(UUID.fromString(snapshot.id()), userId).ifPresent(task -> {
+            task.setStatus(TaskStatus.CANCELLED);
+            EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.DELETE);
+            taskRepository.save(task);
+            log.debug("Reverted canonical task create by cancelling task {} ({})", snapshot.id(), enqueueResult);
+        });
+    }
+
+    private void restoreEventSnapshot(UUID userId, EventRollbackState snapshot) {
+        Event event = eventRepository.findByIdAndUserId(UUID.fromString(snapshot.id()), userId)
+                .orElseGet(Event::new);
+        event.setId(UUID.fromString(snapshot.id()));
+        event.setUserId(userId);
+        restoreEventFields(event, snapshot);
+        EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
+        eventRepository.save(event);
+        log.debug("Reverted canonical event {} and queued provider update ({})", snapshot.id(), enqueueResult);
+    }
+
+    private void restoreTaskSnapshot(UUID userId, TaskRollbackState snapshot) {
+        Task task = taskRepository.findByIdAndUserId(UUID.fromString(snapshot.id()), userId)
+                .orElseGet(Task::new);
+        task.setId(UUID.fromString(snapshot.id()));
+        task.setUserId(userId);
+        restoreTaskFields(task, snapshot);
+        EnqueueResult enqueueResult = providerWriteOutboxService.enqueueTaskWrite(task, ProviderWriteOperation.UPDATE);
+        taskRepository.save(task);
+        log.debug("Reverted canonical task {} and queued provider update ({})", snapshot.id(), enqueueResult);
     }
 
     private void restoreSnapshot(UUID userId, ScheduleBlockSnapshot snapshot) {
@@ -909,7 +1006,7 @@ public class RescheduleSuggestionService {
             block.setEndTime(LocalTime.parse(endTime));
         }
         if (activity != null) {
-            block.setActivity(activity.trim());
+            block.setActivity(clampCanonicalTitle(activity));
         }
         if (category != null) {
             block.setCategory(ScheduleCategory.valueOf(category.toUpperCase()));
@@ -934,7 +1031,7 @@ public class RescheduleSuggestionService {
             throw new IllegalArgumentException("canonical event 생성에는 startAt과 endAt이 필요합니다.");
         }
         if (title != null) {
-            event.setTitle(title.trim());
+            event.setTitle(clampCanonicalTitle(title));
         } else if (requireTimeRange) {
             event.setTitle("AI 제안 일정");
         }
@@ -978,7 +1075,7 @@ public class RescheduleSuggestionService {
         String category = readString(payload, "category");
 
         if (title != null) {
-            task.setTitle(title.trim());
+            task.setTitle(clampCanonicalTitle(title));
         } else if (requireTitle) {
             task.setTitle("AI 추천 할 일");
         }
@@ -1011,6 +1108,7 @@ public class RescheduleSuggestionService {
 
     private EventRollbackState snapshotEventRollback(Event event) {
         return new EventRollbackState(
+                event.getId().toString(),
                 event.getTitle(),
                 event.getDescription(),
                 event.getStartAt(),
@@ -1045,6 +1143,7 @@ public class RescheduleSuggestionService {
 
     private TaskRollbackState snapshotTaskRollback(Task task) {
         return new TaskRollbackState(
+                task.getId().toString(),
                 task.getTitle(),
                 task.getDescription(),
                 task.getDueDate(),
@@ -1359,6 +1458,18 @@ public class RescheduleSuggestionService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private String clampCanonicalTitle(String value) {
+        String trimmed = value == null ? null : value.trim();
+        if (trimmed == null || trimmed.length() <= CANONICAL_TITLE_MAX_LENGTH) {
+            return trimmed;
+        }
+        int endIndex = CANONICAL_TITLE_MAX_LENGTH;
+        if (Character.isHighSurrogate(trimmed.charAt(endIndex - 1))) {
+            endIndex--;
+        }
+        return trimmed.substring(0, endIndex);
+    }
+
     private String readString(Map<String, Object> payload, String... keys) {
         if (payload == null) {
             return null;
@@ -1437,6 +1548,10 @@ public class RescheduleSuggestionService {
             ScheduleBlockSnapshot beforeState,
             ScheduleBlockSnapshot afterState,
             String detail,
+            EventRollbackState beforeEventState,
+            EventRollbackState afterEventState,
+            TaskRollbackState beforeTaskState,
+            TaskRollbackState afterTaskState,
             EnqueueResult providerWriteResult
     ) {
 
@@ -1448,7 +1563,7 @@ public class RescheduleSuggestionService {
                 ScheduleBlockSnapshot afterState,
                 String detail
         ) {
-            this(actionType, targetId, outcome, beforeState, afterState, detail, null);
+            this(actionType, targetId, outcome, beforeState, afterState, detail, null, null, null, null, null);
         }
     }
 
@@ -1466,6 +1581,7 @@ public class RescheduleSuggestionService {
     }
 
     private record EventRollbackState(
+            String id,
             String title,
             String description,
             Instant startAt,
@@ -1483,6 +1599,7 @@ public class RescheduleSuggestionService {
     }
 
     private record TaskRollbackState(
+            String id,
             String title,
             String description,
             Instant dueDate,

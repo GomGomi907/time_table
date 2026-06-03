@@ -339,6 +339,63 @@ class SyncControllerTest {
     }
 
     @Test
+    void outboundAuthFailureMarksReconnectRequiredWithRetryBackoff() throws Exception {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(false);
+        connection.setCapabilityStatus("read_only_token");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Reconnect backoff meeting");
+        event.setDescription("Reconnect retry backoff regression");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(1, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(2, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
+        event = eventRepository.save(event);
+
+        ProviderWriteOutbox outbox = new ProviderWriteOutbox();
+        outbox.setUserId(user.getId());
+        outbox.setLocalType(SyncMappingLocalType.EVENT);
+        outbox.setLocalId(event.getId());
+        outbox.setProvider(SyncProvider.GOOGLE_CALENDAR);
+        outbox.setOperation(ProviderWriteOperation.CREATE);
+        outbox.setState(ProviderWriteState.DIRTY_PENDING_WRITE);
+        providerWriteOutboxRepository.save(outbox);
+        UUID eventId = event.getId();
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "mode": "outbound",
+                                  "resolvePolicy": "proposal_first"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("failed"))
+                .andExpect(jsonPath("$.data.affectedCount").value(1));
+
+        verify(googleOutboundSyncClient, never()).createCalendarEvent(any(CalendarConnection.class), any(Event.class));
+        ProviderWriteOutbox failed = providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(failed.getState()).isEqualTo(ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT);
+        assertThat(failed.getLastErrorCode()).isEqualTo("reconnect_required");
+        assertThat(failed.getNextRetryAt()).isNotNull();
+    }
+
+    @Test
     void outboundGoogleWriteKillSwitchSkipsProviderClientAndDoesNotDrainOutbox() throws Exception {
         ReflectionTestUtils.setField(providerWriteProcessor, "googleWriteEnabled", false);
         ReflectionTestUtils.setField(syncOrchestrationService, "googleWriteEnabled", false);

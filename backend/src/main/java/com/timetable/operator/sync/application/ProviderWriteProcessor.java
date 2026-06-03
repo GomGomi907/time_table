@@ -26,12 +26,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProviderWriteProcessor {
@@ -55,11 +60,11 @@ public class ProviderWriteProcessor {
     private final EventRepository eventRepository;
     private final TaskRepository taskRepository;
     private final GoogleOutboundSyncClient googleOutboundSyncClient;
+    private final PlatformTransactionManager transactionManager;
 
     @Value("${app.sync.google.write-enabled:true}")
     private boolean googleWriteEnabled;
 
-    @Transactional
     public WriteFlushResult flushPendingWrites(UUID userId, SyncTargetSystem targetSystem) {
         if (!googleWriteEnabled) {
             return new WriteFlushResult(
@@ -87,11 +92,19 @@ public class ProviderWriteProcessor {
                 continue;
             }
             try {
-                processOne(userId, outbox);
-                successCount++;
+                boolean processed = inNewTransaction(() -> processOneIfStillReady(userId, outbox.getId()));
+                if (processed) {
+                    successCount++;
+                } else {
+                    skippedRetryCount++;
+                }
             } catch (RuntimeException exception) {
+                if (isOptimisticConflict(exception)) {
+                    skippedRetryCount++;
+                    continue;
+                }
                 failureCount++;
-                markFailure(userId, outbox, exception);
+                recordFailure(userId, outbox.getId(), exception);
             }
         }
         SyncExecutionStatus status = statusFor(successCount, failureCount, skippedRetryCount);
@@ -107,6 +120,36 @@ public class ProviderWriteProcessor {
                 status,
                 detail
         );
+    }
+
+    private boolean processOneIfStillReady(UUID userId, UUID outboxId) {
+        ProviderWriteOutbox fresh = providerWriteOutboxRepository.findById(outboxId)
+                .orElseThrow(() -> new IllegalStateException("Provider write outbox row disappeared before flush."));
+        if (!fresh.getUserId().equals(userId) || !READY_STATES.contains(fresh.getState())) {
+            return false;
+        }
+        if (fresh.getNextRetryAt() != null && fresh.getNextRetryAt().isAfter(Instant.now())) {
+            return false;
+        }
+        processOne(userId, fresh);
+        return true;
+    }
+
+    private void recordFailure(UUID userId, UUID outboxId, RuntimeException exception) {
+        try {
+            inNewTransaction(() -> {
+                providerWriteOutboxRepository.findById(outboxId)
+                        .ifPresent(outbox -> markFailure(userId, outbox, exception));
+                return null;
+            });
+        } catch (RuntimeException failureRecordException) {
+            log.warn(
+                    "Failed to persist provider write failure for outbox {} after {}",
+                    outboxId,
+                    exception.getClass().getSimpleName(),
+                    failureRecordException
+            );
+        }
     }
 
     private static SyncExecutionStatus statusFor(int successCount, int failureCount, int skippedRetryCount) {
@@ -294,12 +337,11 @@ public class ProviderWriteProcessor {
         ProviderWriteState state = authFailure
                 ? ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT
                 : ProviderWriteState.WRITE_FAILED_RETRYABLE;
+        outbox.setAttemptCount(outbox.getAttemptCount() + 1);
         outbox.setState(state);
         outbox.setLastErrorCode(authFailure ? RECONNECT_REQUIRED_ERROR_CODE : exception.getClass().getSimpleName());
         outbox.setLastErrorMessage(exception.getMessage());
-        outbox.setNextRetryAt(state == ProviderWriteState.WRITE_FAILED_RETRYABLE
-                ? Instant.now().plusSeconds(Math.min(3_600L, Math.max(60L, outbox.getAttemptCount() * 60L)))
-                : null);
+        outbox.setNextRetryAt(nextRetryAtFor(outbox));
         providerWriteOutboxRepository.save(outbox);
         if (state == ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT) {
             calendarConnectionRepository.findByUserIdAndProvider(userId, GOOGLE_PROVIDER).ifPresent(connection -> {
@@ -309,6 +351,28 @@ public class ProviderWriteProcessor {
                 calendarConnectionRepository.save(connection);
             });
         }
+    }
+
+    private <T> T inNewTransaction(Supplier<T> action) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return transactionTemplate.execute(status -> action.get());
+    }
+
+    private boolean isOptimisticConflict(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            String simpleName = current.getClass().getSimpleName();
+            if (simpleName.contains("OptimisticLock")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private Instant nextRetryAtFor(ProviderWriteOutbox outbox) {
+        return Instant.now().plusSeconds(Math.min(3_600L, Math.max(60L, outbox.getAttemptCount() * 60L)));
     }
 
     private void ensureWriteCapability(CalendarConnection connection, SyncProvider provider) {

@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -57,4 +58,8 @@ public class ProviderWriteOutbox extends AuditableEntity {
     private Instant inFlightAt;
 
     private Instant appliedAt;
+
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
 }
