@@ -64,8 +64,24 @@ async function seedSchedule(page: Page) {
   });
 }
 
+async function waitForAnyVisible(page: Page, selectors: string[]) {
+  await expect
+    .poll(async () => {
+      for (const selector of selectors) {
+        const count = await page.locator(selector).evaluateAll((elements) => elements.filter((element) => {
+          const style = window.getComputedStyle(element as HTMLElement);
+          const box = (element as HTMLElement).getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && box.width > 0 && box.height > 0;
+        }).length).catch(() => 0);
+        if (count > 0) return true;
+      }
+      return false;
+    }, { timeout: 30_000 })
+    .toBe(true);
+}
+
 async function waitForMode(page: Page, mode: string) {
-  if (mode === "week") await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
+  if (mode === "week") await waitForAnyVisible(page, [".week-stack-board", ".mobile-week-agenda"]);
   if (mode === "month") await expect(page.getByTestId("monthly-mosaic")).toBeVisible({ timeout: 30_000 });
   if (mode === "day") await expect(page.getByTestId("selected-day-timeline")).toBeVisible({ timeout: 30_000 });
   if (mode === "agenda") await expect(page.getByTestId("agenda-stream")).toBeVisible({ timeout: 30_000 });
@@ -89,7 +105,7 @@ async function capture(page: Page, surface: string, viewportName: string) {
       ".schedule-view-toolbar",
       ".schedule-device-layout",
       ".schedule-calendar-panel",
-      ".week-stack-board",
+      ".week-stack-board",`n      ".mobile-week-agenda",
       ".monthly-mosaic-card",
       ".selected-day-card",
       ".agenda-stream-card",
@@ -225,4 +241,6 @@ test("worker-2 visual ralph dashboard/schedule mode audit", async ({ page }, tes
   };
   fs.writeFileSync(path.join(ARTIFACT_DIR, "visual-ralph-task6-verdict.json"), JSON.stringify(artifact, null, 2), "utf8");
 });
+
+
 
