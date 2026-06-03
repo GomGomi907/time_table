@@ -160,6 +160,7 @@ async function captureResponsiveSurface(
 ) {
   for (const { name, width, height } of VIEWPORTS) {
     await page.setViewportSize({ width, height });
+    await page.evaluate(() => window.scrollTo(0, 0));
     await assertPrimaryVisible();
     await assertReleaseVisualDiscipline(page);
     await page.screenshot({ path: testInfo.outputPath(`${surface}-${name}.png`), fullPage: true });
