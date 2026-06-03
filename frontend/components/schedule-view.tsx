@@ -1080,6 +1080,7 @@ function MonthlyMosaic({
   isError,
   selectedDateKey,
   monthDateKey,
+  draftItems,
   timeZone,
   onSelectDate,
 }: {
@@ -1088,6 +1089,7 @@ function MonthlyMosaic({
   isError: boolean;
   selectedDateKey: string;
   monthDateKey: string;
+  draftItems: AiDraftProjectionItem[];
   timeZone: string;
   onSelectDate: (dateKey: string) => void;
 }) {
@@ -1106,7 +1108,7 @@ function MonthlyMosaic({
           <h2>{monthLabel}</h2>
           <p>기존 캘린더 range 응답을 날짜별 결정적 요약으로 압축합니다.</p>
         </div>
-        <span>{range?.instrumentation.occurrenceCount ?? 0}개 항목</span>
+        <span>{(range?.instrumentation.occurrenceCount ?? 0) + draftItems.length}개 항목</span>
       </div>
 
       {isLoading ? <p className="timeline-state-note">월간 데이터를 불러오는 중입니다.</p> : null}
@@ -1118,6 +1120,7 @@ function MonthlyMosaic({
       <div className="monthly-mosaic-grid">
         {monthDays.map((dateKey) => {
           const occurrences = occurrencesByDate.get(dateKey) ?? [];
+          const drafts = draftItemsForDate(draftItems, dateKey, timeZone);
           const totalMinutes = occurrences.reduce(
             (sum, occurrence) => sum + occurrenceDurationMinutesOnDate(occurrence, dateKey, timeZone),
             0,
@@ -1139,6 +1142,19 @@ function MonthlyMosaic({
                   <strong>{occurrences.length}개 일정</strong>
                   <small>{formatDurationLabel(totalMinutes)}</small>
                   <span className="monthly-day-preview">{formatServiceCopy(occurrences[0].title)}</span>
+                  {drafts.length ? (
+                    <span className="monthly-day-draft" data-testid="monthly-draft-badge">
+                      AI Draft {drafts.length}개
+                    </span>
+                  ) : null}
+                </>
+              ) : drafts.length ? (
+                <>
+                  <strong>{drafts.length}개 AI Draft</strong>
+                  <small>적용 전 변경안</small>
+                  <span className="monthly-day-draft" data-testid="monthly-draft-badge">
+                    {formatServiceCopy(drafts[0].title)}
+                  </span>
                 </>
               ) : (
                 <small>비어 있음</small>
@@ -1291,6 +1307,7 @@ function AgendaStream({
   range,
   isLoading,
   isError,
+  draftItems,
   timeZone,
   onSelectDate,
   onOccurrenceSelect,
@@ -1298,13 +1315,54 @@ function AgendaStream({
   range: CalendarRangeResponse | null | undefined;
   isLoading: boolean;
   isError: boolean;
+  draftItems: AiDraftProjectionItem[];
   timeZone: string;
   onSelectDate: (dateKey: string) => void;
   onOccurrenceSelect: (occurrence: CalendarOccurrence) => void;
 }) {
-  const groups = useMemo(() => groupAgendaOccurrences(range, timeZone), [range, timeZone]);
-  const occurrenceCount = useMemo(
-    () => groups.reduce((sum, group) => sum + group.occurrences.length, 0),
+  const occurrenceGroups = useMemo(() => groupAgendaOccurrences(range, timeZone), [range, timeZone]);
+  const draftGroups = useMemo(() => {
+    const groups = new Map<string, AiDraftProjectionItem[]>();
+    draftItems.forEach((draft) => {
+      const dateKeys = draftItemDateKeys(draft, timeZone);
+      const keys = dateKeys.length ? dateKeys : ["unscheduled"];
+      keys.forEach((dateKey) => {
+        const drafts = groups.get(dateKey) ?? [];
+        drafts.push(draft);
+        groups.set(dateKey, drafts);
+      });
+    });
+    return groups;
+  }, [draftItems, timeZone]);
+  const groups = useMemo(
+    () => {
+      const dateKeys = new Set([
+        ...occurrenceGroups.map((group) => group.dateKey),
+        ...Array.from(draftGroups.keys()),
+      ]);
+      return Array.from(dateKeys, (dateKey) => ({
+        dateKey,
+        occurrences: occurrenceGroups.find((group) => group.dateKey === dateKey)?.occurrences ?? [],
+        drafts: (draftGroups.get(dateKey) ?? []).toSorted(
+          (left, right) => (left.startAt ?? "").localeCompare(right.startAt ?? "") || left.title.localeCompare(right.title),
+        ),
+      })).toSorted((left, right) => {
+        if (left.dateKey === right.dateKey) {
+          return 0;
+        }
+        if (left.dateKey === "unscheduled") {
+          return 1;
+        }
+        if (right.dateKey === "unscheduled") {
+          return -1;
+        }
+        return left.dateKey.localeCompare(right.dateKey);
+      });
+    },
+    [draftGroups, occurrenceGroups],
+  );
+  const itemCount = useMemo(
+    () => groups.reduce((sum, group) => sum + group.occurrences.length + group.drafts.length, 0),
     [groups],
   );
 
@@ -1316,7 +1374,7 @@ function AgendaStream({
           <h2>다가오는 일정 흐름</h2>
           <p>캘린더 범위 응답의 발생 항목을 현지 날짜별로 묶어 시간순으로 보여줍니다.</p>
         </div>
-        <span>{occurrenceCount}개</span>
+        <span>{itemCount}개</span>
       </div>
 
       {isLoading ? (
@@ -1335,6 +1393,15 @@ function AgendaStream({
         <div className="agenda-stream-groups">
           {groups.map((group) => {
             const canOpenDay = isCalendarDateKey(group.dateKey);
+            const streamItems = [
+              ...group.drafts.map((draft) => ({ kind: "draft" as const, key: draft.key, startAt: draft.startAt, draft })),
+              ...group.occurrences.map((occurrence) => ({
+                kind: "occurrence" as const,
+                key: occurrence.occurrenceId,
+                startAt: occurrence.startAt,
+                occurrence,
+              })),
+            ].toSorted((left, right) => (left.startAt ?? "").localeCompare(right.startAt ?? "") || left.key.localeCompare(right.key));
             return (
             <section className="agenda-day-group" key={group.dateKey} data-testid="agenda-day-group">
               <button
@@ -1348,28 +1415,48 @@ function AgendaStream({
                 }}
               >
                 <strong>{formatAgendaDateLabel(group.dateKey)}</strong>
-                <span>{canOpenDay ? group.occurrences.length + "개 · 일간 보기" : group.occurrences.length + "개 · 날짜 미정"}</span>
+                <span>
+                  {canOpenDay
+                    ? `${group.occurrences.length + group.drafts.length}개 · 일간 보기`
+                    : `${group.occurrences.length + group.drafts.length}개 · 날짜 미정`}
+                </span>
               </button>
               <ol className="agenda-occurrence-list">
-                {group.occurrences.map((occurrence) => (
-                  <li
-                    className={`agenda-occurrence ${agendaOccurrenceTone(occurrence)}`}
-                    data-testid="agenda-occurrence"
-                    key={occurrence.occurrenceId}
-                  >
-                    <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(occurrence)}>
-                      <span className="agenda-occurrence-time">
-                        {formatOccurrenceTimeRange(occurrence, timeZone)}
-                      </span>
-                      <div>
-                        <strong>{formatServiceCopy(occurrence.title)}</strong>
-                        <span>
-                          {occurrenceKindLabel(occurrence)}
-                          {occurrence.synthetic ? " · 반복" : ""}
-                        </span>
+                {streamItems.map((item) => (
+                  item.kind === "draft" ? (
+                    <li
+                      className="agenda-occurrence ai-draft-occurrence"
+                      data-testid="agenda-draft-occurrence"
+                      key={item.key}
+                    >
+                      <div className="occurrence-edit-trigger" aria-label={`${item.draft.title} draft`}>
+                        <span className="agenda-occurrence-time">{item.draft.detail}</span>
+                        <div>
+                          <strong>{formatServiceCopy(item.draft.title)}</strong>
+                          <span>AI Draft · 적용 전</span>
+                        </div>
                       </div>
-                    </button>
-                  </li>
+                    </li>
+                  ) : (
+                    <li
+                      className={`agenda-occurrence ${agendaOccurrenceTone(item.occurrence)}`}
+                      data-testid="agenda-occurrence"
+                      key={item.key}
+                    >
+                      <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(item.occurrence)}>
+                        <span className="agenda-occurrence-time">
+                          {formatOccurrenceTimeRange(item.occurrence, timeZone)}
+                        </span>
+                        <div>
+                          <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                          <span>
+                            {occurrenceKindLabel(item.occurrence)}
+                            {item.occurrence.synthetic ? " · 반복" : ""}
+                          </span>
+                        </div>
+                      </button>
+                    </li>
+                  )
                 ))}
               </ol>
             </section>
@@ -2222,6 +2309,11 @@ export function ScheduleView() {
 
             <AiDraftProjection draftItems={pendingDraftItems} />
             <div className="schedule-mobile-action-strip" aria-label="주간 일정 빠른 작업">
+              {isMutating ? (
+                <div className="schedule-mobile-ai-status" data-testid="schedule-mobile-ai-status" aria-live="polite">
+                  AI가 요청을 처리 중입니다. 완료되면 이 화면에 바로 표시됩니다.
+                </div>
+              ) : null}
               <button
                 className="ghost-btn"
                 data-testid="schedule-mobile-add-button"
@@ -2255,6 +2347,7 @@ export function ScheduleView() {
                     isError={monthRangeQuery.isError}
                     selectedDateKey={selectedDateKey}
                     monthDateKey={monthRangeWindow.startDateKey}
+                    draftItems={pendingDraftItems}
                     timeZone={monthRangeWindow.timeZone}
                     onSelectDate={(dateKey) => {
                       setSelectedDateKey(dateKey);
@@ -2289,6 +2382,7 @@ export function ScheduleView() {
                     range={agendaRangeQuery.data}
                     isLoading={agendaRangeQuery.isLoading || agendaRangeQuery.isFetching}
                     isError={agendaRangeQuery.isError}
+                    draftItems={pendingDraftItems}
                     timeZone={agendaRangeWindow.timeZone}
                     onSelectDate={(dateKey) => {
                       setSelectedDateKey(dateKey);

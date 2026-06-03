@@ -245,6 +245,12 @@ test("schedule renders pending AI draft projection above the timeline", async ({
   await expect(page.getByTestId("ai-draft-projection")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("ai-draft-projection")).toContainText("AI Draft 집중 시간");
 
+  await page.getByTestId("schedule-view-option-month").click();
+  await expect(page.getByTestId("monthly-draft-badge").first()).toContainText(/AI Draft|AI Draft 집중 시간/, { timeout: 30_000 });
+
+  await page.getByTestId("schedule-view-option-agenda").click();
+  await expect(page.getByTestId("agenda-draft-occurrence")).toContainText("AI Draft 집중 시간", { timeout: 30_000 });
+
   await page.getByTestId("schedule-view-option-day").click();
   await expect(page.getByTestId("selected-day-draft-occurrence")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("selected-day-draft-occurrence")).toContainText("AI Draft · 적용 전");

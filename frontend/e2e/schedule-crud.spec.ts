@@ -185,8 +185,53 @@ test("schedule AI chat starts blank when backend only returns stale suggestions 
   await expect(chatLog.locator(".ai-chat-turn")).toHaveCount(0);
   await expect(chatLog.getByText("아직 대화가 없습니다.")).toBeVisible();
   await expect(page.getByTestId("schedule-pending-count")).toHaveText("대기 없음");
+  await page.getByTestId("schedule-add-button").click();
+  await expect(page.getByRole("dialog", { name: /새 블록 추가/ })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   await page.unroute("**/api/agent/suggestions");
+});
+
+test("schedule mobile shows request progress while AI is processing", async ({ page }, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  await page.setViewportSize({ width: 390, height: 1000 });
+  let releaseResponse!: () => void;
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  let requestStarted!: () => void;
+  const requestStartedPromise = new Promise<void>((resolve) => {
+    requestStarted = resolve;
+  });
+
+  await page.route("**/api/agent/reschedule", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    requestStarted();
+    await responseGate;
+    const createdSuggestion = buildReadonlySuggestion(99, false);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: createdSuggestion, meta: {} }),
+    });
+  });
+
+  await page.goto("/schedule");
+  await expect(page.getByTestId("schedule-ai-request-input")).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId("schedule-ai-request-input").fill("모바일에서 처리중 표시 확인");
+  await page.getByTestId("schedule-ai-request-submit").click();
+  await requestStartedPromise;
+  await expect(page.getByTestId("schedule-mobile-ai-status")).toContainText("AI가 요청을 처리 중입니다.");
+  releaseResponse();
+  await expect(page.locator(".notice-center")).toContainText("변경 요청을 만들었습니다.", { timeout: 30_000 });
+  await expect(page.getByTestId("schedule-mobile-ai-status")).toHaveCount(0, { timeout: 30_000 });
+
+  await page.unroute("**/api/agent/reschedule");
 });
 
 test("schedule AI chat does not force-scroll when the user is reading older turns", async ({ page }, testInfo) => {
