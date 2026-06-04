@@ -1048,7 +1048,7 @@ public class RescheduleSuggestionService {
             event.setCategory(ScheduleCategory.valueOf(category.toUpperCase()));
         }
         if (priority != null) {
-            event.setPriority(Short.parseShort(priority));
+            event.setPriority(readPriority(priority));
         }
         if (goalId != null) {
             event.setGoalId(UUID.fromString(goalId));
@@ -1086,10 +1086,10 @@ public class RescheduleSuggestionService {
             task.setDueDate(dueDate);
         }
         if (estimatedMinutes != null) {
-            task.setEstimatedMinutes(Integer.parseInt(estimatedMinutes));
+            task.setEstimatedMinutes(readEstimatedMinutes(estimatedMinutes));
         }
         if (priority != null) {
-            task.setPriority(Short.parseShort(priority));
+            task.setPriority(readPriority(priority));
         }
         if (goalId != null) {
             task.setGoalId(UUID.fromString(goalId));
@@ -1102,6 +1102,30 @@ public class RescheduleSuggestionService {
         }
         if (task.getStatus() == null) {
             task.setStatus(TaskStatus.TODO);
+        }
+    }
+
+    private short readPriority(String value) {
+        int priority = readInteger(value, "priority는 1부터 5 사이의 숫자여야 합니다.");
+        if (priority < 1 || priority > 5) {
+            throw new IllegalArgumentException("priority는 1부터 5 사이의 숫자여야 합니다.");
+        }
+        return (short) priority;
+    }
+
+    private int readEstimatedMinutes(String value) {
+        int estimatedMinutes = readInteger(value, "estimatedMinutes는 0 이상의 정수여야 합니다.");
+        if (estimatedMinutes < 0) {
+            throw new IllegalArgumentException("estimatedMinutes는 0 이상의 정수여야 합니다.");
+        }
+        return estimatedMinutes;
+    }
+
+    private int readInteger(String value, String errorMessage) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(errorMessage, exception);
         }
     }
 

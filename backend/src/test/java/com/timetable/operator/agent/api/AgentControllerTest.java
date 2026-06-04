@@ -1135,6 +1135,162 @@ class AgentControllerTest {
     }
 
     @Test
+    void applyCanonicalEventWithInvalidPriorityReturnsActionableConflict() throws Exception {
+        long eventCountBefore = eventRepository.count();
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "잘못된 우선순위 방어",
+                  "explanation": "AI numeric payload가 깨졌을 때 사용자가 이해 가능한 오류를 돌려야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "title": "우선순위 파싱 방어",
+                        "startAt": "2026-05-16T19:10:00+09:00",
+                        "endAt": "2026-05-16T20:10:00+09:00",
+                        "category": "WORK",
+                        "priority": "urgent"
+                      },
+                      "reason": "priority 문자열 방어",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "invalid priority 방어"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("priority는 1부터 5 사이의 숫자여야 합니다.")));
+
+        assertThat(eventRepository.count()).isEqualTo(eventCountBefore);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
+    void applyCanonicalTaskWithInvalidEstimatedMinutesReturnsActionableConflict() throws Exception {
+        long taskCountBefore = taskRepository.count();
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "잘못된 예상 소요 시간 방어",
+                  "explanation": "AI numeric payload가 깨졌을 때 사용자가 이해 가능한 오류를 돌려야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "task",
+                      "target_id": null,
+                      "payload": {
+                        "title": "예상 시간 파싱 방어",
+                        "dueDate": "2026-05-16T20:10:00+09:00",
+                        "estimatedMinutes": "soon",
+                        "priority": 3
+                      },
+                      "reason": "estimatedMinutes 문자열 방어",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "invalid estimatedMinutes 방어"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("estimatedMinutes는 0 이상의 정수여야 합니다.")));
+
+        assertThat(taskRepository.count()).isEqualTo(taskCountBefore);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
+    void revertAgentGeneratedCanonicalEventCoalescesUnflushedProviderCreate() throws Exception {
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        calendarConnectionRepository.save(connection);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "생성 후 즉시 되돌리기",
+                  "explanation": "provider flush 전에 새 canonical event를 되돌리면 CREATE+DELETE가 상쇄되어야 한다.",
+                  "commands": [
+                    {
+                      "action_type": "create_event",
+                      "target_type": "event",
+                      "target_id": null,
+                      "payload": {
+                        "title": "즉시 되돌릴 AI 일정",
+                        "startAt": "2026-05-16T19:10:00+09:00",
+                        "endAt": "2026-05-16T20:10:00+09:00",
+                        "category": "WORK"
+                      },
+                      "reason": "생성 후 되돌리기 검증",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "canonical event 생성"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"));
+
+        Event created = eventRepository.findByUserIdOrderByStartAtAsc(savedUser.getId()).stream()
+                .filter(event -> "즉시 되돌릴 AI 일정".equals(event.getTitle()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(created.getId()))
+                .toList()).hasSize(1);
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/revert", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "canonical event 생성 취소"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("reverted"));
+
+        Event reverted = eventRepository.findById(created.getId()).orElseThrow();
+        assertThat(reverted.getStatus()).isEqualTo(EventStatus.CANCELLED);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore);
+        assertThat(providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(created.getId()))
+                .toList()).isEmpty();
+    }
+
+    @Test
     void revertCanonicalEventApplyRestoresLocalStateAndQueuesProviderWrite() throws Exception {
         Event event = new Event();
         event.setUserId(savedUser.getId());

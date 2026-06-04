@@ -56,13 +56,12 @@ public class ProviderWriteOutboxService {
                 stripPrefix(event.getExternalSourceId(), CALENDAR_EXTERNAL_PREFIX)
         );
         ProviderWriteOperation operation = operationFor(requestedOperation, mapping, event.getExternalSourceId());
-        if (operation == ProviderWriteOperation.DELETE && mapping.isEmpty() && isBlank(event.getExternalSourceId())) {
-            return EnqueueResult.NOOP;
-        }
-
+        boolean allowNewOutbox = operation != ProviderWriteOperation.DELETE
+                || mapping.isPresent()
+                || !isBlank(event.getExternalSourceId());
         event.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
         if (connection.isEmpty()) {
-            coalesceOrSave(
+            boolean queued = coalesceOrSave(
                     event.getUserId(),
                     SyncMappingLocalType.EVENT,
                     event.getId(),
@@ -70,13 +69,14 @@ public class ProviderWriteOutboxService {
                     SyncProvider.GOOGLE_CALENDAR,
                     operation,
                     ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
+                    allowNewOutbox,
                     snapshotEvent(event)
             );
-            return EnqueueResult.NO_CONNECTION;
+            return queued ? EnqueueResult.NO_CONNECTION : EnqueueResult.NOOP;
         }
 
         EnqueueResult result = eventWriteResult(connection.get());
-        coalesceOrSave(
+        boolean queued = coalesceOrSave(
                 event.getUserId(),
                 SyncMappingLocalType.EVENT,
                 event.getId(),
@@ -84,9 +84,10 @@ public class ProviderWriteOutboxService {
                 SyncProvider.GOOGLE_CALENDAR,
                 operation,
                 providerWriteState(result),
+                allowNewOutbox,
                 snapshotEvent(event)
         );
-        return result;
+        return queued ? result : EnqueueResult.NOOP;
     }
 
     public EnqueueResult enqueueTaskWrite(Task task, ProviderWriteOperation requestedOperation) {
@@ -100,13 +101,12 @@ public class ProviderWriteOutboxService {
                 stripPrefix(task.getExternalSourceId(), TASK_EXTERNAL_PREFIX)
         );
         ProviderWriteOperation operation = operationFor(requestedOperation, mapping, task.getExternalSourceId());
-        if (operation == ProviderWriteOperation.DELETE && mapping.isEmpty() && isBlank(task.getExternalSourceId())) {
-            return EnqueueResult.NOOP;
-        }
-
+        boolean allowNewOutbox = operation != ProviderWriteOperation.DELETE
+                || mapping.isPresent()
+                || !isBlank(task.getExternalSourceId());
         task.setSyncState(PlannerSyncState.DIRTY_PENDING_WRITE);
         if (connection.isEmpty()) {
-            coalesceOrSave(
+            boolean queued = coalesceOrSave(
                     task.getUserId(),
                     SyncMappingLocalType.TASK,
                     task.getId(),
@@ -114,13 +114,14 @@ public class ProviderWriteOutboxService {
                     SyncProvider.GOOGLE_TASKS,
                     operation,
                     ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT,
+                    allowNewOutbox,
                     snapshotTask(task)
             );
-            return EnqueueResult.NO_CONNECTION;
+            return queued ? EnqueueResult.NO_CONNECTION : EnqueueResult.NOOP;
         }
 
         EnqueueResult result = taskWriteResult(connection.get());
-        coalesceOrSave(
+        boolean queued = coalesceOrSave(
                 task.getUserId(),
                 SyncMappingLocalType.TASK,
                 task.getId(),
@@ -128,9 +129,10 @@ public class ProviderWriteOutboxService {
                 SyncProvider.GOOGLE_TASKS,
                 operation,
                 providerWriteState(result),
+                allowNewOutbox,
                 snapshotTask(task)
         );
-        return result;
+        return queued ? result : EnqueueResult.NOOP;
     }
 
     private EnqueueResult eventWriteResult(CalendarConnection connection) {
@@ -151,7 +153,7 @@ public class ProviderWriteOutboxService {
                 : ProviderWriteState.WRITE_FAILED_NEEDS_RECONNECT;
     }
 
-    private void coalesceOrSave(
+    private boolean coalesceOrSave(
             UUID userId,
             SyncMappingLocalType localType,
             UUID localId,
@@ -159,6 +161,7 @@ public class ProviderWriteOutboxService {
             SyncProvider provider,
             ProviderWriteOperation requestedOperation,
             ProviderWriteState state,
+            boolean allowNewOutbox,
             String payloadSnapshot
     ) {
         Optional<ProviderWriteOutbox> existing = providerWriteOutboxRepository
@@ -171,6 +174,9 @@ public class ProviderWriteOutboxService {
                 );
 
         if (existing.isEmpty()) {
+            if (!allowNewOutbox) {
+                return false;
+            }
             providerWriteOutboxRepository.save(outbox(
                     userId,
                     localType,
@@ -181,14 +187,14 @@ public class ProviderWriteOutboxService {
                     state,
                     payloadSnapshot
             ));
-            return;
+            return true;
         }
 
         ProviderWriteOutbox current = existing.get();
         ProviderWriteOperation mergedOperation = mergeOperation(current.getOperation(), requestedOperation);
         if (mergedOperation == null) {
             providerWriteOutboxRepository.delete(current);
-            return;
+            return false;
         }
 
         current.setMappingId(mappingId == null ? current.getMappingId() : mappingId);
@@ -201,6 +207,7 @@ public class ProviderWriteOutboxService {
         current.setInFlightAt(null);
         current.setAppliedAt(null);
         providerWriteOutboxRepository.save(current);
+        return true;
     }
 
     private ProviderWriteOperation mergeOperation(

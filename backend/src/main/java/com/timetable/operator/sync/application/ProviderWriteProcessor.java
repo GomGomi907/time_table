@@ -80,17 +80,15 @@ public class ProviderWriteProcessor {
         SyncProvider provider = targetSystem == SyncTargetSystem.GOOGLE_CALENDAR
                 ? SyncProvider.GOOGLE_CALENDAR
                 : SyncProvider.GOOGLE_TASKS;
+        Instant now = Instant.now();
         List<ProviderWriteOutbox> pending = providerWriteOutboxRepository
-                .findByUserIdAndProviderAndStateInOrderByCreatedAtAsc(userId, provider, READY_STATES);
+                .findReadyByUserIdAndProviderAndStateInOrderByCreatedAtAsc(userId, provider, READY_STATES, now);
 
         int successCount = 0;
         int failureCount = 0;
-        int skippedRetryCount = 0;
+        int skippedRetryCount = countAsInt(providerWriteOutboxRepository
+                .countWaitingRetryByUserIdAndProviderAndStateIn(userId, provider, READY_STATES, now));
         for (ProviderWriteOutbox outbox : pending) {
-            if (outbox.getNextRetryAt() != null && outbox.getNextRetryAt().isAfter(Instant.now())) {
-                skippedRetryCount++;
-                continue;
-            }
             try {
                 boolean processed = inNewTransaction(() -> processOneIfStillReady(userId, outbox.getId()));
                 if (processed) {
@@ -120,6 +118,10 @@ public class ProviderWriteProcessor {
                 status,
                 detail
         );
+    }
+
+    private static int countAsInt(long value) {
+        return value > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) value;
     }
 
     private boolean processOneIfStillReady(UUID userId, UUID outboxId) {

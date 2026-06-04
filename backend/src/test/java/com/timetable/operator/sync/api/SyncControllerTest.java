@@ -731,6 +731,43 @@ class SyncControllerTest {
     }
 
     @Test
+    void providerWriteOutboxCoalescesLocalCreateThenDeleteBeforeFlush() {
+        AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .orElseThrow();
+        connection.setCalendarWriteEnabled(true);
+        connection.setCapabilityStatus("write_enabled");
+        calendarConnectionRepository.save(connection);
+
+        Event event = new Event();
+        event.setUserId(user.getId());
+        event.setTitle("Transient local meeting");
+        event.setDescription("Create-delete coalescing test");
+        event.setCategory(ScheduleCategory.WORK);
+        event.setStartAt(Instant.now().plus(3, ChronoUnit.HOURS));
+        event.setEndAt(Instant.now().plus(4, ChronoUnit.HOURS));
+        event.setPriority((short) 3);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.LOCAL);
+        event.setSyncState(PlannerSyncState.LOCAL_ONLY);
+        event = eventRepository.save(event);
+        UUID eventId = event.getId();
+
+        providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.CREATE);
+        assertThat(providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .toList()).hasSize(1);
+
+        ProviderWriteOutboxService.EnqueueResult deleteResult =
+                providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.DELETE);
+
+        assertThat(deleteResult).isEqualTo(ProviderWriteOutboxService.EnqueueResult.NOOP);
+        assertThat(providerWriteOutboxRepository.findAll().stream()
+                .filter(row -> row.getLocalId().equals(eventId))
+                .toList()).isEmpty();
+    }
+
+    @Test
     void providerWriteOutboxDoesNotAttachAnotherUsersExternalMapping() {
         AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
         AppUser otherUser = new AppUser();
