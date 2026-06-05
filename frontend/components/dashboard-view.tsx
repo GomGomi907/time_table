@@ -366,7 +366,7 @@ export function DashboardView() {
                 onReject={() =>
                   void withDashboardMutation(
                     () => api.rejectSuggestion(pendingSuggestion.id),
-                    "변경을 보류했습니다.",
+                    "제안을 닫았습니다.",
                     "변경 처리에 실패했습니다.",
                   )
                 }

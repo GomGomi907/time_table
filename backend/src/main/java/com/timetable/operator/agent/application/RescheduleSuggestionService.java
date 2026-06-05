@@ -324,7 +324,7 @@ public class RescheduleSuggestionService {
         return switch (status) {
             case PENDING -> "검토 대기";
             case APPLIED -> "적용 완료";
-            case REJECTED -> "보류됨";
+            case REJECTED -> "사용 안 함";
             case REVERTED -> "되돌림 완료";
         };
     }
@@ -334,12 +334,12 @@ public class RescheduleSuggestionService {
             SuggestionExecutionSummaryResponse executionSummary
     ) {
         return switch (suggestion.getStatus()) {
-            case PENDING -> "검토 후 적용하거나 보류할 수 있습니다.";
+            case PENDING -> "검토 후 적용하거나 사용하지 않을 수 있습니다.";
             case APPLIED -> executionSummary == null
                     ? "제안을 적용했습니다."
                     : executionSummary.detail();
             case REJECTED -> suggestion.getReason() == null || suggestion.getReason().isBlank()
-                    ? "제안을 보류했습니다."
+                    ? "제안을 닫았습니다."
                     : suggestion.getReason();
             case REVERTED -> suggestion.getReason() == null || suggestion.getReason().isBlank()
                     ? "적용한 제안을 되돌렸습니다."

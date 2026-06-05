@@ -33,7 +33,7 @@ public class AiRequestAgentService {
                     user.getId(),
                     exception
             );
-            return aiCommandValidationService.providerUnavailableBatch(reason);
+            return aiCommandValidationService.providerUnavailableBatch(reason, exception);
         }
     }
 

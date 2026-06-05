@@ -442,7 +442,7 @@ function buildReadonlySuggestion(
     id: `suggestion-${index}`,
     triggerType: "manual_request",
     status,
-    statusLabel: status === "pending" ? "검토 대기" : "보류됨",
+    statusLabel: status === "pending" ? "검토 대기" : "사용 안 함",
     statusDetail: "테스트 읽기 전용 제안",
     summary: `답변 ${index}${paddedDetail}`,
     reason: `요청 ${index}${paddedDetail}`,

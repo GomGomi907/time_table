@@ -477,7 +477,7 @@ export const api = {
     return requestEnvelope<RescheduleSuggestion>(`/api/agent/suggestions/${suggestionId}/reject`, {
       method: "POST",
       body: JSON.stringify({
-        reason: reason ?? "프론트에서 보류",
+        reason: reason ?? "사용자가 이 제안을 사용하지 않음",
       }),
     });
   },

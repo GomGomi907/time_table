@@ -363,8 +363,8 @@ export function FocusView() {
       () =>
         action === "apply"
           ? api.applySuggestion(pendingSuggestion.id, "적용")
-          : api.rejectSuggestion(pendingSuggestion.id, "보류"),
-      action === "apply" ? "변경을 적용했습니다." : "변경을 보류했습니다.",
+          : api.rejectSuggestion(pendingSuggestion.id, "사용자가 이 제안을 사용하지 않음"),
+      action === "apply" ? "변경을 적용했습니다." : "제안을 닫았습니다.",
       { syncFocusFromResponse: false },
     );
   }

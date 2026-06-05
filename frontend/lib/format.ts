@@ -246,9 +246,9 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
     const message = getStringField(payload, "message");
     return {
       kind: "provider_unavailable",
-      title: "지금은 적용할 수 없습니다.",
+      title: "AI 요청을 처리하지 못했습니다.",
       detail: toSafeSuggestionText(message || suggestion.explanation, "잠시 후 다시 시도해 주세요."),
-      guidance: "잠시 후 다시 시도하세요.",
+      guidance: "요청 내용은 보존됩니다. 원인을 확인한 뒤 다시 요청하세요.",
       canApply: false,
       applyLabel: "다시 요청 필요",
     };

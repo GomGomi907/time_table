@@ -69,7 +69,7 @@ test.describe("핵심 사용자 시나리오", () => {
     await expect(loginStart).toBeVisible();
   });
 
-  test("사용자는 빈 조정 요청을 막고, 요청 생성 후 보류할 수 있다", async ({ page }, testInfo) => {
+  test("사용자는 빈 조정 요청을 막고, 요청 생성 후 제안을 닫을 수 있다", async ({ page }, testInfo) => {
     await loginAsUniqueMockUser(page, testInfo);
     await completeOnboardingIfPresent(page);
     await clearPendingSuggestions(page);
@@ -89,13 +89,13 @@ test.describe("핵심 사용자 시나리오", () => {
     await expect(page.getByRole("status")).toContainText("변경 요청을 만들었습니다.", {
       timeout: 30_000,
     });
-    await expect(page.getByText("보류").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText("이 제안 사용 안 함").first()).toBeVisible({ timeout: 30_000 });
 
-    await page.getByRole("button", { name: "보류" }).first().click();
-    await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", {
+    await page.getByRole("button", { name: "이 제안 사용 안 함" }).first().click();
+    await expect(page.getByRole("status")).toContainText("제안을 닫았습니다.", {
       timeout: 30_000,
     });
-    await expect(page.getByRole("button", { name: "보류" })).toHaveCount(0, { timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toHaveCount(0, { timeout: 30_000 });
   });
 
   test("사용자는 할 일을 시작하고 완료할 수 있다", async ({ page }, testInfo) => {
@@ -137,7 +137,7 @@ test.describe("핵심 사용자 시나리오", () => {
     expect(completed.data.find((item) => item.id === task.data.id)?.status).toBe("DONE");
   });
 
-  test("사용자가 현재 일정을 미루면 변경 요청을 같은 화면에서 보류할 수 있다", async ({ page }, testInfo) => {
+  test("사용자가 현재 일정을 미루면 변경 요청을 같은 화면에서 제안을 닫을 수 있다", async ({ page }, testInfo) => {
     await loginAsUniqueMockUser(page, testInfo);
     await completeOnboardingIfPresent(page);
     await clearPendingSuggestions(page);
@@ -182,10 +182,10 @@ test.describe("핵심 사용자 시나리오", () => {
         timeout: 30_000,
       });
     }
-    await expect(page.getByRole("button", { name: "보류" })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toBeVisible({ timeout: 30_000 });
 
-    await page.getByRole("button", { name: "보류" }).click();
-    await expect(page.getByRole("status")).toContainText("변경을 보류했습니다.", {
+    await page.getByRole("button", { name: "이 제안 사용 안 함" }).click();
+    await expect(page.getByRole("status")).toContainText("제안을 닫았습니다.", {
       timeout: 30_000,
     });
     await expect(page.getByText("변경 요청")).toBeHidden({ timeout: 30_000 });
@@ -194,6 +194,6 @@ test.describe("핵심 사용자 시나리오", () => {
     expect(rejectedSuggestions.data.filter((suggestion) => suggestion.status === "pending")).toHaveLength(0);
 
     await page.goto("/schedule");
-    await expect(page.getByRole("button", { name: "보류" }).first()).toBeHidden({ timeout: 30_000 });
+    await expect(page.getByRole("button", { name: "이 제안 사용 안 함" }).first()).toBeHidden({ timeout: 30_000 });
   });
 });

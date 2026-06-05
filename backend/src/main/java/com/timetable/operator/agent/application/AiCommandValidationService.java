@@ -110,13 +110,29 @@ public class AiCommandValidationService {
     }
 
     public StructuredAiCommandBatch providerUnavailableBatch(String reason) {
+        return providerUnavailableBatch(reason, null);
+    }
+
+    public StructuredAiCommandBatch providerUnavailableBatch(String reason, RuntimeException exception) {
+        String visibleMessage = providerUnavailableMessage(exception);
         return nonExecutableBatch(
                 "AI 요청 처리 실패",
                 "AI 제공자 응답을 받지 못해 실행 가능한 일정 변경안을 만들지 않았습니다.",
-                "잠시 후 다시 시도해 주세요. 같은 문제가 반복되면 AI 설정과 네트워크 상태를 확인해야 합니다.",
+                visibleMessage,
                 "provider_unavailable",
                 reason
         );
+    }
+
+    private String providerUnavailableMessage(RuntimeException exception) {
+        String message = exception == null ? "" : String.valueOf(exception.getMessage()).toLowerCase();
+        if (message.contains("resource_exhausted")
+                || message.contains("prepayment credits")
+                || message.contains("quota")
+                || message.contains("429")) {
+            return "AI 사용량 한도 또는 결제 크레딧이 소진되어 요청을 처리하지 못했습니다. 관리자 설정을 확인한 뒤 다시 요청해 주세요.";
+        }
+        return "AI 제공자 응답을 받지 못했습니다. 잠시 후 다시 요청해 주세요.";
     }
 
     public StructuredAiCommandBatch clarificationRequiredBatch(

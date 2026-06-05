@@ -364,9 +364,21 @@ public class AiRescheduleClient implements AiAgentStageClient {
             log.warn("Gemini reschedule request failed with status {} and body: {}",
                     statusCode,
                     responseBody);
-            throw new IllegalStateException("AI 재조율 요청에 실패했습니다.");
+            throw new IllegalStateException(providerFailureMessage(statusCode, responseBody));
         }
         return objectMapper.readValue(responseBody, GeminiGenerateContentResponse.class);
+    }
+
+    private String providerFailureMessage(int statusCode, String responseBody) {
+        String body = responseBody == null ? "" : responseBody;
+        String normalizedBody = body.toLowerCase();
+        if (statusCode == 429
+                || normalizedBody.contains("resource_exhausted")
+                || normalizedBody.contains("prepayment credits")
+                || normalizedBody.contains("quota")) {
+            return "Gemini provider quota exhausted: status=" + statusCode + ", body=" + body;
+        }
+        return "Gemini provider request failed: status=" + statusCode;
     }
 
     private String readBody(InputStream inputStream) throws IOException {

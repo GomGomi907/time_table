@@ -268,6 +268,31 @@ class AgentAiOrchestrationControllerTest {
     }
 
     @Test
+    void providerQuotaFailureShowsActionableLimitMessage() throws Exception {
+        when(aiAgentStageClient.interpret(any())).thenThrow(new IllegalStateException(
+                "Gemini provider quota exhausted: status=429, body={\"error\":{\"status\":\"RESOURCE_EXHAUSTED\",\"message\":\"prepayment credits are depleted\"}}"
+        ));
+
+        mockMvc.perform(post("/api/agent/reschedule")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "triggerType": "manual_request",
+                                  "reason": "오늘 내일 연차를 썼다. 일정을 수정해라"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.summary").value("AI 요청 처리 실패"))
+                .andExpect(jsonPath("$.data.executable").value(false))
+                .andExpect(jsonPath("$.data.commandBatch.commands[0].payload.resolutionType").value("provider_unavailable"))
+                .andExpect(jsonPath("$.data.commandBatch.commands[0].payload.message").value(
+                        "AI 사용량 한도 또는 결제 크레딧이 소진되어 요청을 처리하지 못했습니다. 관리자 설정을 확인한 뒤 다시 요청해 주세요."
+                ));
+    }
+
+    @Test
     void providerFailureDuringDraftReturnsProviderUnavailableSuggestion() throws Exception {
         when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation("create", "event", null, "제품 회의", "WEDNESDAY", "15:00", "16:00", null, null, null, List.of(), List.of(), 0.95, true, ""));
         when(aiAgentStageClient.draft(any(), any())).thenThrow(new IllegalStateException("fake draft down"));

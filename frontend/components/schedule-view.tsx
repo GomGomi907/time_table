@@ -2140,7 +2140,7 @@ export function ScheduleView() {
 
       showNotice({
         tone: "success",
-        title: action === "apply" ? "변경을 일정표에 반영했습니다." : "변경을 보류했습니다.",
+        title: action === "apply" ? "변경을 일정표에 반영했습니다." : "제안을 닫았습니다.",
         detail: getSuggestionNoticeDetail(response),
       });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);

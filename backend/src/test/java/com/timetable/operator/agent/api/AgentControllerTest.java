@@ -226,7 +226,7 @@ class AgentControllerTest {
                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("rejected"))
-                .andExpect(jsonPath("$.data.statusLabel").value("보류됨"))
+                .andExpect(jsonPath("$.data.statusLabel").value("사용 안 함"))
                 .andExpect(jsonPath("$.data.statusDetail").value("지금은 수동으로 처리"));
 
         mockMvc.perform(get("/api/agent/suggestions").with(user("tester").roles("USER")))

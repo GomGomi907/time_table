@@ -58,7 +58,7 @@ async function ensurePendingSuggestion(page: Page) {
 }
 
 async function expectPendingSuggestionAction(page: Page, suggestion: Pick<SuggestionResponse, "executable">) {
-  await expect(page.getByRole("button", { name: "보류" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toBeVisible();
 
   if (suggestion.executable) {
     await expect(page.getByRole("button", { name: "적용" })).toBeEnabled();
@@ -113,7 +113,7 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
 
   const pendingSuggestion = await ensurePendingSuggestion(page);
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: /변경 제안|확인이 필요합니다\.|지금은 적용할 수 없습니다./ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /변경 제안|확인이 필요합니다\.|AI 요청을 처리하지 못했습니다./ })).toBeVisible({ timeout: 30_000 });
   await expectPendingSuggestionAction(page, pendingSuggestion);
   await assertNoInternalUserCopy(page);
   screenshots.push(await capture(page, "mobile-dashboard-pending", { width: 390, height: 1000 }));

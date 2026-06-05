@@ -66,7 +66,7 @@ export function SuggestionReviewCard({
       ) : (
         <div className="suggestion-actions approval-actions">
           <button className="ghost-btn" disabled={isPending} onClick={onReject} type="button">
-            보류
+            이 제안 사용 안 함
           </button>
           <button className="solid-btn" disabled={isPending || !display.canApply} onClick={onApply} type="button">
             {display.applyLabel}
