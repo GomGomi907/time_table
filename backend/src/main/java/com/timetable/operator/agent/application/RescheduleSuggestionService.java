@@ -2,7 +2,9 @@ package com.timetable.operator.agent.application;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.timetable.operator.agent.application.context.AiContextPackageBuilder;
 import com.timetable.operator.agent.domain.AgentCommandActionType;
+import com.timetable.operator.agent.domain.AiDecisionPackage;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
 import com.timetable.operator.agent.domain.RescheduleSuggestion;
 import com.timetable.operator.agent.domain.RescheduleSuggestionStatus;
@@ -76,6 +78,7 @@ public class RescheduleSuggestionService {
     private final ScheduleBlockRules scheduleBlockRules;
     private final ProviderWriteOutboxService providerWriteOutboxService;
     private final AiRequestAgentService aiRequestAgentService;
+    private final AiContextPackageBuilder aiContextPackageBuilder;
 
     @Transactional
     public RescheduleSuggestionResponse createManualSuggestion(ManualRescheduleRequest request) {
@@ -255,6 +258,12 @@ public class RescheduleSuggestionService {
 
     private RescheduleSuggestionResponse toResponse(RescheduleSuggestion suggestion) {
         StructuredAiCommandBatch batch = readBatch(suggestion.getSuggestionPayload());
+        AiDecisionPackage decisionPackage = AiDecisionPackage.from(
+                batch,
+                null,
+                null,
+                null
+        );
         List<SuggestionPreviewItemResponse> previewItems = buildPreviewItems(batch);
         int executableCommandCount = (int) batch.commands().stream()
                 .filter(StructuredAiCommand::requiresConfirmation)
@@ -272,6 +281,7 @@ public class RescheduleSuggestionService {
                 suggestion.getDecisionReason(),
                 suggestion.getExplanation(),
                 batch,
+                decisionPackage,
                 previewItems,
                 executableCommandCount,
                 executableCommandCount > 0,
@@ -349,6 +359,17 @@ public class RescheduleSuggestionService {
                     ? "적용한 제안을 되돌렸습니다."
                     : suggestion.getDecisionReason();
         };
+    }
+
+    private String readRequestKind(StructuredAiCommandBatch batch) {
+        if (batch == null || batch.commands() == null) {
+            return "manual_request";
+        }
+        return batch.commands().stream()
+                .map(command -> readString(command.payload(), "requestKind"))
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElse("manual_request");
     }
 
     private List<SuggestionPreviewItemResponse> buildPreviewItems(StructuredAiCommandBatch batch) {
@@ -586,6 +607,12 @@ public class RescheduleSuggestionService {
     }
 
     private AppliedCommandSnapshot deleteEvent(Event event, StructuredAiCommand command) {
+        if (isExternalBackedEvent(event)) {
+            return noExecutableTarget(
+                    command,
+                    "외부 원본 일정은 AI 제안 적용으로 직접 삭제하지 않습니다. Google 캘린더에서 직접 확인하거나 수동 처리해 주세요."
+            );
+        }
         EventRollbackState beforeState = snapshotEventRollback(event);
         try {
             event.setStatus(EventStatus.CANCELLED);
@@ -683,6 +710,12 @@ public class RescheduleSuggestionService {
 
     private AppliedCommandSnapshot deleteTask(UUID userId, StructuredAiCommand command) {
         Task task = getOwnedTask(userId, command);
+        if (isExternalBackedTask(task)) {
+            return noExecutableTarget(
+                    command,
+                    "외부 원본 할 일은 AI 제안 적용으로 직접 삭제하지 않습니다. Google Tasks에서 직접 확인하거나 수동 처리해 주세요."
+            );
+        }
         TaskRollbackState beforeState = snapshotTaskRollback(task);
         try {
             task.setStatus(TaskStatus.CANCELLED);
@@ -740,6 +773,20 @@ public class RescheduleSuggestionService {
 
     private boolean blocksExternalWrite(EnqueueResult result) {
         return result == EnqueueResult.WRITE_SCOPE_REQUIRED || result == EnqueueResult.NO_CONNECTION;
+    }
+
+    private boolean isExternalBackedEvent(Event event) {
+        return event.getSourceType() == EventSourceType.GOOGLE_CALENDAR
+                || event.getExternalSourceId() != null
+                || event.getSyncState() == com.timetable.operator.common.domain.PlannerSyncState.IMPORTED
+                || event.getSyncState() == com.timetable.operator.common.domain.PlannerSyncState.SYNCED;
+    }
+
+    private boolean isExternalBackedTask(Task task) {
+        return task.getSourceType() == TaskSourceType.GOOGLE_TASKS
+                || task.getExternalSourceId() != null
+                || task.getSyncState() == com.timetable.operator.common.domain.PlannerSyncState.IMPORTED
+                || task.getSyncState() == com.timetable.operator.common.domain.PlannerSyncState.SYNCED;
     }
 
     private Task getOwnedTask(UUID userId, StructuredAiCommand command) {
@@ -1236,7 +1283,7 @@ public class RescheduleSuggestionService {
                         ? buildAvailabilityWindows(scheduleBlocks, events, planningRange, userZone)
                         : List.of();
 
-        return new AiRescheduleClient.RescheduleAiContext(
+        AiRescheduleClient.RescheduleAiContext context = new AiRescheduleClient.RescheduleAiContext(
                 new AiRescheduleClient.UserContext(
                         user.getId().toString(),
                         blankToDefault(user.getTimezone(), "Asia/Seoul")
@@ -1266,6 +1313,16 @@ public class RescheduleSuggestionService {
                         .toList(),
                 messageHistory,
                 availabilityWindows
+        );
+        return new AiRescheduleClient.RescheduleAiContext(
+                context.user(),
+                context.request(),
+                context.weeklyBlocks(),
+                context.events(),
+                context.tasks(),
+                context.messageHistory(),
+                context.availabilityWindows(),
+                aiContextPackageBuilder.build(context)
         );
     }
 
@@ -1576,6 +1633,7 @@ public class RescheduleSuggestionService {
             String decisionReason,
             String explanation,
             StructuredAiCommandBatch commandBatch,
+            AiDecisionPackage decisionPackage,
             List<SuggestionPreviewItemResponse> previewItems,
             int executableCommandCount,
             boolean executable,

@@ -1,0 +1,30 @@
+{
+  "id": "overloaded_week",
+  "request": "이번 주 업무가 너무 빡빡한데 숨 좀 트이게 해줘.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-12T00:00:00Z",
+  "interpretation": { "action": "create", "targetType": "event", "title": "업무 정리 시간", "startAt": "2026-06-06T07:00:00Z", "endAt": "2026-06-06T07:30:00Z", "confidence": 0.82, "repairable": true },
+  "context": {
+    "events": [
+      { "id": "dddddddd-dddd-dddd-dddd-dddddddddddd", "title": "고정 고객 미팅", "category": "WORK", "startAt": "2026-06-06T05:00:00Z", "endAt": "2026-06-06T06:00:00Z", "syncState": "DIRTY_PENDING_WRITE" }
+    ],
+    "availabilityWindows": [
+      { "startAt": "2026-06-06T07:00:00Z", "endAt": "2026-06-06T07:30:00Z", "localLabel": "토 16:00-16:30", "durationMinutes": 30, "source": "fixture" }
+    ]
+  },
+  "draft": {
+    "summary": "업무 정리 시간 추가",
+    "explanation": "고정 미팅은 보호하고 빈 시간에 짧은 정리 시간을 제안합니다.",
+    "commands": [
+      { "actionType": "create_event", "targetType": "event", "payload": { "title": "업무 정리 시간", "startAt": "2026-06-06T07:00:00Z", "endAt": "2026-06-06T07:30:00Z", "category": "WORK" }, "reason": "과부하 완충 시간", "requiresConfirmation": true }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": true,
+    "expectedActionTypes": ["create_event"],
+    "payloadContains": { "title": "업무 정리 시간", "startAt": "2026-06-06T07:00:00Z", "endAt": "2026-06-06T07:30:00Z", "category": "WORK" },
+    "explanationContains": ["고정 미팅은 보호"],
+    "forbiddenPayloadText": ["providerMetadata", "rawPrompt"],
+    "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "argumentPrecision", "dbDiffCorrectness", "userEffort", "privacyExposure", "costLatency"]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "id": "recurring_commute_scope",
+  "request": "앞으로 출근 시간 바꿔줘.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-12T00:00:00Z",
+  "interpretation": { "action": "update", "targetType": "event", "title": "출근", "missingFields": ["targetId"], "confidence": 0.80, "repairable": true },
+  "context": {
+    "weeklyBlocks": [
+      { "id": "12121212-1212-1212-1212-121212121212", "dayOfWeek": "MONDAY", "startTime": "09:00", "endTime": "09:45", "activity": "출근", "category": "WORK" }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": false,
+    "payloadContains": { "requestKind": "recurring_routine", "resolutionType": "clarification_required" },
+    "explanationContains": ["반복 일정", "이번만인지 앞으로 계속인지"],
+    "forbiddenExecutableActions": ["delete_event", "move_event", "update_event"],
+    "requiredMetrics": ["intentAccuracy", "clarificationQuality", "commandSafety", "userEffort", "privacyExposure"]
+  }
+}

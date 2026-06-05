@@ -1,0 +1,22 @@
+{
+  "id": "travel_day_buffer",
+  "request": "내일 출장이라 이동시간 고려해서 조정해줘.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-07T00:00:00Z",
+  "interpretation": { "action": "request_reschedule", "targetType": "event", "confidence": 0.84, "repairable": true },
+  "context": {
+    "events": [
+      { "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "title": "출장일 업무 회의", "category": "WORK", "startAt": "2026-06-06T05:00:00Z", "endAt": "2026-06-06T06:00:00Z", "syncState": "LOCAL_ONLY" }
+    ],
+    "weeklyBlocks": [
+      { "id": "cccccccc-cccc-cccc-cccc-cccccccccccc", "dayOfWeek": "SATURDAY", "startTime": "09:00", "endTime": "18:00", "activity": "근무", "category": "WORK" }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": false,
+    "payloadContains": { "requestKind": "status_declaration", "mode": "출장", "externalMutationAllowed": false },
+    "payloadListContains": { "workEvents": ["출장일 업무 회의"], "workBlocks": ["근무"] },
+    "explanationContains": ["출장 모드", "외부 일정은 직접 삭제하지 않습니다"],
+    "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "argumentPrecision", "userEffort", "privacyExposure"]
+  }
+}

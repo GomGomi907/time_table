@@ -155,6 +155,7 @@ Required requests:
 2. ambiguous request -> clarification or non-executable safe response;
 3. provider failure/timeout -> retry-oriented UX, no crash, no mutation;
 4. malformed provider output in non-prod/fake path -> rejected safely.
+5. multi-scenario live smoke via `scripts/llm-live-probe.ps1 -ScenarioSet` -> report under `.omx/reports/` with p95 latency, command count, privacy exposure score, estimated character size, and PASS safety verdicts.
 
 No prompt, reasoning trace, validation internals, or provider metadata may appear in the UI.
 

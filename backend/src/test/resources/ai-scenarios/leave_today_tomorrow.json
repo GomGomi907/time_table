@@ -1,0 +1,28 @@
+{
+  "id": "leave_today_tomorrow",
+  "request": "오늘 내일 연차를 썼다. 일정을 수정해라.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-07T00:00:00Z",
+  "interpretation": { "action": "request_reschedule", "targetType": "event", "confidence": 0.86, "repairable": true },
+  "context": {
+    "events": [
+      { "id": "11111111-1111-1111-1111-111111111111", "title": "업무 회의", "category": "WORK", "startAt": "2026-06-05T05:00:00Z", "endAt": "2026-06-05T06:00:00Z", "syncState": "DIRTY_PENDING_WRITE" },
+      { "id": "22222222-2222-2222-2222-222222222222", "title": "친구 약속", "category": "LIFE", "startAt": "2026-06-05T10:00:00Z", "endAt": "2026-06-05T11:00:00Z", "syncState": "LOCAL_ONLY" }
+    ],
+    "weeklyBlocks": [
+      { "id": "33333333-3333-3333-3333-333333333333", "dayOfWeek": "FRIDAY", "startTime": "09:00", "endTime": "18:00", "activity": "근무", "category": "WORK" }
+    ],
+    "tasks": [
+      { "id": "44444444-4444-4444-4444-444444444444", "title": "보고서 작성", "category": "WORK", "estimatedMinutes": 90, "actualMinutes": 0, "priority": 3, "status": "TODO", "syncState": "LOCAL_ONLY" }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": false,
+    "payloadContains": { "requestKind": "status_declaration", "mode": "휴가", "externalMutationAllowed": false, "requiresUserConfirmation": true },
+    "payloadListContains": { "workEvents": ["업무 회의", "외부 원본 보호"], "workBlocks": ["근무"], "workTasks": ["보고서 작성"] },
+    "payloadListNotContains": { "workEvents": ["친구 약속"] },
+    "explanationContains": ["개인 일정은 보존", "외부 일정은 직접 삭제하지 않습니다"],
+    "forbiddenExecutableActions": ["delete_event"],
+    "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "userEffort", "privacyExposure"]
+  }
+}

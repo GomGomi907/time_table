@@ -8,6 +8,7 @@ import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
 import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
+import com.timetable.operator.agent.application.context.ContextPackage;
 import com.timetable.operator.common.config.AppProperties;
 import java.io.IOException;
 import java.io.InputStream;
@@ -571,8 +572,21 @@ public class AiRescheduleClient implements AiAgentStageClient {
             List<EventContext> events,
             List<TaskContext> tasks,
             List<MessageHistoryContext> messageHistory,
-            List<AvailabilityWindowContext> availabilityWindows
+            List<AvailabilityWindowContext> availabilityWindows,
+            ContextPackage contextPackage
     ) {
+        public RescheduleAiContext(
+                UserContext user,
+                RequestContext request,
+                List<ScheduleBlockContext> weeklyBlocks,
+                List<EventContext> events,
+                List<TaskContext> tasks,
+                List<MessageHistoryContext> messageHistory,
+                List<AvailabilityWindowContext> availabilityWindows
+        ) {
+            this(user, request, weeklyBlocks, events, tasks, messageHistory, availabilityWindows, null);
+        }
+
         public RescheduleAiContext(
                 UserContext user,
                 RequestContext request,

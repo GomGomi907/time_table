@@ -1,6 +1,7 @@
 package com.timetable.operator.agent.api;
 
 import com.timetable.operator.agent.application.RescheduleSuggestionService;
+import com.timetable.operator.agent.domain.AiDecisionPackage;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
 import com.timetable.operator.common.api.ApiEnvelope;
 import com.timetable.operator.common.api.ApiResponses;
@@ -115,6 +116,7 @@ public class AgentController {
             String decisionReason,
             String explanation,
             StructuredAiCommandBatch commandBatch,
+            AiDecisionPackage decisionPackage,
             List<AgentSuggestionPreviewItemResponse> previewItems,
             int executableCommandCount,
             boolean executable,
@@ -137,6 +139,7 @@ public class AgentController {
                     response.decisionReason(),
                     response.explanation(),
                     response.commandBatch(),
+                    response.decisionPackage(),
                     response.previewItems().stream()
                             .map(AgentSuggestionPreviewItemResponse::from)
                             .toList(),

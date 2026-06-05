@@ -77,10 +77,13 @@ $env:APP_AI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
 
 동작:
 
-1. `/api/agent/reschedule` 요청이 들어오면 현재 사용자, 주간 시간표 블록, 일정, 미완료 태스크를 AI 컨텍스트로 묶는다.
+1. `/api/agent/reschedule` 요청이 들어오면 현재 사용자, 주간 시간표 블록, 일정, 미완료 태스크를 AI 컨텍스트로 묶고 Context Package 메타데이터(요청 유형, 포함/제외 섹션, 추정 크기, privacy exposure score)를 만든다.
 2. 백엔드는 Gemini `models/{model}:generateContent` 요청에 `x-goog-api-key` 헤더와 JSON 응답 설정을 붙인다.
 3. AI는 JSON Schema로 제한된 `StructuredAiCommandBatch`를 반환한다.
-4. 반환된 `move_event`, `update_event`, `create_event`, `delete_event`, `recommend_task` 명령은 사용자가 제안을 적용할 때 로컬 canonical Event/Task/ScheduleBlock에 반영된다.
-5. Google에서 온 일정/태스크를 변경하면 provider write outbox가 예약되어 다음 outbound sync 때 Google Calendar/Tasks로 전파된다.
+4. 백엔드는 raw command batch 위에 `AiDecisionPackage`를 만들어 UI와 품질 측정이 request kind, trust level, affected items, confirmation need, privacy block을 읽게 한다.
+5. 반환된 `move_event`, `update_event`, `create_event`, `delete_event`, `recommend_task` 명령은 사용자가 제안을 적용할 때 로컬 canonical Event/Task/ScheduleBlock에 반영된다.
+6. Google에서 온 일정/태스크를 변경하면 provider write outbox가 예약되어 다음 outbound sync 때 Google Calendar/Tasks로 전파된다. 외부 일정의 직접 삭제는 현재 trust milestone에서 허용하지 않는다.
+
+UI/보고서에는 raw prompt, reasoning trace, validation internals, provider metadata, API key가 노출되면 안 된다. Live smoke는 `.omx/reports/llm-live-probe-*.json`에 latency, scenario id/request kind, validation/safety verdict, command count, privacy exposure score, estimated character size를 남긴다.
 
 AI가 꺼져 있으면 요청은 “검토 대기” suggestion으로만 저장되고, 실행 가능한 AI 변경 명령은 만들지 않는다.

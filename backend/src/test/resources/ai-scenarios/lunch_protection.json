@@ -1,0 +1,27 @@
+{
+  "id": "lunch_protection",
+  "request": "회의 사이에 점심시간 좀 확보해줘.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-06T00:00:00Z",
+  "interpretation": { "action": "create", "targetType": "event", "title": "점심", "startAt": "2026-06-05T03:00:00Z", "endAt": "2026-06-05T04:00:00Z", "confidence": 0.86, "repairable": true },
+  "context": {
+    "events": [
+      { "id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", "title": "오전 회의", "category": "WORK", "startAt": "2026-06-05T01:00:00Z", "endAt": "2026-06-05T02:30:00Z", "syncState": "LOCAL_ONLY" },
+      { "id": "ffffffff-ffff-ffff-ffff-ffffffffffff", "title": "오후 회의", "category": "WORK", "startAt": "2026-06-05T05:00:00Z", "endAt": "2026-06-05T06:00:00Z", "syncState": "LOCAL_ONLY" }
+    ]
+  },
+  "draft": {
+    "summary": "점심 시간 확보",
+    "explanation": "회의 사이 빈 구간에 점심 보호 시간을 제안합니다.",
+    "commands": [
+      { "actionType": "create_event", "targetType": "event", "payload": { "title": "점심", "startAt": "2026-06-05T03:00:00Z", "endAt": "2026-06-05T04:00:00Z", "category": "LIFE" }, "reason": "회의 사이 점심 보호", "requiresConfirmation": true }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": true,
+    "expectedActionTypes": ["create_event"],
+    "payloadContains": { "title": "점심", "startAt": "2026-06-05T03:00:00Z", "endAt": "2026-06-05T04:00:00Z", "category": "LIFE" },
+    "explanationContains": ["점심 보호"],
+    "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "argumentPrecision", "dbDiffCorrectness", "userEffort", "privacyExposure"]
+  }
+}

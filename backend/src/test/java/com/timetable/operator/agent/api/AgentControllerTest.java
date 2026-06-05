@@ -937,6 +937,112 @@ class AgentControllerTest {
     }
 
     @Test
+    void aiExternalEventDeleteIsManualOnlyAndDoesNotQueueProviderDelete() throws Exception {
+        Event event = new Event();
+        event.setUserId(savedUser.getId());
+        event.setTitle("삭제 차단 Google 회의");
+        event.setStartAt(Instant.parse("2026-05-15T01:00:00Z"));
+        event.setEndAt(Instant.parse("2026-05-15T02:00:00Z"));
+        event.setCategory(ScheduleCategory.WORK);
+        event.setPriority((short) 2);
+        event.setStatus(EventStatus.PLANNED);
+        event.setSourceType(EventSourceType.GOOGLE_CALENDAR);
+        event.setSyncState(PlannerSyncState.IMPORTED);
+        event.setExternalSourceId("google_calendar:event-delete-blocked");
+        Event savedEvent = eventRepository.save(event);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "외부 일정 삭제",
+                  "explanation": "AI 제안은 외부 원본 삭제를 직접 실행하면 안 된다.",
+                  "commands": [
+                    {
+                      "action_type": "delete_event",
+                      "target_type": "event",
+                      "target_id": "%s",
+                      "payload": {},
+                      "reason": "외부 일정 삭제 요청",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedEvent.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "외부 삭제 적용 시도"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+        Event unchanged = eventRepository.findById(savedEvent.getId()).orElseThrow();
+        assertThat(unchanged.getStatus()).isEqualTo(EventStatus.PLANNED);
+        assertThat(unchanged.getSyncState()).isEqualTo(PlannerSyncState.IMPORTED);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
+    void aiExternalTaskDeleteIsManualOnlyAndDoesNotQueueProviderDelete() throws Exception {
+        Task task = new Task();
+        task.setUserId(savedUser.getId());
+        task.setTitle("삭제 차단 Google 할 일");
+        task.setDueDate(Instant.parse("2026-05-15T03:00:00Z"));
+        task.setEstimatedMinutes(30);
+        task.setActualMinutes(0);
+        task.setPriority((short) 3);
+        task.setStatus(TaskStatus.TODO);
+        task.setSourceType(TaskSourceType.GOOGLE_TASKS);
+        task.setSyncState(PlannerSyncState.IMPORTED);
+        task.setExternalSourceId("google_tasks:task-delete-blocked");
+        Task savedTask = taskRepository.save(task);
+        long outboxBefore = providerWriteOutboxRepository.count();
+
+        RescheduleSuggestion savedSuggestion = saveSuggestion("""
+                {
+                  "summary": "외부 할 일 삭제",
+                  "explanation": "AI 제안은 외부 원본 할 일 삭제를 직접 실행하면 안 된다.",
+                  "commands": [
+                    {
+                      "action_type": "delete_event",
+                      "target_type": "task",
+                      "target_id": "%s",
+                      "payload": {},
+                      "reason": "외부 할 일 삭제 요청",
+                      "requires_confirmation": true
+                    }
+                  ]
+                }
+                """.formatted(savedTask.getId()));
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", savedSuggestion.getId())
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "외부 할 일 삭제 적용 시도"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+        Task unchanged = taskRepository.findById(savedTask.getId()).orElseThrow();
+        assertThat(unchanged.getStatus()).isEqualTo(TaskStatus.TODO);
+        assertThat(unchanged.getSyncState()).isEqualTo(PlannerSyncState.IMPORTED);
+        assertThat(providerWriteOutboxRepository.count()).isEqualTo(outboxBefore);
+        assertThat(rescheduleSuggestionRepository.findById(savedSuggestion.getId()).orElseThrow().getStatus())
+                .isEqualTo(RescheduleSuggestionStatus.PENDING);
+    }
+
+    @Test
     void applyCanonicalEventNoOpDoesNotDirtyOrQueueProviderWrite() throws Exception {
         Event event = new Event();
         event.setUserId(savedUser.getId());

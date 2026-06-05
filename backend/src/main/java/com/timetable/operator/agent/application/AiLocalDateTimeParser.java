@@ -5,14 +5,14 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 
-final class AiLocalDateTimeParser {
+public final class AiLocalDateTimeParser {
 
     private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Seoul");
 
     private AiLocalDateTimeParser() {
     }
 
-    static ZoneId resolveUserZone(String timezone) {
+    public static ZoneId resolveUserZone(String timezone) {
         if (timezone == null || timezone.isBlank()) {
             return FALLBACK_ZONE;
         }
@@ -23,7 +23,7 @@ final class AiLocalDateTimeParser {
         }
     }
 
-    static Instant parseRequired(String value, ZoneId userZone) {
+    public static Instant parseRequired(String value, ZoneId userZone) {
         if (value == null || value.isBlank()) {
             throw new AiDateTimeFormatException("AI datetime value is required.");
         }
@@ -38,7 +38,7 @@ final class AiLocalDateTimeParser {
         }
     }
 
-    static Instant parseNullable(String value, ZoneId userZone) {
+    public static Instant parseNullable(String value, ZoneId userZone) {
         if (value == null || value.isBlank()) {
             return null;
         }

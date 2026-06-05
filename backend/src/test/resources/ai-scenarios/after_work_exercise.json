@@ -1,0 +1,19 @@
+{
+  "id": "after_work_exercise",
+  "request": "퇴근 후 운동 넣어줘.",
+  "resolvedRangeStart": "2026-06-05T01:00:00Z",
+  "resolvedRangeEnd": "2026-06-09T00:00:00Z",
+  "interpretation": { "action": "create", "targetType": "event", "title": "운동", "missingFields": ["time"], "confidence": 0.72, "repairable": true },
+  "context": {
+    "weeklyBlocks": [
+      { "id": "88888888-8888-8888-8888-888888888888", "dayOfWeek": "FRIDAY", "startTime": "09:00", "endTime": "18:00", "activity": "근무", "category": "WORK" }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": true,
+    "expectedActionTypes": ["create_event"],
+    "payloadContains": { "title": "운동", "startAt": "2026-06-05T09:00:00Z", "endAt": "2026-06-05T10:00:00Z", "category": "HEALTH" },
+    "explanationContains": ["퇴근 이후"],
+    "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "argumentPrecision", "userEffort", "privacyExposure", "costLatency"]
+  }
+}
