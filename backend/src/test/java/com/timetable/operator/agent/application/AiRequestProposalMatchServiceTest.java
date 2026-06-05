@@ -26,6 +26,60 @@ class AiRequestProposalMatchServiceTest {
     }
 
     @Test
+    void createCanMatchAssistantDefaultedDateAndEndTimeWhenTitleAndStartAreClear() {
+        AiAgentInterpretation interpretation = new AiAgentInterpretation(
+                "create", "event", null, "점심약속", null, "12:00", null, null, null, null,
+                List.of("date", "endTime"), List.of(), 0.72, true, "점심 약속은 몇 시까지인가요?"
+        );
+
+        AiRequestProposalMatchService.MatchResult result = matchService.requireMatch(
+                "오늘 12시에 점심약속",
+                interpretation,
+                batch(command(
+                        AgentCommandActionType.CREATE_EVENT,
+                        AgentCommandTargetType.EVENT,
+                        null,
+                        Map.of(
+                                "title", "점심약속",
+                                "startAt", "2026-06-05T03:00:00Z",
+                                "endAt", "2026-06-05T04:00:00Z",
+                                "category", "LIFE"
+                        )
+                )),
+                "Asia/Seoul"
+        );
+
+        assertThat(result.matched()).isTrue();
+    }
+
+    @Test
+    void createBlocksDefaultedDatedStartWhenLocalClockTimeDiffers() {
+        AiAgentInterpretation interpretation = new AiAgentInterpretation(
+                "create", "event", null, "점심약속", null, "12:00", null, null, null, null,
+                List.of("date", "endTime"), List.of(), 0.72, true, "점심 약속은 몇 시까지인가요?"
+        );
+
+        AiRequestProposalMatchService.MatchResult result = matchService.requireMatch(
+                "오늘 12시에 점심약속",
+                interpretation,
+                batch(command(
+                        AgentCommandActionType.CREATE_EVENT,
+                        AgentCommandTargetType.EVENT,
+                        null,
+                        Map.of(
+                                "title", "점심약속",
+                                "startAt", "2026-06-05T04:00:00Z",
+                                "endAt", "2026-06-05T05:00:00Z",
+                                "category", "LIFE"
+                        )
+                )),
+                "Asia/Seoul"
+        );
+
+        assertThat(result.reason()).isEqualTo("time_mismatch");
+    }
+
+    @Test
     void updateRequiresActionTargetAndIntentMatch() {
         String targetId = UUID.randomUUID().toString();
         AiAgentInterpretation interpretation = new AiAgentInterpretation("update", "event", targetId, "주간회의", null, null, null, null, null, null, List.of(), List.of(), 0.9, true, "");

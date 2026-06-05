@@ -35,6 +35,12 @@ public class RescheduleSuggestion extends AuditableEntity {
     private String reason;
 
     @Column(columnDefinition = "text")
+    private String originalRequest;
+
+    @Column(columnDefinition = "text")
+    private String decisionReason;
+
+    @Column(columnDefinition = "text")
     private String explanation;
 
     @Column(nullable = false, columnDefinition = "text")

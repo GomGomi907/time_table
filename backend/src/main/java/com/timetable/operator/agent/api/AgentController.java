@@ -111,6 +111,8 @@ public class AgentController {
             String statusDetail,
             String summary,
             String reason,
+            String originalRequest,
+            String decisionReason,
             String explanation,
             StructuredAiCommandBatch commandBatch,
             List<AgentSuggestionPreviewItemResponse> previewItems,
@@ -131,6 +133,8 @@ public class AgentController {
                     response.statusDetail(),
                     response.summary(),
                     response.reason(),
+                    response.originalRequest(),
+                    response.decisionReason(),
                     response.explanation(),
                     response.commandBatch(),
                     response.previewItems().stream()

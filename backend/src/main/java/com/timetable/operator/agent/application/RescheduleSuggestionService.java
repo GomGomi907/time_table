@@ -61,6 +61,7 @@ public class RescheduleSuggestionService {
     private static final String PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL = "Google 쓰기는 재연동 후 처리됩니다.";
     private static final String PROVIDER_WRITE_NO_CONNECTION_DETAIL = "Google 연동이 없어 Google에는 반영되지 않았습니다.";
     private static final int AI_MESSAGE_HISTORY_LIMIT = 5;
+    private static final int AI_HISTORY_FIELD_MAX_CHARS = 1000;
     private static final int DEFAULT_AI_FUTURE_CALENDAR_DAYS = 3;
     private static final int MIN_AVAILABILITY_WINDOW_MINUTES = 30;
     private static final int MAX_AVAILABILITY_WINDOWS = 24;
@@ -180,7 +181,7 @@ public class RescheduleSuggestionService {
         suggestion.setAppliedAt(Instant.now());
         suggestion.setExecutionSnapshot(writeJson(snapshots));
         if (request != null && request.reason() != null && !request.reason().isBlank()) {
-            suggestion.setReason(request.reason().trim());
+            suggestion.setDecisionReason(request.reason().trim());
         }
         return toResponse(rescheduleSuggestionRepository.save(suggestion));
     }
@@ -196,7 +197,7 @@ public class RescheduleSuggestionService {
         suggestion.setStatus(RescheduleSuggestionStatus.REJECTED);
         suggestion.setRejectedAt(Instant.now());
         if (request != null && request.reason() != null && !request.reason().isBlank()) {
-            suggestion.setReason(request.reason().trim());
+            suggestion.setDecisionReason(request.reason().trim());
         }
         return toResponse(rescheduleSuggestionRepository.save(suggestion));
     }
@@ -217,7 +218,7 @@ public class RescheduleSuggestionService {
         suggestion.setStatus(RescheduleSuggestionStatus.REVERTED);
         suggestion.setRevertedAt(Instant.now());
         if (revertReason != null && !revertReason.isBlank()) {
-            suggestion.setReason(revertReason.trim());
+            suggestion.setDecisionReason(revertReason.trim());
         }
         return toResponse(rescheduleSuggestionRepository.save(suggestion));
     }
@@ -236,6 +237,7 @@ public class RescheduleSuggestionService {
         suggestion.setStatus(RescheduleSuggestionStatus.PENDING);
         suggestion.setSummary(summary);
         suggestion.setReason(reason);
+        suggestion.setOriginalRequest(reason);
         suggestion.setExplanation(explanation);
         suggestion.setSuggestionPayload(writeJson(batch));
         return toResponse(rescheduleSuggestionRepository.save(suggestion));
@@ -266,6 +268,8 @@ public class RescheduleSuggestionService {
                 statusDetail(suggestion, executionSummary),
                 suggestion.getSummary(),
                 suggestion.getReason(),
+                originalRequest(suggestion),
+                suggestion.getDecisionReason(),
                 suggestion.getExplanation(),
                 batch,
                 previewItems,
@@ -338,12 +342,12 @@ public class RescheduleSuggestionService {
             case APPLIED -> executionSummary == null
                     ? "제안을 적용했습니다."
                     : executionSummary.detail();
-            case REJECTED -> suggestion.getReason() == null || suggestion.getReason().isBlank()
+            case REJECTED -> suggestion.getDecisionReason() == null || suggestion.getDecisionReason().isBlank()
                     ? "제안을 닫았습니다."
-                    : suggestion.getReason();
-            case REVERTED -> suggestion.getReason() == null || suggestion.getReason().isBlank()
+                    : suggestion.getDecisionReason();
+            case REVERTED -> suggestion.getDecisionReason() == null || suggestion.getDecisionReason().isBlank()
                     ? "적용한 제안을 되돌렸습니다."
-                    : suggestion.getReason();
+                    : suggestion.getDecisionReason();
         };
     }
 
@@ -1296,14 +1300,39 @@ public class RescheduleSuggestionService {
                 .map(suggestion -> new AiRescheduleClient.MessageHistoryContext(
                         suggestion.getCreatedAt() == null ? null : suggestion.getCreatedAt().toString(),
                         suggestion.getStatus().wireValue(),
-                        suggestion.getReason(),
-                        suggestion.getSummary(),
-                        null
+                        compactHistoryText(originalRequest(suggestion)),
+                        compactHistoryText(suggestion.getSummary()),
+                        historyAssistantExplanation(suggestion)
                 ))
                 .toList();
         List<AiRescheduleClient.MessageHistoryContext> oldestFirst = new ArrayList<>(newestFirst);
         java.util.Collections.reverse(oldestFirst);
         return oldestFirst;
+    }
+
+    private String originalRequest(RescheduleSuggestion suggestion) {
+        if (suggestion.getOriginalRequest() != null && !suggestion.getOriginalRequest().isBlank()) {
+            return suggestion.getOriginalRequest();
+        }
+        return suggestion.getReason();
+    }
+
+    private String historyAssistantExplanation(RescheduleSuggestion suggestion) {
+        if (suggestion.getStatus() == RescheduleSuggestionStatus.REJECTED) {
+            return compactHistoryText(suggestion.getDecisionReason());
+        }
+        return compactHistoryText(suggestion.getExplanation());
+    }
+
+    private String compactHistoryText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().replaceAll("\\s+", " ");
+        if (normalized.length() <= AI_HISTORY_FIELD_MAX_CHARS) {
+            return normalized;
+        }
+        return normalized.substring(0, AI_HISTORY_FIELD_MAX_CHARS);
     }
 
     private boolean shouldIncludeAvailabilityWindows(ManualRescheduleRequest request) {
@@ -1543,6 +1572,8 @@ public class RescheduleSuggestionService {
             String statusDetail,
             String summary,
             String reason,
+            String originalRequest,
+            String decisionReason,
             String explanation,
             StructuredAiCommandBatch commandBatch,
             List<SuggestionPreviewItemResponse> previewItems,

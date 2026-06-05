@@ -468,7 +468,7 @@ export const api = {
     return requestEnvelope<RescheduleSuggestion>(`/api/agent/suggestions/${suggestionId}/apply`, {
       method: "POST",
       body: JSON.stringify({
-        reason: reason ?? "프론트에서 적용",
+        reason: reason ?? "사용자가 제안을 적용함",
       }),
     });
   },

@@ -386,6 +386,8 @@ export interface RescheduleSuggestion {
   statusDetail: string;
   summary: string;
   reason: string | null;
+  originalRequest: string | null;
+  decisionReason: string | null;
   explanation: string;
   commandBatch: StructuredAiCommandBatch;
   previewItems: SuggestionPreviewItem[];

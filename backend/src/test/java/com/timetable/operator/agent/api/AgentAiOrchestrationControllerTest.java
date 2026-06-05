@@ -428,7 +428,7 @@ class AgentAiOrchestrationControllerTest {
                 .isEqualTo("근무 요약 6");
         assertThat(capturedRequest.context().messageHistory())
                 .extracting(AiRescheduleClient.MessageHistoryContext::assistantExplanation)
-                .containsOnlyNulls();
+                .containsExactly("테스트 대화 이력", null, "테스트 대화 이력", "테스트 대화 이력", "테스트 대화 이력");
         Instant resolvedRangeStart = Instant.parse(capturedRequest.context().request().resolvedRangeStart());
         Instant resolvedRangeEnd = Instant.parse(capturedRequest.context().request().resolvedRangeEnd());
         assertThat(resolvedRangeStart.atZone(userZone).toLocalDate()).isEqualTo(today);
@@ -490,6 +490,83 @@ class AgentAiOrchestrationControllerTest {
         assertThat(capturedRequest.context().availabilityWindows()).isEmpty();
     }
 
+    @Test
+    void manualSuggestionPreservesOriginalRequestWhenUserAppliesWithDecisionReason() throws Exception {
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create",
+                "event",
+                null,
+                "점심약속",
+                null,
+                "12:00",
+                null,
+                "2026-06-05T03:00:00Z",
+                "2026-06-05T04:00:00Z",
+                null,
+                List.of("endTime"),
+                List.of(),
+                0.72,
+                true,
+                "점심 약속은 몇 시까지인가요?"
+        ));
+        when(aiAgentStageClient.draft(any(), any())).thenReturn(new StructuredAiCommandBatch(
+                "점심 약속 추가",
+                "오늘 12시부터 60분으로 가정했습니다.",
+                List.of(new StructuredAiCommand(
+                        AgentCommandActionType.CREATE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        null,
+                        Map.of(
+                                "title", "점심약속",
+                                "startAt", "2026-06-05T03:00:00Z",
+                                "endAt", "2026-06-05T04:00:00Z",
+                                "category", ScheduleCategory.LIFE.name()
+                        ),
+                        "점심 기본 60분 가정",
+                        true
+                ))
+        ));
+
+        MvcResult suggestionResult = mockMvc.perform(post("/api/agent/reschedule")
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "triggerType": "manual_request",
+                                  "reason": "오늘 12시에 점심약속"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reason").value("오늘 12시에 점심약속"))
+                .andExpect(jsonPath("$.data.originalRequest").value("오늘 12시에 점심약속"))
+                .andExpect(jsonPath("$.data.executable").value(true))
+                .andReturn();
+
+        String suggestionId = suggestionResult.getResponse().getContentAsString()
+                .replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+
+        mockMvc.perform(post("/api/agent/suggestions/{suggestionId}/apply", suggestionId)
+                        .with(user("tester").roles("USER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason": "사용자가 기본 60분 가정을 승인함"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("applied"))
+                .andExpect(jsonPath("$.data.reason").value("오늘 12시에 점심약속"))
+                .andExpect(jsonPath("$.data.originalRequest").value("오늘 12시에 점심약속"))
+                .andExpect(jsonPath("$.data.decisionReason").value("사용자가 기본 60분 가정을 승인함"));
+
+        RescheduleSuggestion saved = rescheduleSuggestionRepository.findById(java.util.UUID.fromString(suggestionId)).orElseThrow();
+        assertThat(saved.getReason()).isEqualTo("오늘 12시에 점심약속");
+        assertThat(saved.getOriginalRequest()).isEqualTo("오늘 12시에 점심약속");
+        assertThat(saved.getDecisionReason()).isEqualTo("사용자가 기본 60분 가정을 승인함");
+    }
+
     private static StructuredAiCommand scheduleCreate(String day, String start, String end, String activity) {
         return new StructuredAiCommand(
                 AgentCommandActionType.CREATE_EVENT.wireValue(),
@@ -514,6 +591,7 @@ class AgentAiOrchestrationControllerTest {
         suggestion.setTriggerType(RescheduleSuggestionTriggerType.MANUAL_REQUEST);
         suggestion.setStatus(status);
         suggestion.setReason(reason);
+        suggestion.setOriginalRequest(reason);
         suggestion.setSummary(summary);
         suggestion.setExplanation("테스트 대화 이력");
         suggestion.setSuggestionPayload("""

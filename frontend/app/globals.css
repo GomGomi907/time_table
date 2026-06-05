@@ -388,6 +388,13 @@ summary,
   gap: clamp(18px, 3vw, 30px);
 }
 
+.login-panel-rich {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 .login-hero,
 .onboarding-sidebar,
 .onboarding-loading-copy {

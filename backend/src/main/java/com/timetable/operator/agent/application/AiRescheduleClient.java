@@ -54,9 +54,14 @@ public class AiRescheduleClient implements AiAgentStageClient {
             - Use only ids included in context for update, move, and delete. This id rule does not apply to create commands.
             - Create commands are independent new objects: create_event/recommend_task MUST use target_id null/targetId null and must not require an existing id.
             - Treat Korean relative dates/times from userRequest in the provided timezone.
+            - Act like a product-grade assistant, not a form validator. When intent is clear enough, draft a safe proposal with explicit assumptions instead of asking for every missing field.
+            - Default assumptions for create_event when title/activity and a start time are clear:
+              * missing date -> today in the user's timezone if still plausible, otherwise the next plausible day;
+              * missing duration/end time -> lunch/meal/점심/밥 60 minutes, meeting/회의/미팅 60 minutes, quick/잠깐/짧게/brief 15 minutes, commute/출근/퇴근 45 minutes, exercise/운동 60 minutes, otherwise 60 minutes;
+              * include these assumptions in explanation and command reason.
             - Prefer small, directly executable commands over broad plans.
             - If the latest userRequest is a short follow-up, resolve it against context.messageHistory before asking again.
-            - If the user request is random, vague, not schedule/task related, or lacks required time/title information after using messageHistory and any provided availabilityWindows, return explain_only with requires_confirmation=false instead of guessing.
+            - If the user request is random, vague, not schedule/task related, lacks title/activity plus any usable time signal after using messageHistory, or asks for destructive deletion without one clear target, return explain_only with requires_confirmation=false instead of guessing.
 
             Return exactly one JSON object with this shape:
             {
@@ -118,12 +123,15 @@ public class AiRescheduleClient implements AiAgentStageClient {
             - context.availabilityWindows is server-computed empty schedule time and may be omitted for low-value requests; use it to understand likely insertion points only when present.
             - Existing ids must be copied exactly from context for update/move/delete. Never invent targetId.
             - Create actions do not need existing ids. For action create with targetType event/task, targetId must be null and confidence may be high when title/activity plus time intent are clear.
+            - For create event with title/activity and a concrete clock time but missing date or end time, do not mark it unrepairable. Keep the parsed title/start time, set repairable=true, and allow drafting with assistant defaults.
+            - Follow-up example: if messageHistory shows the assistant asked for an end time for "오늘 12시에 점심약속" and latest userRequest says "12시라고", preserve the original date/title and treat the latest text as a correction/clarification; draft a safe 60-minute lunch unless the user clearly says otherwise.
+            - Leave/vacation/연차/휴가 means the user is unavailable from work. Inspect today/tomorrow or the requested range for work/commute blocks and propose cancelling/removing those; ask one concise follow-up only for non-work personal plans.
 
             Decision rules:
             - For create event/task, first combine the latest userRequest with messageHistory. Require a clear title/activity and either a concrete date/time, an availabilityWindow match when provided, or enough weekly-block information.
             - For update/move/delete, require exactly one matching existing event/task/block from context.
             - For random text, greetings, explanations, or non-schedule requests, use action explain_only, targetType none, confidence <= 0.4.
-            - For a plausible schedule request missing date, time, duration, or target identity, set repairable=true, list missingFields, and ask one short Korean clarification.
+            - For a plausible schedule request missing only defaultable date/end/duration, keep confidence high enough for drafting when title and start time are clear. For missing title, start time, or destructive target identity, ask one short Korean clarification.
             - Do not force executable confidence. Use confidence >= 0.78 only when action, target type, and required fields are explicit.
 
             Required action values: create, update, move, delete, request_reschedule, run_sync, explain_only.

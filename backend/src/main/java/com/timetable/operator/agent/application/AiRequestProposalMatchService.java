@@ -4,6 +4,11 @@ import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
 import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.StructuredAiCommandBatch;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -13,13 +18,17 @@ import org.springframework.stereotype.Service;
 public class AiRequestProposalMatchService {
 
     public MatchResult requireMatch(String requestText, AiAgentInterpretation interpretation, StructuredAiCommandBatch batch) {
+        return requireMatch(requestText, interpretation, batch, null);
+    }
+
+    public MatchResult requireMatch(String requestText, AiAgentInterpretation interpretation, StructuredAiCommandBatch batch, String timezone) {
         if (interpretation == null) {
             return MatchResult.blocked("missing_interpretation", "요청을 어떻게 처리할지 확인이 필요합니다.", List.of("intent"), false);
         }
-        if (interpretation.lowConfidence()) {
+        if (interpretation.lowConfidence() && !interpretation.canDraftWithAssistantDefaults()) {
             return MatchResult.blocked("low_confidence", interpretation.safeClarificationQuestion(), List.of("confidence"), false);
         }
-        if (interpretation.hasMissingOrAmbiguousFields()) {
+        if (interpretation.hasMissingOrAmbiguousFields() && !interpretation.canDraftWithAssistantDefaults()) {
             return MatchResult.blocked(
                     "missing_or_ambiguous_interpretation",
                     interpretation.safeClarificationQuestion(),
@@ -42,7 +51,7 @@ public class AiRequestProposalMatchService {
         }
 
         for (StructuredAiCommand command : executableCommands) {
-            MatchResult commandMatch = matchCommand(requestText, interpretation, command);
+            MatchResult commandMatch = matchCommand(requestText, interpretation, command, timezone);
             if (!commandMatch.matched()) {
                 return commandMatch;
             }
@@ -50,7 +59,7 @@ public class AiRequestProposalMatchService {
         return MatchResult.ok();
     }
 
-    private MatchResult matchCommand(String requestText, AiAgentInterpretation interpretation, StructuredAiCommand command) {
+    private MatchResult matchCommand(String requestText, AiAgentInterpretation interpretation, StructuredAiCommand command, String timezone) {
         AgentCommandActionType commandAction;
         AgentCommandTargetType commandTarget;
         try {
@@ -84,7 +93,7 @@ public class AiRequestProposalMatchService {
         if (requestedFamily == ActionFamily.CREATE && !titleMatches(interpretation, command.payload())) {
             return MatchResult.blocked("title_mismatch", "무엇을 추가할까요?", List.of("title"), true);
         }
-        if (!timeMatches(interpretation, command.payload())) {
+        if (!timeMatches(requestedFamily, interpretation, command.payload(), timezone)) {
             return MatchResult.blocked("time_mismatch", "언제로 바꿀까요?", List.of("time"), true);
         }
         if (requestedFamily == ActionFamily.UPDATE && !changedFieldsMatch(requestText, interpretation, command.payload())) {
@@ -105,14 +114,14 @@ public class AiRequestProposalMatchService {
         return !actual.isBlank() && (actual.contains(expected) || expected.contains(actual));
     }
 
-    private boolean timeMatches(AiAgentInterpretation interpretation, Map<String, Object> payload) {
+    private boolean timeMatches(ActionFamily requestedFamily, AiAgentInterpretation interpretation, Map<String, Object> payload, String timezone) {
         if (!equalsWhenExpected(interpretation.dayOfWeek(), readString(payload, "dayOfWeek", "day_of_week"))) {
             return false;
         }
-        if (!equalsWhenExpected(interpretation.startTime(), readString(payload, "startTime", "start_time"))) {
+        if (!equalsWhenExpectedOrDatedCreate(requestedFamily, interpretation.startTime(), payload, timezone, "startTime", "start_time", "startAt", "start_at")) {
             return false;
         }
-        if (!equalsWhenExpected(interpretation.endTime(), readString(payload, "endTime", "end_time"))) {
+        if (!equalsWhenExpectedOrDatedCreate(requestedFamily, interpretation.endTime(), payload, timezone, "endTime", "end_time", "endAt", "end_at")) {
             return false;
         }
         if (!equalsWhenExpected(interpretation.startAt(), readString(payload, "startAt", "start_at"))) {
@@ -127,6 +136,55 @@ public class AiRequestProposalMatchService {
             return expectedShift.equals(actualShift);
         }
         return true;
+    }
+
+    private boolean equalsWhenExpectedOrDatedCreate(
+            ActionFamily requestedFamily,
+            String expected,
+            Map<String, Object> payload,
+            String timezone,
+            String primaryKey,
+            String primarySnakeKey,
+            String datedKey,
+            String datedSnakeKey
+    ) {
+        if (equalsWhenExpected(expected, readString(payload, primaryKey, primarySnakeKey))) {
+            return true;
+        }
+        if (requestedFamily != ActionFamily.CREATE || isBlank(expected)) {
+            return false;
+        }
+        return localTimeMatches(expected, readString(payload, datedKey, datedSnakeKey), timezone);
+    }
+
+    private boolean localTimeMatches(String expected, String datedValue, String timezone) {
+        if (isBlank(datedValue)) {
+            return false;
+        }
+        LocalTime expectedTime = parseLocalTime(expected);
+        LocalTime actualTime = parseDatedLocalTime(datedValue, timezone);
+        return expectedTime != null && expectedTime.equals(actualTime);
+    }
+
+    private LocalTime parseLocalTime(String value) {
+        try {
+            return LocalTime.parse(value.trim());
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
+    }
+
+    private LocalTime parseDatedLocalTime(String value, String timezone) {
+        ZoneId zone = AiLocalDateTimeParser.resolveUserZone(timezone);
+        try {
+            return Instant.parse(value.trim()).atZone(zone).toLocalTime();
+        } catch (DateTimeParseException instantException) {
+            try {
+                return LocalDateTime.parse(value.trim()).toLocalTime();
+            } catch (DateTimeParseException localException) {
+                return null;
+            }
+        }
     }
 
     private boolean changedFieldsMatch(String requestText, AiAgentInterpretation interpretation, Map<String, Object> payload) {

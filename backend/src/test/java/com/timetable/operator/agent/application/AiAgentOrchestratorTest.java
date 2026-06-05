@@ -121,6 +121,64 @@ class AiAgentOrchestratorTest {
     }
 
     @Test
+    void defaultableCreateMissingDateAndEndTimeStillDraftsAssistantProposal() {
+        when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create", "event", null, "점심약속", null, "12:00", null, null, null, null,
+                List.of("date", "endTime"), List.of(), 0.72, true, "점심 약속은 몇 시까지인가요?"
+        ));
+        when(stageClient.draft(any(), any())).thenReturn(batch(new StructuredAiCommand(
+                AgentCommandActionType.CREATE_EVENT.wireValue(),
+                AgentCommandTargetType.EVENT.wireValue(),
+                null,
+                Map.of(
+                        "title", "점심약속",
+                        "startAt", "2026-06-05T03:00:00Z",
+                        "endAt", "2026-06-05T04:00:00Z",
+                        "category", ScheduleCategory.LIFE.name()
+                ),
+                "날짜는 오늘, 종료는 점심 기본 60분으로 가정했습니다.",
+                true
+        )));
+
+        StructuredAiCommandBatch resolved = orchestrator.resolve(request("오늘 12시에 점심약속"));
+
+        assertThat(resolved.commands()).anyMatch(StructuredAiCommand::requiresConfirmation);
+        assertThat(resolved.commands().getFirst().payload()).containsEntry("title", "점심약속");
+        verify(stageClient).draft(any(), any());
+        verify(stageClient, never()).repair(any(), any(), any(), any());
+    }
+
+    @Test
+    void defaultableCreateSurvivesDraftProviderFailureWithDeterministicFallback() {
+        when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create", "event", null, "점심약속", null, "12:00", null,
+                "2026-06-05T03:00:00Z",
+                "2026-06-05T04:00:00Z",
+                null,
+                List.of("date", "endTime"),
+                List.of(),
+                0.72,
+                true,
+                "점심 약속은 몇 시까지인가요?"
+        ));
+        when(stageClient.draft(any(), any())).thenThrow(new IllegalStateException("provider down"));
+
+        StructuredAiCommandBatch resolved = orchestrator.resolve(request("12시에 점심약속"));
+
+        assertThat(resolved.commands()).anyMatch(StructuredAiCommand::requiresConfirmation);
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.CREATE_EVENT.wireValue());
+        assertThat(command.targetId()).isNull();
+        assertThat(command.payload())
+                .containsEntry("title", "점심약속")
+                .containsEntry("startAt", "2026-06-05T03:00:00Z")
+                .containsEntry("endAt", "2026-06-05T04:00:00Z")
+                .containsEntry("category", ScheduleCategory.LIFE.name());
+        assertThat(resolved.explanation()).contains("확인용 제안");
+        verify(stageClient, never()).repair(any(), any(), any(), any());
+    }
+
+    @Test
     void unsupportedActionSkipsDraftAndRepair() {
         when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
                 "run_sync", "none", null, null, null, null, null, null, null, null,
