@@ -179,6 +179,38 @@ class AiAgentOrchestratorTest {
     }
 
     @Test
+    void defaultableCreateSurvivesDraftProviderFailureWhenOnlyStartTimeWasInterpreted() {
+        when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create", "event", null, "점심약속", null, "12:00", null,
+                null,
+                null,
+                null,
+                List.of("date", "endTime"),
+                List.of(),
+                0.72,
+                true,
+                "점심 약속은 몇 시까지인가요?"
+        ));
+        when(stageClient.draft(any(), any())).thenThrow(new IllegalStateException("provider down"));
+
+        StructuredAiCommandBatch resolved = orchestrator.resolve(requestWithResolvedRange(
+                "12시에 점심약속",
+                "2026-06-05T01:00:00Z",
+                "2026-06-09T00:00:00Z"
+        ));
+
+        assertThat(resolved.commands()).anyMatch(StructuredAiCommand::requiresConfirmation);
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.payload())
+                .containsEntry("title", "점심약속")
+                .containsEntry("startAt", "2026-06-05T03:00:00Z")
+                .containsEntry("endAt", "2026-06-05T04:00:00Z")
+                .containsEntry("category", ScheduleCategory.LIFE.name());
+        assertThat(command.reason()).contains("AI 제공자 draft가 실패");
+        verify(stageClient, never()).repair(any(), any(), any(), any());
+    }
+
+    @Test
     void unsupportedActionSkipsDraftAndRepair() {
         when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
                 "run_sync", "none", null, null, null, null, null, null, null, null,
@@ -238,10 +270,13 @@ class AiAgentOrchestratorTest {
 
     @Test
     void providerFailureAtDraftDoesNotRepair() {
-        when(stageClient.interpret(any())).thenReturn(createInterpretation("제품 회의", "WEDNESDAY", "15:00", "16:00"));
+        when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "update", "event", block.getId().toString(), "제품 회의", null, null, null, null, null, null,
+                List.of(), List.of(), 0.95, true, ""
+        ));
         when(stageClient.draft(any(), any())).thenThrow(new IllegalStateException("provider down"));
 
-        assertThatThrownBy(() -> orchestrator.resolve(request("수요일 15:00-16:00 제품 회의 추가해줘")))
+        assertThatThrownBy(() -> orchestrator.resolve(request(block.getId() + " 제품 회의 제목 바꿔줘")))
                 .isInstanceOf(IllegalStateException.class);
         verify(stageClient, never()).repair(any(), any(), any(), any());
     }
@@ -297,6 +332,16 @@ class AiAgentOrchestratorTest {
         return new AiAgentRequest(user, reason, new AiRescheduleClient.RescheduleAiContext(
                 new AiRescheduleClient.UserContext(user.getId().toString(), "Asia/Seoul"),
                 new AiRescheduleClient.RequestContext("manual_request", reason, null, null),
+                List.of(),
+                List.of(),
+                List.of()
+        ));
+    }
+
+    private AiAgentRequest requestWithResolvedRange(String reason, String resolvedRangeStart, String resolvedRangeEnd) {
+        return new AiAgentRequest(user, reason, new AiRescheduleClient.RescheduleAiContext(
+                new AiRescheduleClient.UserContext(user.getId().toString(), "Asia/Seoul"),
+                new AiRescheduleClient.RequestContext("manual_request", reason, null, null, resolvedRangeStart, resolvedRangeEnd),
                 List.of(),
                 List.of(),
                 List.of()

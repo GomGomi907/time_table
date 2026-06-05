@@ -294,7 +294,9 @@ class AgentAiOrchestrationControllerTest {
 
     @Test
     void providerFailureDuringDraftReturnsProviderUnavailableSuggestion() throws Exception {
-        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation("create", "event", null, "제품 회의", "WEDNESDAY", "15:00", "16:00", null, null, null, List.of(), List.of(), 0.95, true, ""));
+        seedScheduleBlock(DayOfWeek.MONDAY, LocalTime.of(15, 0), LocalTime.of(16, 0), "제품 회의");
+        String targetId = scheduleBlockRepository.findByUserId(user.getId()).getFirst().getId().toString();
+        when(aiAgentStageClient.interpret(any())).thenReturn(new AiAgentInterpretation("update", "event", targetId, "제품 회의", null, null, null, null, null, null, List.of(), List.of(), 0.95, true, ""));
         when(aiAgentStageClient.draft(any(), any())).thenThrow(new IllegalStateException("fake draft down"));
 
         long beforeCount = scheduleBlockRepository.countByUserId(user.getId());
@@ -306,7 +308,7 @@ class AgentAiOrchestrationControllerTest {
                         .content("""
                                 {
                                   "triggerType": "manual_request",
-                                  "reason": "수요일 15:00-16:00 제품 회의 추가해줘"
+                                  "reason": "제품 회의 제목 바꿔줘"
                                 }
                                 """))
                 .andExpect(status().isOk())

@@ -5,8 +5,14 @@ import com.timetable.operator.agent.domain.StructuredAiCommand;
 import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
-import java.util.List;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -87,14 +93,17 @@ public class AiAgentOrchestrator {
     private StructuredAiCommandBatch defaultableCreateFallback(AiAgentRequest request, AiAgentInterpretation interpretation) {
         if (!interpretation.canDraftWithAssistantDefaults()
                 || isBlank(interpretation.title())
-                || isBlank(interpretation.startAt())
-                || isBlank(interpretation.endAt())) {
+                || (isBlank(interpretation.startAt()) && isBlank(interpretation.startTime()))) {
+            return null;
+        }
+        FallbackTimeWindow timeWindow = resolveFallbackTimeWindow(request, interpretation);
+        if (timeWindow == null) {
             return null;
         }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("title", interpretation.title().trim());
-        payload.put("startAt", interpretation.startAt().trim());
-        payload.put("endAt", interpretation.endAt().trim());
+        payload.put("startAt", timeWindow.startAt());
+        payload.put("endAt", timeWindow.endAt());
         payload.put("category", inferCategory(request.reason()).name());
         String reason = "AI 제공자 draft가 실패해 해석 단계의 날짜/시간과 안전 기본값으로 만든 임시 제안입니다. 적용 전 반드시 확인하세요.";
         return new StructuredAiCommandBatch(
@@ -109,6 +118,98 @@ public class AiAgentOrchestrator {
                         true
                 ))
         );
+    }
+
+    private FallbackTimeWindow resolveFallbackTimeWindow(AiAgentRequest request, AiAgentInterpretation interpretation) {
+        if (!isBlank(interpretation.startAt()) && !isBlank(interpretation.endAt())) {
+            return new FallbackTimeWindow(interpretation.startAt().trim(), interpretation.endAt().trim());
+        }
+        LocalTime startTime = parseLocalTime(interpretation.startTime());
+        if (startTime == null) {
+            return null;
+        }
+        ZoneId userZone = AiLocalDateTimeParser.resolveUserZone(request.user().getTimezone());
+        ZonedDateTime planningStart = planningStart(request, userZone);
+        LocalDate date = inferFallbackDate(request.reason(), planningStart, startTime);
+        ZonedDateTime startAt = date.atTime(startTime).atZone(userZone);
+        ZonedDateTime endAt = fallbackEndAt(request, interpretation, startAt);
+        if (!endAt.isAfter(startAt)) {
+            return null;
+        }
+        return new FallbackTimeWindow(startAt.toInstant().toString(), endAt.toInstant().toString());
+    }
+
+    private ZonedDateTime planningStart(AiAgentRequest request, ZoneId userZone) {
+        String resolvedRangeStart = request.context() == null || request.context().request() == null
+                ? null
+                : request.context().request().resolvedRangeStart();
+        if (!isBlank(resolvedRangeStart)) {
+            try {
+                return Instant.parse(resolvedRangeStart.trim()).atZone(userZone);
+            } catch (DateTimeParseException ignored) {
+                // Fall through to current time when context carries a malformed value.
+            }
+        }
+        return ZonedDateTime.now(userZone);
+    }
+
+    private LocalDate inferFallbackDate(String reason, ZonedDateTime planningStart, LocalTime startTime) {
+        String text = reason == null ? "" : reason.toLowerCase(Locale.ROOT);
+        if (text.contains("모레")) {
+            return planningStart.toLocalDate().plusDays(2);
+        }
+        if (text.contains("내일") || text.contains("tomorrow")) {
+            return planningStart.toLocalDate().plusDays(1);
+        }
+        if (text.contains("오늘") || text.contains("today")) {
+            return planningStart.toLocalDate();
+        }
+        LocalDate date = planningStart.toLocalDate();
+        return startTime.isAfter(planningStart.toLocalTime()) ? date : date.plusDays(1);
+    }
+
+    private ZonedDateTime fallbackEndAt(AiAgentRequest request, AiAgentInterpretation interpretation, ZonedDateTime startAt) {
+        if (!isBlank(interpretation.endAt())) {
+            try {
+                return Instant.parse(interpretation.endAt().trim()).atZone(startAt.getZone());
+            } catch (DateTimeParseException ignored) {
+                // Fall through to endTime/default duration.
+            }
+        }
+        LocalTime endTime = parseLocalTime(interpretation.endTime());
+        if (endTime != null) {
+            ZonedDateTime endAt = startAt.toLocalDate().atTime(endTime).atZone(startAt.getZone());
+            return endAt.isAfter(startAt) ? endAt : endAt.plusDays(1);
+        }
+        return startAt.plusMinutes(inferDurationMinutes(request.reason(), interpretation.title()));
+    }
+
+    private LocalTime parseLocalTime(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(value.trim());
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
+    }
+
+    private long inferDurationMinutes(String reason, String title) {
+        String text = ((reason == null ? "" : reason) + " " + (title == null ? "" : title)).toLowerCase(Locale.ROOT);
+        if (text.contains("잠깐") || text.contains("짧게") || text.contains("10분") || text.contains("15분")
+                || text.contains("brief") || text.contains("quick")) {
+            return 15;
+        }
+        if (text.contains("출근") || text.contains("퇴근") || text.contains("commute")) {
+            return 45;
+        }
+        if (text.contains("점심") || text.contains("밥") || text.contains("식사") || text.contains("lunch")
+                || text.contains("meal") || text.contains("회의") || text.contains("미팅") || text.contains("meeting")
+                || text.contains("운동") || text.contains("exercise")) {
+            return 60;
+        }
+        return 60;
     }
 
     private ScheduleCategory inferCategory(String reason) {
@@ -204,5 +305,8 @@ public class AiAgentOrchestrator {
             StructuredAiCommandBatch batch,
             AiRequestProposalMatchService.MatchResult failure
     ) {
+    }
+
+    private record FallbackTimeWindow(String startAt, String endAt) {
     }
 }
