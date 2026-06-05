@@ -304,7 +304,7 @@ public class RescheduleSuggestionService {
                 .count();
         String detail = "%d개 명령 적용, %d개 명령 기록".formatted(appliedCount, noOpCount);
         if (providerWriteBlockedCount > 0) {
-            detail += ", Google 쓰기 보류 %d개".formatted(providerWriteBlockedCount);
+            detail += ", Google 쓰기 대기 %d개".formatted(providerWriteBlockedCount);
         }
 
         return new SuggestionExecutionSummaryResponse(

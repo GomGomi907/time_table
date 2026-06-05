@@ -141,8 +141,8 @@
 
 ## Content voice
 - Tone: short, concrete, calm.
-- Terminology: “일정”, “변경 요청”, “적용”, “보류”, “집중” consistently.
-- Microcopy rules: no AI thoughts in notes; no rationale UI; no internal metadata (`confidence`, `reasoning`, `chainOfThought`, `validationTrace`, etc.); avoid awkward phrases like “적용하거나 보류할 수 있습니다” when state can be shorter.
+- Terminology: “일정”, “변경 요청”, “적용”, “검토”, “집중” consistently.
+- Microcopy rules: no AI thoughts in notes; no rationale UI; no internal metadata (`confidence`, `reasoning`, `chainOfThought`, `validationTrace`, etc.); avoid awkward phrases like “적용하거나 나중에 검토할 수 있습니다” when state can be shorter.
 - Korean copy must be written to wrap well. Prefer short phrases that can break naturally over long noun chains.
 - Avoid machine-like or speculative service language. Do not write sentences that sound like the AI is explaining its private reasoning.
 - User memo fields must contain only user-relevant schedule information. They must never contain AI-generated advice, hidden reasoning, validation evidence, provider traces, or internal repair attempts.
