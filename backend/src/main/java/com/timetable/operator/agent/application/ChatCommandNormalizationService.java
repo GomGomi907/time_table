@@ -32,12 +32,18 @@ public class ChatCommandNormalizationService {
         String normalizedMessage = rawMessage.trim().replaceAll("\\s+", " ");
         String lowerCaseMessage = normalizedMessage.toLowerCase(Locale.ROOT);
 
+        String targetId = extractUuid(normalizedMessage).orElse(null);
         boolean syncRequested = containsAny(lowerCaseMessage, "동기화", "sync");
         boolean priorityRequested = containsAny(lowerCaseMessage, "우선순위", "priority");
         boolean revertRequested = containsAny(lowerCaseMessage, "되돌", "revert", "undo");
-        boolean rescheduleRequested = containsAny(lowerCaseMessage, "미뤄", "옮겨", "조정", "reschedule", "move");
+        boolean explicitRescheduleRequested = containsAny(lowerCaseMessage, "미뤄", "옮겨", "조정", "reschedule", "move");
+        boolean assistantPlanningCandidate = isAssistantPlanningCandidate(lowerCaseMessage);
+        boolean systemCommandOnly = syncRequested || priorityRequested || revertRequested;
+        boolean requiresAiPlanning = assistantPlanningCandidate
+                && !(targetId != null && explicitRescheduleRequested)
+                && (explicitRescheduleRequested || !systemCommandOnly);
+        boolean rescheduleRequested = explicitRescheduleRequested || requiresAiPlanning;
 
-        String targetId = extractUuid(normalizedMessage).orElse(null);
         Integer proposedPriority = extractPriority(normalizedMessage).orElse(null);
         int suggestedShiftMinutes = extractDurationMinutes(normalizedMessage).orElse(30);
         String targetType = detectTargetType(lowerCaseMessage);
@@ -129,8 +135,29 @@ public class ChatCommandNormalizationService {
                 normalizedMessage,
                 intent,
                 executionType,
+                requiresAiPlanning,
                 new StructuredAiCommandBatch(intent, explanation, List.copyOf(commands))
         );
+    }
+
+    private boolean isAssistantPlanningCandidate(String lowerCaseMessage) {
+        boolean scheduleTopic = containsAny(
+                lowerCaseMessage,
+                "일정", "스케줄", "캘린더", "계획", "할 일", "할일", "태스크", "task",
+                "업무", "근무", "출근", "퇴근", "회의", "미팅", "약속", "수업", "운동", "병원", "예약",
+                "연차", "휴가", "휴무", "쉬", "오늘", "내일", "모레", "이번", "다음",
+                "schedule", "calendar", "meeting", "appointment", "vacation", "leave", "work"
+        ) || lowerCaseMessage.matches(".*\\d{1,2}\\s*(시|:|분).*");
+
+        boolean assistantDirective = containsAny(
+                lowerCaseMessage,
+                "추가", "삭제", "지워", "취소", "수정", "변경", "바꿔", "옮겨", "미뤄", "앞당", "조정",
+                "정리", "관리", "잡", "넣", "빼", "비워", "도와", "봐", "검토", "알려", "추천", "제안",
+                "연차", "휴가", "휴무", "쉬", "썼", "쓸", "해줘", "해라", "해",
+                "add", "delete", "remove", "cancel", "update", "change", "move", "plan", "help", "suggest"
+        );
+
+        return scheduleTopic && assistantDirective;
     }
 
     private List<String> detectSyncTargets(String lowerCaseMessage) {
@@ -275,6 +302,7 @@ public class ChatCommandNormalizationService {
             String normalizedMessage,
             String intent,
             ChatExecutionType executionType,
+            boolean requiresAiPlanning,
             StructuredAiCommandBatch commandBatch
     ) {
     }

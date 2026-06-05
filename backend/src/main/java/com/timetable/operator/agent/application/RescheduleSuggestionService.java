@@ -100,10 +100,20 @@ public class RescheduleSuggestionService {
             ChatCommandNormalizationService.NormalizedChatCommand normalizedChatCommand
     ) {
         AppUser user = currentUserProvider.getCurrentUser();
-        StructuredAiCommandBatch batch = aiRequestAgentService.resolvePrebuiltCommandBatch(
-                user,
-                normalizedChatCommand.commandBatch()
-        );
+        StructuredAiCommandBatch batch = normalizedChatCommand.requiresAiPlanning()
+                ? resolveManualSuggestionBatch(
+                        user,
+                        new ManualRescheduleRequest(
+                                RescheduleSuggestionTriggerType.MANUAL_REQUEST.wireValue(),
+                                null,
+                                null,
+                                normalizedChatCommand.normalizedMessage()
+                        )
+                )
+                : aiRequestAgentService.resolvePrebuiltCommandBatch(
+                        user,
+                        normalizedChatCommand.commandBatch()
+                );
         return createSuggestion(
                 user.getId(),
                 RescheduleSuggestionTriggerType.MANUAL_REQUEST,

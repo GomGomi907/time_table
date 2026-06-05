@@ -93,6 +93,53 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
   await expect(page.getByTestId("selected-day-occurrence")).toContainText(["아침 루틴 정리", "오전 제품 리뷰", "밤샘 출시 점검"]);
 });
 
+test("agenda and selected day occurrence cards keep long text in the full card width", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  const longTitle = "오늘 내일 연차와 출근 조정 때문에 매우 긴 이름으로 들어온 고객사 프로젝트 킥오프 회의";
+
+  await page.route("**/api/calendar/range**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: {
+          start: "2026-01-01T15:00:00.000Z",
+          end: "2026-01-15T15:00:00.000Z",
+          view: "AGENDA",
+          timezone: "Asia/Seoul",
+          occurrences: [
+            agendaOccurrence("long-agenda-event", longTitle, "2026-01-02T00:20:00.000Z", "2026-01-02T09:40:00.000Z"),
+          ],
+          instrumentation: {
+            repositoryGroupCount: 1,
+            repositoryGroups: ["events"],
+            occurrenceCount: 1,
+            rangeDays: 14,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/schedule");
+  await page.getByTestId("schedule-view-option-agenda").click();
+  await expect(page.getByTestId("agenda-stream")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("agenda-occurrence").first()).toContainText(longTitle);
+
+  await expectOccurrenceCardsUseFullWidth(page, "agenda-occurrence");
+
+  await page.getByTestId("agenda-day-group").first().locator(".agenda-day-head").click();
+  await expect(page.getByTestId("selected-day-timeline")).toBeVisible();
+  await expect(page.getByTestId("selected-day-occurrence").first()).toContainText(longTitle);
+
+  await expectOccurrenceCardsUseFullWidth(page, "selected-day-occurrence");
+});
+
 
 test("schedule monthly mosaic summarizes range days and hands selected date to day view", async ({
   page,
@@ -343,3 +390,45 @@ test("schedule range event occurrence can be opened and patched from the day tim
   expect(patchBody?.endAt).toBe("2026-01-02T02:00:00.000Z");
   expect(patchBody?.goalId).toBe("11111111-1111-1111-1111-111111111111");
 });
+
+async function expectOccurrenceCardsUseFullWidth(page: import("@playwright/test").Page, testId: string) {
+  await expect
+    .poll(async () =>
+      page.getByTestId(testId).evaluateAll((items) =>
+        items.map((item) => {
+          const trigger = item.querySelector<HTMLElement>(".occurrence-edit-trigger");
+          const timeColumn = trigger?.querySelector<HTMLElement>(".agenda-occurrence-time");
+          const copyColumn = trigger?.querySelector<HTMLElement>("div");
+          const itemRect = item.getBoundingClientRect();
+          const triggerRect = trigger?.getBoundingClientRect();
+          const timeRect = timeColumn?.getBoundingClientRect();
+          const copyRect = copyColumn?.getBoundingClientRect();
+          const triggerStyle = trigger ? window.getComputedStyle(trigger) : null;
+          return {
+            triggerUsesCardWidth: Boolean(triggerRect && triggerRect.width >= itemRect.width - 2),
+            triggerCoversCardEdges: Boolean(
+              triggerRect &&
+                Math.abs(triggerRect.left - itemRect.left) <= 1 &&
+                Math.abs(triggerRect.right - itemRect.right) <= 1,
+            ),
+            triggerOwnsCardPadding: triggerStyle?.paddingTop === "12px" && triggerStyle?.paddingLeft === "12px",
+            timeColumnIsNotCramped: Boolean(timeRect && timeRect.width >= 80),
+            copyHasBreathingRoom: Boolean(copyRect && copyRect.width >= Math.min(180, itemRect.width * 0.48)),
+            itemWidth: Math.round(itemRect.width),
+            triggerWidth: Math.round(triggerRect?.width ?? 0),
+            timeWidth: Math.round(timeRect?.width ?? 0),
+            copyWidth: Math.round(copyRect?.width ?? 0),
+          };
+        }),
+      ),
+    )
+    .toEqual([
+      expect.objectContaining({
+        triggerUsesCardWidth: true,
+        triggerCoversCardEdges: true,
+        triggerOwnsCardPadding: true,
+        timeColumnIsNotCramped: true,
+        copyHasBreathingRoom: true,
+      }),
+    ]);
+}

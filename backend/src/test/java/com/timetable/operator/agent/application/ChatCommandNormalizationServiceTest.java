@@ -37,8 +37,32 @@ class ChatCommandNormalizationServiceTest {
                 service.normalize("move meeting by 45 minutes");
 
         assertThat(normalized.executionType()).isEqualTo(ChatExecutionType.RESCHEDULE);
+        assertThat(normalized.requiresAiPlanning()).isTrue();
         assertThat(actionTypes(normalized)).containsExactly(AgentCommandActionType.REQUEST_RESCHEDULE.wireValue());
         assertThat(normalized.commandBatch().commands().getFirst().payload()).containsEntry("suggestedShiftMinutes", 45);
+    }
+
+    @Test
+    void annualLeaveScheduleRequestEscalatesToAiPlanning() {
+        ChatCommandNormalizationService.NormalizedChatCommand normalized =
+                service.normalize("오늘 내일 연차를 썼다. 일정을 수정해라.");
+
+        assertThat(normalized.executionType()).isEqualTo(ChatExecutionType.RESCHEDULE);
+        assertThat(normalized.requiresAiPlanning()).isTrue();
+        assertThat(actionTypes(normalized)).containsExactly(AgentCommandActionType.REQUEST_RESCHEDULE.wireValue());
+    }
+
+    @Test
+    void explicitUuidMoveKeepsPrebuiltFastPath() {
+        ChatCommandNormalizationService.NormalizedChatCommand normalized =
+                service.normalize("11111111-1111-1111-1111-111111111111 일정 30분 미뤄줘");
+
+        assertThat(normalized.executionType()).isEqualTo(ChatExecutionType.RESCHEDULE);
+        assertThat(normalized.requiresAiPlanning()).isFalse();
+        assertThat(actionTypes(normalized)).containsExactly(
+                AgentCommandActionType.REQUEST_RESCHEDULE.wireValue(),
+                AgentCommandActionType.MOVE_EVENT.wireValue()
+        );
     }
 
     @Test

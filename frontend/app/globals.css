@@ -358,14 +358,19 @@ summary,
 .status-screen {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  min-width: 0;
   align-items: center;
   justify-items: center;
   padding: var(--page-pad);
+  overflow-x: clip;
 }
 
 .status-panel {
   display: grid;
   width: min(100%, 680px);
+  min-width: 0;
   gap: 18px;
   padding: clamp(28px, 5vw, 54px);
 }
@@ -378,6 +383,7 @@ summary,
 .login-panel {
   display: grid;
   width: min(100%, 1040px);
+  min-width: 0;
   grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
   gap: clamp(18px, 3vw, 30px);
 }
@@ -874,6 +880,7 @@ summary,
 
 .onboarding-loading-panel {
   width: min(100%, 760px);
+  min-width: 0;
   border-radius: var(--radius-xl);
   padding: clamp(26px, 5vw, 60px);
   background: rgba(255, 255, 255, 0.88);
@@ -1846,13 +1853,14 @@ summary,
 .agenda-occurrence,
 .selected-day-occurrence {
   --tone: var(--meeting);
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 12px;
+  --occurrence-time-column: 82px;
+  display: block;
+  min-width: 0;
   border: 1px solid color-mix(in srgb, var(--tone) 22%, transparent);
   border-radius: 16px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--tone) 11%, white), #fff);
-  padding: 12px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .agenda-occurrence.deep,
@@ -1863,9 +1871,12 @@ summary,
 .selected-day-occurrence.meeting { --tone: var(--meeting); }
 
 .agenda-occurrence-time {
+  min-width: 0;
   color: color-mix(in srgb, var(--tone) 62%, var(--ink));
   font-size: 0.8rem;
   font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
 }
 
 .agenda-occurrence div,
@@ -1884,7 +1895,7 @@ summary,
 .agenda-occurrence div span,
 .selected-day-occurrence div span,
 .agenda-stream-empty {
-  color: var(--muted);
+  color: color-mix(in srgb, var(--muted) 74%, var(--ink));
   font-size: 0.84rem;
 }
 
@@ -2624,6 +2635,7 @@ button.current-schedule-card:hover {
   .login-hero,
   .login-action-card,
   .onboarding-sidebar,
+  .onboarding-loading-panel,
   .onboarding-card,
   .planner-board,
   .ai-compose-card,
@@ -2861,7 +2873,8 @@ button.current-schedule-card:hover {
   }
 
   .login-hero,
-  .onboarding-sidebar {
+  .onboarding-sidebar,
+  .onboarding-loading-panel {
     padding: 24px;
   }
 
@@ -2962,20 +2975,32 @@ button.current-schedule-card:hover {
 .occurrence-edit-trigger {
   display: grid;
   width: 100%;
-  grid-template-columns: 72px minmax(0, 1fr);
+  min-width: 0;
+  grid-template-columns: var(--occurrence-time-column, 82px) minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
   border: 0;
+  border-radius: inherit;
   background: transparent;
   color: inherit;
-  padding: 0;
+  padding: 12px;
   text-align: left;
+  cursor: default;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+button.occurrence-edit-trigger {
   cursor: pointer;
+}
+
+button.occurrence-edit-trigger:hover {
+  background: color-mix(in srgb, var(--tone) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 12%, transparent);
 }
 
 .occurrence-edit-trigger:focus-visible {
   outline: 3px solid rgba(91, 110, 225, 0.36);
-  outline-offset: 4px;
-  border-radius: 12px;
+  outline-offset: -3px;
 }
 
 .selected-day-draft-list {
