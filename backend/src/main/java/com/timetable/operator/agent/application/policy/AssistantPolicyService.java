@@ -206,7 +206,7 @@ public class AssistantPolicyService {
             payload.put("requiresUserConfirmation", true);
             return CommandRiskAssessment.blocked(
                     "삭제 전 확인이 필요합니다",
-                    "삭제/취소 후보를 먼저 분류했습니다. AI 초안만으로 바로 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.",
+                    "삭제/취소 후보를 먼저 분류했습니다. AI 판단만으로 바로 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.",
                     "postflight_destructive_candidate_confirmation",
                     payload
             );
@@ -215,7 +215,7 @@ public class AssistantPolicyService {
         if (!protectedTargets.isEmpty()) {
             return CommandRiskAssessment.blocked(
                     "외부 원본 변경은 확인이 필요합니다",
-                    "외부 캘린더 일정은 AI 초안이 바로 삭제하지 않습니다. 먼저 후보를 확인하고 Google 반영 여부를 명시적으로 선택해야 합니다.",
+                    "외부 캘린더 일정은 AI 판단만으로 바로 삭제하지 않습니다. 먼저 후보를 확인하고 Google 반영 여부를 명시적으로 선택해야 합니다.",
                     "external_direct_mutation_blocked",
                     Map.of(
                             "requestKind", "external_calendar_protection",
@@ -877,4 +877,3 @@ public class AssistantPolicyService {
     private record TimeRange(LocalTime start, LocalTime end, int endIndex) {
     }
 }
-

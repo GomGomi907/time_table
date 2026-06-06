@@ -118,7 +118,7 @@ public class ChatCommandNormalizationService {
                     AgentCommandTargetType.NONE.wireValue(),
                     null,
                     Map.of(
-                            "summary", "허용된 작업 범위 안에서 명령으로 정규화하지 못했습니다.",
+                            "summary", "허용된 작업 범위 안에서 실행할 변경으로 정리하지 못했습니다.",
                             "nextActions", List.of("더 구체적인 일정/동기화/우선순위 요청으로 다시 시도해 주세요.")
                     ),
                     "범용 잡담보다 기능 중심 UX를 우선합니다.",
@@ -248,7 +248,7 @@ public class ChatCommandNormalizationService {
             segments.add("재조율 요청");
         }
         if (segments.isEmpty()) {
-            return "허용된 작업형 AI 명령으로 해석되지 않아 설명 응답으로 축소했습니다.";
+            return "허용된 작업형 요청으로 해석되지 않아 설명 응답으로 축소했습니다.";
         }
         return String.join(" + ", segments) + "으로 정규화했습니다.";
     }

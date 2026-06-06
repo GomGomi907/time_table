@@ -116,8 +116,8 @@ const TEST_OR_INTERNAL_MEMO_PATTERN =
   /(e2e|playwright|qa seed|service improvement|mock|dashboard briefing pending approval)/i;
 
 export function formatUserFacingAiCopy(value: string | null | undefined, fallback = "") {
-  const normalized = formatServiceCopy(value).trim();
-  if (!normalized || INTERNAL_AI_METADATA_PATTERN.test(normalized)) {
+  const normalized = sanitizeInternalAiCopy(formatServiceCopy(value));
+  if (!normalized) {
     return fallback;
   }
   return normalized;
@@ -188,8 +188,50 @@ export interface SuggestionDisplayState {
   applyLabel: string;
 }
 
-const INTERNAL_AI_METADATA_PATTERN =
-  /\b(confidence|stage|draft|canonical|commandBatch|command|payload|requestKind|resolutionType|matchEvidence|validationTrace|validation|repairAttempt|chainOfThought|reasoning|missingFields|ambiguousFields|schedule block)\b|초안|명령|제공자|검증|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
+const INTERNAL_AI_SENTINEL_PATTERN = /INTERNAL_REASON_SHOULD_NOT_RENDER/i;
+const INTERNAL_AI_METADATA_TERMS =
+  "confidence|stage|draft|canonical|commandBatch|command|payload|requestKind|resolutionType|matchEvidence|validationTrace|validation|repairAttempt|chainOfThought|reasoning|missingFields|ambiguousFields|schedule block";
+const INTERNAL_AI_METADATA_LABEL_PATTERN = new RegExp(
+  `\\b(?:${INTERNAL_AI_METADATA_TERMS})\\b\\s*[:=]\\s*[^,.;\\n]+[,.;\\n]?`,
+  "gi",
+);
+const INTERNAL_AI_METADATA_TOKEN_PATTERN = new RegExp(`\\b(?:${INTERNAL_AI_METADATA_TERMS})\\b`, "gi");
+const INTERNAL_AI_COPY_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/AI\s*초안/g, "AI 판단"],
+  [/후보\s*명령/g, "변경 후보"],
+  [/초안/g, "변경안"],
+  [/명령/g, "변경"],
+  [/제공자/g, "AI"],
+  [/검증/g, "확인"],
+];
+
+export function sanitizeInternalAiCopy(value: string | null | undefined) {
+  let normalized = (value ?? "").trim();
+  if (!normalized || INTERNAL_AI_SENTINEL_PATTERN.test(normalized)) {
+    return "";
+  }
+
+  const hadMetadata = INTERNAL_AI_METADATA_LABEL_PATTERN.test(normalized)
+    || INTERNAL_AI_METADATA_TOKEN_PATTERN.test(normalized);
+  INTERNAL_AI_METADATA_LABEL_PATTERN.lastIndex = 0;
+  INTERNAL_AI_METADATA_TOKEN_PATTERN.lastIndex = 0;
+
+  normalized = normalized
+    .replace(INTERNAL_AI_METADATA_LABEL_PATTERN, " ")
+    .replace(INTERNAL_AI_METADATA_TOKEN_PATTERN, " ");
+  for (const [pattern, replacement] of INTERNAL_AI_COPY_REPLACEMENTS) {
+    normalized = normalized.replace(pattern, replacement);
+  }
+  normalized = normalized
+    .replace(/\s*([,.;:])\s*/g, "$1 ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (hadMetadata && !/[가-힣]/.test(normalized)) {
+    return "";
+  }
+  return normalized;
+}
 
 function getFirstCommandPayload(suggestion: RescheduleSuggestion) {
   const payload = suggestion.commandBatch?.commands?.[0]?.payload;

@@ -43,7 +43,7 @@ public class AiCommandValidationService {
     public StructuredAiCommandBatch requireExecutableOrClarification(UUID userId, String timezone, StructuredAiCommandBatch batch) {
         if (batch == null || batch.commands() == null || batch.commands().isEmpty()) {
             return clarificationBatch(
-                    "요청을 일정이나 할 일 명령으로 해석하지 못했습니다. 원하는 일정/할 일, 날짜와 시간을 더 구체적으로 알려주세요.",
+                    "요청을 일정이나 할 일 변경으로 해석하지 못했습니다. 원하는 일정/할 일, 날짜와 시간을 더 구체적으로 알려주세요.",
                     List.of("action"),
                     List.of(),
                     "empty_command_batch"
@@ -90,7 +90,7 @@ public class AiCommandValidationService {
         }
         if (executableCount == 0) {
             return clarificationBatch(
-                    "실제로 변경할 수 있는 일정이나 할 일 명령이 없습니다. 무엇을 추가/수정/삭제할지 더 구체적으로 알려주세요.",
+                    "실제로 변경할 수 있는 일정이나 할 일이 없습니다. 무엇을 추가/수정/삭제할지 더 구체적으로 알려주세요.",
                     List.of("executableCommand"),
                     List.of(),
                     "no_executable_command"
@@ -170,7 +170,7 @@ public class AiCommandValidationService {
 
     private CommandValidation validateCommand(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         if (command == null) {
-            return invalid("명령 내용을 읽지 못했습니다. 요청을 다시 입력해 주세요.", List.of("command"), List.of(), "null_command");
+            return invalid("변경 내용을 읽지 못했습니다. 요청을 다시 입력해 주세요.", List.of("command"), List.of(), "null_command");
         }
 
         AgentCommandActionType actionType;
@@ -179,7 +179,7 @@ public class AiCommandValidationService {
             actionType = AgentCommandActionType.from(command.actionType());
             targetType = AgentCommandTargetType.from(command.targetType());
         } catch (IllegalArgumentException exception) {
-            return invalid("지원하지 않는 명령 형식입니다. 일정/할 일 추가, 수정, 삭제 요청으로 다시 입력해 주세요.",
+            return invalid("지원하지 않는 변경 형식입니다. 일정/할 일 추가, 수정, 삭제 요청으로 다시 입력해 주세요.",
                     List.of("actionType"), List.of(), "unsupported_action_or_target");
         }
 
@@ -187,7 +187,7 @@ public class AiCommandValidationService {
             return CommandValidation.nonExecutableResult();
         }
         if (!command.requiresConfirmation()) {
-            return invalid("변경 명령은 사용자 확인이 필요합니다. 어떤 변경을 검토할지 다시 입력해 주세요.",
+            return invalid("변경 전에는 사용자 확인이 필요합니다. 어떤 변경을 검토할지 다시 입력해 주세요.",
                     List.of("requiresConfirmation"), List.of(), "missing_confirmation_flag");
         }
         if (actionType == AgentCommandActionType.REQUEST_RESCHEDULE) {
@@ -224,7 +224,7 @@ public class AiCommandValidationService {
             case UPDATE_EVENT -> validateExistingTaskMutation(userId, userZone, command, true, false, "수정할 할 일 ID와 바꿀 내용이 필요합니다.");
             case MOVE_EVENT -> validateExistingTaskMutation(userId, userZone, command, false, true, "옮길 할 일 ID와 새 마감 또는 이동 시간이 필요합니다.");
             case DELETE_EVENT -> validateExistingTaskMutation(userId, userZone, command, false, false, "삭제할 할 일 ID가 필요합니다.");
-            default -> invalid("할 일에는 추가, 수정, 이동, 삭제 명령만 적용할 수 있습니다.",
+            default -> invalid("할 일에는 추가, 수정, 이동, 삭제만 적용할 수 있습니다.",
                     List.of("actionType"), List.of(), "unsupported_task_action");
         };
     }
@@ -276,7 +276,7 @@ public class AiCommandValidationService {
             case UPDATE_EVENT -> validateExistingEventOrScheduleMutation(userId, userZone, command, true, false, "수정할 일정 ID와 바꿀 내용이 필요합니다.");
             case MOVE_EVENT -> validateExistingEventOrScheduleMutation(userId, userZone, command, false, true, "옮길 일정 ID와 새 시간 또는 이동 시간이 필요합니다.");
             case DELETE_EVENT -> validateExistingEventOrScheduleMutation(userId, userZone, command, false, false, "삭제할 일정 ID가 필요합니다.");
-            default -> invalid("일정에는 추가, 수정, 이동, 삭제 명령만 적용할 수 있습니다.",
+            default -> invalid("일정에는 추가, 수정, 이동, 삭제만 적용할 수 있습니다.",
                     List.of("actionType"), List.of(), "unsupported_event_action");
         };
     }

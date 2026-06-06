@@ -141,6 +141,7 @@ class AssistantPolicyServiceTest {
         );
 
         StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(resolved.explanation()).doesNotContain("초안", "draft", "명령");
         assertThat(command.requiresConfirmation()).isFalse();
         assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
         assertThat(command.reason()).isEqualTo("external_direct_mutation_blocked");
@@ -173,6 +174,7 @@ class AssistantPolicyServiceTest {
         );
 
         StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(resolved.explanation()).doesNotContain("초안", "draft", "명령");
         assertThat(command.requiresConfirmation()).isFalse();
         assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
         assertThat(command.reason()).isEqualTo("postflight_destructive_candidate_confirmation");
@@ -247,4 +249,3 @@ class AssistantPolicyServiceTest {
         return new AiRescheduleClient.AvailabilityWindowContext(startAt, endAt, label, 30, "test");
     }
 }
-
