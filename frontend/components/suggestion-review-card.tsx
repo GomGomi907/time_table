@@ -84,6 +84,11 @@ export function SuggestionReviewCard({
   const readOnlyDetail = compact && suggestion.status === "applied"
     ? "일정표에 반영했습니다."
     : resultDetail ?? suggestion.statusLabel;
+  const compactTitle = readOnly
+    ? readOnlyDetail
+    : display.canApply
+      ? "확인이 필요합니다."
+      : display.title;
   const title =
     titleElement === "h2"
       ? <h2>{display.title}</h2>
@@ -91,11 +96,11 @@ export function SuggestionReviewCard({
 
   return (
     <div className={`${className} ${display.kind}`}>
-      <p className="panel-kicker">{kicker}</p>
+      {compact ? null : <p className="panel-kicker">{kicker}</p>}
       <div className="suggestion-diff-head">
-        {title}
-        <p className="section-header-note">{display.detail}</p>
-        {display.guidance ? <p className="micro-copy suggestion-guidance">{display.guidance}</p> : null}
+        {compact ? <strong>{compactTitle}</strong> : title}
+        {!compact || !display.canApply ? <p className="section-header-note">{display.detail}</p> : null}
+        {!compact && display.guidance ? <p className="micro-copy suggestion-guidance">{display.guidance}</p> : null}
       </div>
       <DecisionSectionList sections={decisionSections} />
       {previewItems.length ? (
@@ -113,9 +118,10 @@ export function SuggestionReviewCard({
           {hiddenPreviewCount ? <li className="suggestion-preview-more">외 {hiddenPreviewCount}개 변경</li> : null}
         </ul>
       ) : null}
-      {readOnly ? (
+      {readOnly && !compact ? (
         <p className="suggestion-status-note">{readOnlyDetail}</p>
       ) : (
+        readOnly ? null :
         <div className="suggestion-actions approval-actions">
           <button className="ghost-btn" disabled={isPending} onClick={onReject} type="button">
             {compact ? "닫기" : "이 제안 사용 안 함"}
