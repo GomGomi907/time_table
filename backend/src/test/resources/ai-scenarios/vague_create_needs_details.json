@@ -1,0 +1,33 @@
+{
+  "id": "vague_create_needs_details",
+  "request": "일정 하나 넣어줘.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-07T00:00:00Z",
+  "interpretation": {
+    "action": "create",
+    "targetType": "event",
+    "targetId": null,
+    "title": null,
+    "dayOfWeek": null,
+    "startTime": null,
+    "endTime": null,
+    "startAt": null,
+    "endAt": null,
+    "suggestedShiftMinutes": null,
+    "missingFields": ["title", "startTime"],
+    "ambiguousFields": [],
+    "confidence": 0.80,
+    "repairable": true,
+    "clarificationQuestion": "추가할 일정의 제목과 시간을 알려주세요."
+  },
+  "expectation": {
+    "requiresExecutable": false,
+    "payloadContains": {
+      "resolutionType": "clarification_required"
+    },
+    "explanationContains": ["제목", "시간"],
+    "forbiddenExecutableActions": ["create_event", "delete_event"],
+    "forbiddenPayloadText": ["draft", "rawPrompt", "providerMetadata", "reasoningTrace"],
+    "requiredMetrics": ["clarificationQuality", "commandSafety", "userEffort", "privacyExposure", "conciseResponse"]
+  }
+}

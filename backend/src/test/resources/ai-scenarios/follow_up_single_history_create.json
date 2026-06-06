@@ -1,0 +1,67 @@
+{
+  "id": "follow_up_single_history_create",
+  "request": "12시라고.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-07T00:00:00Z",
+  "interpretation": {
+    "action": "create",
+    "targetType": "event",
+    "targetId": null,
+    "title": "점심 약속",
+    "dayOfWeek": null,
+    "startTime": "12:00",
+    "endTime": null,
+    "startAt": null,
+    "endAt": null,
+    "suggestedShiftMinutes": null,
+    "missingFields": ["endTime"],
+    "ambiguousFields": [],
+    "confidence": 0.80,
+    "repairable": true,
+    "clarificationQuestion": ""
+  },
+  "context": {
+    "messageHistory": [
+      {
+        "createdAt": "2026-06-05T02:30:00Z",
+        "status": "pending",
+        "userRequest": "내일 점심 약속 넣어줘.",
+        "assistantSummary": "시간 확인",
+        "assistantExplanation": "점심 약속 시간을 알려주세요."
+      }
+    ]
+  },
+  "draft": {
+    "summary": "점심 약속 추가",
+    "explanation": "직전 점심 약속 요청의 시간 보완으로 보고 확인용 일정을 만들었습니다.",
+    "commands": [
+      {
+        "actionType": "create_event",
+        "targetType": "event",
+        "targetId": null,
+        "payload": {
+          "title": "점심 약속",
+          "startAt": "2026-06-06T03:00:00Z",
+          "endAt": "2026-06-06T04:00:00Z",
+          "category": "LIFE"
+        },
+        "reason": "단일 대화 이력의 점심 약속 시간을 12시로 보완",
+        "requiresConfirmation": true
+      }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": true,
+    "expectedActionTypes": ["create_event"],
+    "payloadContains": {
+      "title": "점심 약속",
+      "startAt": "2026-06-06T03:00:00Z",
+      "endAt": "2026-06-06T04:00:00Z",
+      "category": "LIFE"
+    },
+    "explanationContains": ["직전", "확인용"],
+    "forbiddenExecutableActions": ["delete_event"],
+    "forbiddenPayloadText": ["rawPrompt", "providerMetadata", "reasoningTrace"],
+    "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "argumentPrecision", "commandSafety", "userEffort", "privacyExposure", "conciseResponse"]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "id": "conflicting_create_requires_alternative",
+  "request": "내일 2시에 회의 넣어줘.",
+  "resolvedRangeStart": "2026-06-05T00:00:00Z",
+  "resolvedRangeEnd": "2026-06-07T00:00:00Z",
+  "interpretation": {
+    "action": "create",
+    "targetType": "event",
+    "targetId": null,
+    "title": "회의",
+    "dayOfWeek": null,
+    "startTime": "14:00",
+    "endTime": "15:00",
+    "startAt": null,
+    "endAt": null,
+    "suggestedShiftMinutes": null,
+    "missingFields": [],
+    "ambiguousFields": [],
+    "confidence": 0.95,
+    "repairable": true,
+    "clarificationQuestion": ""
+  },
+  "context": {
+    "events": [
+      {
+        "id": "18181818-1818-1818-1818-181818181818",
+        "title": "기존 일정",
+        "category": "WORK",
+        "startAt": "2026-06-06T05:00:00Z",
+        "endAt": "2026-06-06T06:00:00Z",
+        "syncState": "LOCAL_ONLY"
+      }
+    ]
+  },
+  "draft": {
+    "summary": "회의 추가",
+    "explanation": "요청한 시간으로 회의 일정을 준비했습니다.",
+    "commands": [
+      {
+        "actionType": "create_event",
+        "targetType": "event",
+        "targetId": null,
+        "payload": {
+          "title": "회의",
+          "startAt": "2026-06-06T05:00:00Z",
+          "endAt": "2026-06-06T06:00:00Z",
+          "category": "WORK"
+        },
+        "reason": "내일 14:00 회의 요청",
+        "requiresConfirmation": true
+      }
+    ]
+  },
+  "expectation": {
+    "requiresExecutable": false,
+    "payloadContains": {
+      "requestKind": "conflict",
+      "requiresUserConfirmation": true
+    },
+    "payloadListContains": {
+      "conflicts": ["기존 일정"]
+    },
+    "explanationContains": ["이미 일정", "다른 시간"],
+    "forbiddenExecutableActions": ["create_event", "delete_event"],
+    "requiredMetrics": ["intentAccuracy", "contextRecall", "commandSafety", "userEffort", "privacyExposure", "conciseResponse"]
+  }
+}
