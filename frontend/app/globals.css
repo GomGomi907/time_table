@@ -2107,6 +2107,14 @@ button.current-schedule-card:hover {
   box-shadow: 0 16px 32px rgba(91, 110, 225, 0.18);
 }
 
+.calendar-occurrence-block {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--tone, var(--accent)) 34%, rgba(91, 110, 225, 0.18));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tone, var(--accent)) 16%, white), #fff),
+    radial-gradient(circle at top right, rgba(91, 110, 225, 0.14), transparent 42%);
+}
+
 .week-stack-block {
   position: relative;
   display: grid;

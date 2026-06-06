@@ -149,10 +149,10 @@ public class AiAgentOrchestrator {
         payload.put("startAt", timeWindow.startAt());
         payload.put("endAt", timeWindow.endAt());
         payload.put("category", inferCategory(request.reason()).name());
-        String reason = "AI 제공자 draft가 실패해 해석 단계의 날짜/시간과 안전 기본값으로 만든 임시 제안입니다. 적용 전 반드시 확인하세요.";
+        String reason = "요청을 이해했지만 자동 생성 응답이 불안정해, 확인 가능한 시간 정보만 바탕으로 변경안을 준비했습니다. 반영 전 한 번만 확인해 주세요.";
         return new StructuredAiCommandBatch(
                 interpretation.title().trim() + " 추가",
-                "요청 의도는 명확하지만 AI draft 응답이 실패해, 해석된 시작/종료 시각을 기준으로 확인용 제안을 만들었습니다.",
+                "요청 의도와 시간이 명확해 확인용 변경안을 준비했습니다.",
                 List.of(new StructuredAiCommand(
                         AgentCommandActionType.CREATE_EVENT.wireValue(),
                         AgentCommandTargetType.EVENT.wireValue(),

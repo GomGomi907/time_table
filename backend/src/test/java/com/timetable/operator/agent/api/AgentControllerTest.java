@@ -739,9 +739,9 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 쓰기 대기 1개")))
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 반영 대기 1개")))
                 .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1))
-                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 쓰기 대기 1개")));
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 반영 대기 1개")));
 
         Event moved = eventRepository.findById(savedEvent.getId()).orElseThrow();
         assertThat(moved.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:30:00Z"));
@@ -798,8 +798,8 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 쓰기 대기 1개")))
-                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 쓰기 대기 1개")));
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 반영 대기 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 반영 대기 1개")));
 
         assertThat(eventRepository.count()).isEqualTo(eventCountBefore + 1);
         Event created = eventRepository.findByUserIdOrderByStartAtAsc(savedUser.getId()).stream()
@@ -919,8 +919,8 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 쓰기 대기 1개")))
-                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 쓰기 대기 1개")));
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 반영 대기 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 반영 대기 1개")));
 
         Task updated = taskRepository.findById(savedTask.getId()).orElseThrow();
         assertThat(updated.getTitle()).isEqualTo("읽기 전용 Google 할 일 - 수정");

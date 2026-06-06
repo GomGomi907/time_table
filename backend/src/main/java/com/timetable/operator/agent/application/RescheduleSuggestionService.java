@@ -328,9 +328,14 @@ public class RescheduleSuggestionService {
         int providerWriteBlockedCount = (int) snapshots.stream()
                 .filter(this::hasBlockedProviderWrite)
                 .count();
-        String detail = "%d개 명령 적용, %d개 명령 기록".formatted(appliedCount, noOpCount);
+        String detail = appliedCount == 1
+                ? "일정표에 반영했습니다."
+                : "%d개 변경을 일정표에 반영했습니다.".formatted(appliedCount);
+        if (noOpCount > 0) {
+            detail += " 처리하지 않은 항목 %d개는 그대로 두었습니다.".formatted(noOpCount);
+        }
         if (providerWriteBlockedCount > 0) {
-            detail += ", Google 쓰기 대기 %d개".formatted(providerWriteBlockedCount);
+            detail += " Google 반영 대기 %d개가 있습니다.".formatted(providerWriteBlockedCount);
         }
 
         return new SuggestionExecutionSummaryResponse(
@@ -364,12 +369,12 @@ public class RescheduleSuggestionService {
             SuggestionExecutionSummaryResponse executionSummary
     ) {
         return switch (suggestion.getStatus()) {
-            case PENDING -> "검토 후 적용하거나 사용하지 않을 수 있습니다.";
+            case PENDING -> "확인 후 일정표에 반영하거나 닫을 수 있습니다.";
             case APPLIED -> executionSummary == null
-                    ? "제안을 적용했습니다."
+                    ? "일정표에 반영했습니다."
                     : executionSummary.detail();
             case REJECTED -> suggestion.getDecisionReason() == null || suggestion.getDecisionReason().isBlank()
-                    ? "제안을 닫았습니다."
+                    ? "요청을 닫았습니다."
                     : suggestion.getDecisionReason();
             case REVERTED -> suggestion.getDecisionReason() == null || suggestion.getDecisionReason().isBlank()
                     ? "적용한 제안을 되돌렸습니다."
@@ -590,7 +595,7 @@ public class RescheduleSuggestionService {
                     case MOVE_EVENT -> moveEvent(event.get(), userZone, command);
                     case UPDATE_EVENT -> updateEvent(event.get(), userZone, command);
                     case DELETE_EVENT -> deleteEvent(event.get(), command);
-                    default -> noExecutableTarget(command, "canonical event에 적용할 수 없는 명령입니다.");
+                    default -> noExecutableTarget(command, "해당 일정에 적용할 수 없는 요청입니다.");
                 };
             }
         }
@@ -642,7 +647,7 @@ public class RescheduleSuggestionService {
             case MOVE_EVENT -> moveTask(userId, userZone, command);
             case UPDATE_EVENT -> updateTask(userId, userZone, command);
             case DELETE_EVENT -> deleteTask(userId, command);
-            default -> noExecutableTarget(command, "canonical task에 적용할 수 없는 명령입니다.");
+            default -> noExecutableTarget(command, "해당 할 일에 적용할 수 없는 요청입니다.");
         };
     }
 
@@ -657,7 +662,7 @@ public class RescheduleSuggestionService {
         return appliedProviderWriteSnapshot(
                 command,
                 persisted.getId().toString(),
-                "create_event 제안을 canonical event에 반영했습니다.",
+                "새 일정을 추가했습니다.",
                 null,
                 snapshotEventRollback(persisted),
                 null,
@@ -691,7 +696,7 @@ public class RescheduleSuggestionService {
             return appliedProviderWriteSnapshot(
                     command,
                     event.getId().toString(),
-                    "move_event 제안을 canonical event에 반영했습니다.",
+                    "일정 시간을 옮겼습니다.",
                     beforeState,
                     snapshotEventRollback(event),
                     null,
@@ -714,7 +719,7 @@ public class RescheduleSuggestionService {
             return appliedProviderWriteSnapshot(
                     command,
                     event.getId().toString(),
-                    "update_event 제안을 canonical event에 반영했습니다.",
+                    "일정 내용을 수정했습니다.",
                     beforeState,
                     snapshotEventRollback(event),
                     null,
@@ -742,7 +747,7 @@ public class RescheduleSuggestionService {
             return appliedProviderWriteSnapshot(
                     command,
                     event.getId().toString(),
-                    "delete_event 제안을 canonical event 취소로 반영했습니다.",
+                    "일정을 취소했습니다.",
                     beforeState,
                     snapshotEventRollback(event),
                     null,
@@ -766,7 +771,7 @@ public class RescheduleSuggestionService {
         return appliedProviderWriteSnapshot(
                 command,
                 persisted.getId().toString(),
-                "할 일 제안을 canonical task에 반영했습니다.",
+                "할 일을 추가했습니다.",
                 null,
                 null,
                 null,
@@ -793,7 +798,7 @@ public class RescheduleSuggestionService {
             return appliedProviderWriteSnapshot(
                     command,
                     task.getId().toString(),
-                    "move_event 제안을 canonical task 마감 조정으로 반영했습니다.",
+                    "할 일 마감을 조정했습니다.",
                     null,
                     null,
                     beforeState,
@@ -816,7 +821,7 @@ public class RescheduleSuggestionService {
             return appliedProviderWriteSnapshot(
                     command,
                     task.getId().toString(),
-                    "update_event 제안을 canonical task에 반영했습니다.",
+                    "할 일을 수정했습니다.",
                     null,
                     null,
                     beforeState,
@@ -845,7 +850,7 @@ public class RescheduleSuggestionService {
             return appliedProviderWriteSnapshot(
                     command,
                     task.getId().toString(),
-                    "delete_event 제안을 canonical task 취소로 반영했습니다.",
+                    "할 일을 취소했습니다.",
                     null,
                     null,
                     beforeState,
@@ -968,7 +973,7 @@ public class RescheduleSuggestionService {
                 "applied",
                 beforeState,
                 snapshot(saved),
-                "move_event 제안을 schedule block에 반영했습니다."
+                "주간 루틴 시간을 옮겼습니다."
         );
     }
 
@@ -994,7 +999,7 @@ public class RescheduleSuggestionService {
                 "applied",
                 beforeState,
                 snapshot(saved),
-                "update_event 제안을 schedule block에 반영했습니다."
+                "주간 루틴을 수정했습니다."
         );
     }
 
@@ -1012,7 +1017,7 @@ public class RescheduleSuggestionService {
                 "applied",
                 null,
                 snapshot(saved),
-                "create_event 제안을 schedule block으로 생성했습니다."
+                "주간 루틴을 추가했습니다."
         );
     }
 
@@ -1030,7 +1035,7 @@ public class RescheduleSuggestionService {
                 "applied",
                 beforeState,
                 null,
-                "delete_event 제안을 schedule block 삭제로 반영했습니다."
+                "주간 루틴을 삭제했습니다."
         );
     }
 
@@ -1210,7 +1215,7 @@ public class RescheduleSuggestionService {
         String goalId = readString(payload, "goalId", "goal_id");
 
         if (requireTimeRange && (startAt == null || endAt == null)) {
-            throw new IllegalArgumentException("canonical event 생성에는 startAt과 endAt이 필요합니다.");
+            throw new IllegalArgumentException("일정을 추가하려면 시작 시간과 종료 시간이 필요합니다.");
         }
         if (title != null) {
             event.setTitle(clampCanonicalTitle(title));

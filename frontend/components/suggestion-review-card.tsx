@@ -61,6 +61,7 @@ interface SuggestionReviewCardProps {
   kicker?: string;
   titleElement?: "h2" | "strong";
   readOnly?: boolean;
+  compact?: boolean;
 }
 
 export function SuggestionReviewCard({
@@ -72,13 +73,17 @@ export function SuggestionReviewCard({
   kicker = "변경 요청",
   titleElement = "strong",
   readOnly = false,
+  compact = false,
 }: SuggestionReviewCardProps) {
   const display = getSuggestionDisplayState(suggestion);
   const executablePreviewItems = (suggestion.previewItems ?? []).filter((item) => item.executable);
-  const previewItems = executablePreviewItems.slice(0, 3);
-  const decisionSections = getDecisionSections(suggestion);
+  const previewItems = executablePreviewItems.slice(0, compact ? 2 : 3);
+  const decisionSections = compact ? [] : getDecisionSections(suggestion);
   const hiddenPreviewCount = Math.max(executablePreviewItems.length - previewItems.length, 0);
   const resultDetail = getSuggestionResultDetail(suggestion);
+  const readOnlyDetail = compact && suggestion.status === "applied"
+    ? "일정표에 반영했습니다."
+    : resultDetail ?? suggestion.statusLabel;
   const title =
     titleElement === "h2"
       ? <h2>{display.title}</h2>
@@ -109,11 +114,11 @@ export function SuggestionReviewCard({
         </ul>
       ) : null}
       {readOnly ? (
-        <p className="suggestion-status-note">{resultDetail ?? suggestion.statusLabel}</p>
+        <p className="suggestion-status-note">{readOnlyDetail}</p>
       ) : (
         <div className="suggestion-actions approval-actions">
           <button className="ghost-btn" disabled={isPending} onClick={onReject} type="button">
-            이 제안 사용 안 함
+            {compact ? "닫기" : "이 제안 사용 안 함"}
           </button>
           <button className="solid-btn" disabled={isPending || !display.canApply} onClick={onApply} type="button">
             {display.applyLabel}

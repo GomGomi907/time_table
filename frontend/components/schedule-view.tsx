@@ -636,6 +636,29 @@ function monthStartDateKey(dateKey: string) {
   return new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0)).toISOString().slice(0, 10);
 }
 
+function weekStartDateKey(dateKey: string) {
+  const dayIndex = DAY_ORDER.indexOf(dayOfWeekFromDateKey(dateKey));
+  return addDaysToDateKey(dateKey, -Math.max(dayIndex, 0));
+}
+
+function buildWeekRangeWindow(dateKey: string, timeZoneInput: string | null | undefined) {
+  const timeZone = safeTimeZone(timeZoneInput);
+  const safeDateKey = isCalendarDateKey(dateKey) ? dateKey : zonedDateKey(new Date(), timeZone);
+  const startDateKey = weekStartDateKey(safeDateKey);
+  const endDateKey = addDaysToDateKey(startDateKey, 7);
+  return {
+    start: toIsoAtZonedDate(startDateKey, "00:00", timeZone),
+    end: toIsoAtZonedDate(endDateKey, "00:00", timeZone),
+    startDateKey,
+    endDateKey,
+    timeZone,
+  };
+}
+
+function buildWeekDateKeys(startDateKey: string) {
+  return DAY_ORDER.map((_day, index) => addDaysToDateKey(startDateKey, index));
+}
+
 function buildMonthRangeWindow(dateKey: string, timeZoneInput: string | null | undefined) {
   const timeZone = safeTimeZone(timeZoneInput);
   const safeDateKey = isCalendarDateKey(dateKey) ? dateKey : zonedDateKey(new Date(), timeZone);
@@ -728,24 +751,85 @@ function scheduleBlockActionLabel(dayOfWeek: string, block: ScheduleBlock, state
   return `${pieces.join(", ")}. ${note ? `메모: ${note}. ` : ""}선택하면 일정 편집 창을 엽니다.`;
 }
 
+function groupDatedWeekOccurrences(
+  range: CalendarRangeResponse | null | undefined,
+  weekDateKeys: string[],
+  timeZone: string,
+) {
+  const groups = new Map<string, CalendarOccurrence[]>();
+  const weekKeySet = new Set(weekDateKeys);
+  range?.occurrences
+    .filter((occurrence) => occurrence.entityType !== "ROUTINE_BLOCK")
+    .toSorted(compareCalendarOccurrences)
+    .forEach((occurrence) => {
+      occurrenceLocalDateKeys(occurrence, timeZone)
+        .filter((dateKey) => weekKeySet.has(dateKey))
+        .forEach((dateKey) => {
+          const day = dayOfWeekFromDateKey(dateKey);
+          const occurrences = groups.get(day) ?? [];
+          occurrences.push(occurrence);
+          groups.set(day, occurrences);
+        });
+    });
+
+  groups.forEach((occurrences, day) => {
+    groups.set(day, occurrences.toSorted(compareCalendarOccurrences));
+  });
+  return groups;
+}
+
+function occurrenceActionLabel(occurrence: CalendarOccurrence, timeZone: string) {
+  const pieces = [
+    formatOccurrenceTimeRange(occurrence, timeZone),
+    formatServiceCopy(occurrence.title),
+    occurrenceKindLabel(occurrence),
+  ].filter(Boolean);
+  return `${pieces.join(", ")}. 선택하면 일정 편집 창을 엽니다.`;
+}
+
+function weekStartDateKeyFallback(timeZone: string) {
+  return weekStartDateKey(zonedDateKey(new Date(), timeZone));
+}
+
 function WeeklyStack({
   week,
+  range,
+  weekStartDateKey,
+  isRangeLoading = false,
+  isRangeError = false,
   onBlockSelect,
+  onOccurrenceSelect,
   timeZone,
 }: {
   week: WeekScheduleResponse | null;
+  range?: CalendarRangeResponse | null;
+  weekStartDateKey?: string;
+  isRangeLoading?: boolean;
+  isRangeError?: boolean;
   onBlockSelect: (block: EditableScheduleBlock) => void;
+  onOccurrenceSelect?: (occurrence: CalendarOccurrence) => void;
   timeZone?: string;
 }) {
-  const currentDay = getCurrentDayName(timeZone);
-  const currentMinutes = getCurrentMinutes(timeZone);
+  const resolvedTimeZone = safeTimeZone(timeZone);
+  const currentDay = getCurrentDayName(resolvedTimeZone);
+  const currentMinutes = getCurrentMinutes(resolvedTimeZone);
   const weekBlocks = getVisibleWeekBlocks(week);
-  const totalBlocks = weekBlocks.length;
+  const rangeWeekStartDateKey = weekStartDateKey ?? weekStartDateKeyFallback(resolvedTimeZone);
+  const weekDateKeys = useMemo(() => buildWeekDateKeys(rangeWeekStartDateKey), [rangeWeekStartDateKey]);
+  const datedOccurrencesByDay = useMemo(
+    () => groupDatedWeekOccurrences(range, weekDateKeys, resolvedTimeZone),
+    [range, weekDateKeys, resolvedTimeZone],
+  );
+  const totalDatedOccurrences = Array.from(datedOccurrencesByDay.values())
+    .reduce((sum, occurrences) => sum + occurrences.length, 0);
+  const totalBlocks = weekBlocks.length + totalDatedOccurrences;
   const totalMinutes = weekBlocks.reduce(
     (sum, block) => sum + durationInMinutes(block.startTime, block.endTime),
     0,
   );
-  const busyDays = DAY_ORDER.filter((day) => getVisibleDailyBlocks(week, day).length > 0).length;
+  const busyDays = DAY_ORDER.filter(
+    (day) => getVisibleDailyBlocks(week, day).length > 0 || (datedOccurrencesByDay.get(day)?.length ?? 0) > 0,
+  ).length;
   const todayBlocks = getVisibleDailyBlocks(week, currentDay);
   const activeScheduleBlock = todayBlocks.find((block) => isBlockActive(block, currentMinutes)) ?? null;
   const nextScheduleBlock = todayBlocks.find((block) => minutesFromClock(block.startTime) > currentMinutes) ?? null;
@@ -760,7 +844,7 @@ function WeeklyStack({
           <p className="panel-kicker">오늘 보기</p>
           <div className="mobile-brief-grid">
             <span>
-              <strong>{todayBlocks.length}</strong>
+              <strong>{todayBlocks.length + (datedOccurrencesByDay.get(currentDay)?.length ?? 0)}</strong>
               오늘 일정
             </span>
             <span>
@@ -788,10 +872,13 @@ function WeeklyStack({
         {mobileDays.map((day) => {
           const isToday = currentDay === day;
           const blocks = getVisibleDailyBlocks(week, day);
+          const datedOccurrences = datedOccurrencesByDay.get(day) ?? [];
+          const totalDayItems = blocks.length + datedOccurrences.length;
           const previewBlocks = blocks.slice(0, isToday ? 4 : 3);
+          const previewOccurrences = datedOccurrences.slice(0, Math.max(0, (isToday ? 4 : 3) - previewBlocks.length));
           const cardContent = (
             <>
-              {blocks.length ? (
+              {totalDayItems ? (
                 <div className="mobile-day-blocks">
                   {previewBlocks.map((block) => (
                     (() => {
@@ -818,9 +905,22 @@ function WeeklyStack({
                       );
                     })()
                   ))}
-                  {blocks.length > previewBlocks.length ? (
+                  {previewOccurrences.map((occurrence) => (
+                    <button
+                      key={occurrence.occurrenceId}
+                      type="button"
+                      aria-label={occurrenceActionLabel(occurrence, resolvedTimeZone)}
+                      className={`mobile-schedule-block calendar-occurrence-block ${agendaOccurrenceTone(occurrence)}`}
+                      onClick={() => onOccurrenceSelect?.(occurrence)}
+                    >
+                      <span className="event-time">{formatOccurrenceTimeRange(occurrence, resolvedTimeZone)}</span>
+                      <strong>{formatServiceCopy(occurrence.title)}</strong>
+                      <span>{occurrenceKindLabel(occurrence)}</span>
+                    </button>
+                  ))}
+                  {totalDayItems > previewBlocks.length + previewOccurrences.length ? (
                     <p className="mobile-empty-day">
-                      나머지 {blocks.length - previewBlocks.length}개 일정
+                      나머지 {totalDayItems - previewBlocks.length - previewOccurrences.length}개 일정
                     </p>
                   ) : null}
                 </div>
@@ -836,7 +936,7 @@ function WeeklyStack({
             <section className={`mobile-day-card ${isToday ? "today" : ""}`} key={day}>
               <div className="mobile-day-head">
                 <strong>{isToday ? "오늘 · " : ""}{DAY_FULL_LABELS[day]}</strong>
-                <span>{blocks.length ? `${blocks.length}개 일정` : "비어 있음"}</span>
+                <span>{totalDayItems ? `${totalDayItems}개 일정` : "비어 있음"}</span>
               </div>
               {cardContent}
             </section>
@@ -900,18 +1000,23 @@ function WeeklyStack({
           </div>
         )}
 
+        {isRangeLoading ? <p className="timeline-state-note">캘린더 일정을 불러오는 중입니다.</p> : null}
+        {isRangeError ? <p className="timeline-state-note error">캘린더 일정을 불러오지 못했습니다. 로컬 주간 일정은 계속 표시합니다.</p> : null}
+
         <div className="week-stack-board" aria-label="주간 일정 스택">
           {DAY_ORDER.map((day) => {
             const isToday = currentDay === day;
             const blocks = getVisibleDailyBlocks(week, day);
+            const datedOccurrences = datedOccurrencesByDay.get(day) ?? [];
+            const totalDayItems = blocks.length + datedOccurrences.length;
             return (
               <section key={day} className={`week-stack-day ${isToday ? "today" : ""}`}>
                 <div className="week-stack-day-head">
                   <strong>{isToday ? "오늘 · " : ""}{DAY_FULL_LABELS[day]}</strong>
-                  <span>{blocks.length ? `${blocks.length}개 일정` : "비어 있음"}</span>
+                  <span>{totalDayItems ? `${totalDayItems}개 일정` : "비어 있음"}</span>
                 </div>
 
-                {blocks.length ? (
+                {totalDayItems ? (
                   <div className="week-stack-list">
                     {blocks.map((block) => {
                       const isCurrentBlock = day === currentDay && isBlockActive(block, currentMinutes);
@@ -938,6 +1043,19 @@ function WeeklyStack({
                         </button>
                       );
                     })}
+                    {datedOccurrences.map((occurrence) => (
+                      <button
+                        key={occurrence.occurrenceId}
+                        type="button"
+                        aria-label={occurrenceActionLabel(occurrence, resolvedTimeZone)}
+                        className={`schedule-block week-stack-block calendar-occurrence-block ${agendaOccurrenceTone(occurrence)}`}
+                        onClick={() => onOccurrenceSelect?.(occurrence)}
+                      >
+                        <span className="event-time">{formatOccurrenceTimeRange(occurrence, resolvedTimeZone)}</span>
+                        <strong>{formatServiceCopy(occurrence.title)}</strong>
+                        <span className="current-event-chip">{occurrenceKindLabel(occurrence)}</span>
+                      </button>
+                    ))}
                   </div>
                 ) : (
                   <p className="week-stack-empty">비어 있는 시간입니다.</p>
@@ -999,7 +1117,7 @@ function draftProjectionDetail(payload: Record<string, unknown> | undefined, tim
   if (shiftMinutes) {
     return `${shiftMinutes}분 이동`;
   }
-  return "시간 세부값은 제안 카드에서 확인";
+  return "시간 세부값은 변경 요청에서 확인";
 }
 
 function buildAiDraftProjectionItems(suggestions: RescheduleSuggestion[], timeZone: string) {
@@ -1510,6 +1628,10 @@ export function ScheduleView() {
     () => buildMonthRangeWindow(selectedDateKey, session?.timezone),
     [selectedDateKey, session?.timezone],
   );
+  const weekRangeWindow = useMemo(
+    () => buildWeekRangeWindow(selectedDateKey, session?.timezone),
+    [selectedDateKey, session?.timezone],
+  );
   const agendaRangeQuery = useCalendarRangeQuery(
     {
       start: agendaRangeWindow.start,
@@ -1527,6 +1649,15 @@ export function ScheduleView() {
       timezone: monthRangeWindow.timeZone,
     },
     { enabled: Boolean(session?.authenticated) && (timelineView === "month" || timelineView === "day") },
+  );
+  const weekRangeQuery = useCalendarRangeQuery(
+    {
+      start: weekRangeWindow.start,
+      end: weekRangeWindow.end,
+      view: "week",
+      timezone: weekRangeWindow.timeZone,
+    },
+    { enabled: Boolean(session?.authenticated) && timelineView === "week" },
   );
 
   async function runScheduleMutationExclusive<T>(operation: (signal: AbortSignal) => Promise<T>) {
@@ -2102,7 +2233,7 @@ export function ScheduleView() {
       setRequestReason("");
       showNotice({
         tone: "success",
-        title: "변경 요청을 만들었습니다.",
+        title: "확인할 변경안을 준비했습니다.",
       });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);
     } catch (requestError) {
@@ -2140,9 +2271,10 @@ export function ScheduleView() {
 
       showNotice({
         tone: "success",
-        title: action === "apply" ? "변경을 일정표에 반영했습니다." : "제안을 닫았습니다.",
+        title: action === "apply" ? "일정표에 반영했습니다." : "요청을 닫았습니다.",
         detail: getSuggestionNoticeDetail(response),
       });
+      await queryClient.invalidateQueries({ queryKey: calendarRangeQueryRootKey });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);
     } catch (decisionError) {
       if (isConflictError(decisionError)) {
@@ -2152,7 +2284,7 @@ export function ScheduleView() {
         tone: "error",
         title: "변경 처리에 실패했습니다.",
         detail: isConflictError(decisionError)
-          ? "제안이 이미 다른 화면에서 처리되었거나 일정이 바뀌었습니다. 최신 변경 요청을 다시 확인하세요."
+          ? "요청이 이미 다른 화면에서 처리되었거나 일정이 바뀌었습니다. 최신 변경 요청을 다시 확인하세요."
           : decisionError instanceof Error
             ? decisionError.message
             : "잠시 후 다시 시도하면 됩니다.",
@@ -2208,8 +2340,9 @@ export function ScheduleView() {
                     className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
                     isPending={isMutating}
                     suggestion={suggestion}
-                    kicker={isPendingSuggestion ? "검토" : suggestion.statusLabel}
+                    kicker={isPendingSuggestion ? "확인 필요" : suggestion.statusLabel}
                     readOnly={!isPendingSuggestion}
+                    compact
                     onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
                     onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
                   />
@@ -2358,8 +2491,13 @@ export function ScheduleView() {
                 {timelineView === "week" ? (
                   <WeeklyStack
                     week={data.week}
+                    range={weekRangeQuery.data}
+                    weekStartDateKey={weekRangeWindow.startDateKey}
+                    isRangeLoading={weekRangeQuery.isLoading || weekRangeQuery.isFetching}
+                    isRangeError={weekRangeQuery.isError}
                     onBlockSelect={(block) => void openEditModal(block)}
-                    timeZone={session?.timezone}
+                    onOccurrenceSelect={(occurrence) => void openOccurrenceEditModal(occurrence)}
+                    timeZone={weekRangeWindow.timeZone}
                   />
                 ) : null}
                 {timelineView === "day" ? (

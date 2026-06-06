@@ -174,7 +174,7 @@ class AiAgentOrchestratorTest {
                 .containsEntry("startAt", "2026-06-05T03:00:00Z")
                 .containsEntry("endAt", "2026-06-05T04:00:00Z")
                 .containsEntry("category", ScheduleCategory.LIFE.name());
-        assertThat(resolved.explanation()).contains("확인용 제안");
+        assertThat(resolved.explanation()).contains("확인용 변경안");
         verify(stageClient, never()).repair(any(), any(), any(), any());
     }
 
@@ -206,7 +206,7 @@ class AiAgentOrchestratorTest {
                 .containsEntry("startAt", "2026-06-05T03:00:00Z")
                 .containsEntry("endAt", "2026-06-05T04:00:00Z")
                 .containsEntry("category", ScheduleCategory.LIFE.name());
-        assertThat(command.reason()).contains("AI 제공자 draft가 실패");
+        assertThat(command.reason()).contains("자동 생성 응답이 불안정");
         verify(stageClient, never()).repair(any(), any(), any(), any());
     }
 

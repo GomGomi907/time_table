@@ -158,7 +158,7 @@ const DAY_LABELS: Record<string, string> = {
 
 export function formatAiActionLabel(value: string | null | undefined) {
   if (!value) {
-    return "제안";
+    return "변경";
   }
 
   return AI_ACTION_LABELS[value.toLowerCase()] ?? value.split("_").join(" ");
@@ -187,7 +187,7 @@ export interface SuggestionDisplayState {
 }
 
 const INTERNAL_AI_METADATA_PATTERN =
-  /\b(confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields)\b/i;
+  /\b(confidence|stage|draft|canonical|command|payload|requestKind|resolutionType|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields|schedule block)\b/i;
 
 function getFirstCommandPayload(suggestion: RescheduleSuggestion) {
   const payload = suggestion.commandBatch?.commands?.[0]?.payload;
@@ -245,11 +245,11 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
   if (suggestion.executable) {
     return {
       kind: "executable",
-      title: trustLevel === "review_required" ? "검토가 필요한 변경 제안" : "변경 제안",
+      title: trustLevel === "review_required" ? "확인이 필요한 변경" : "반영할 변경",
       detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation, "변경 시간을 확인하고 적용하세요."),
       guidance: decisionPackage?.riskLevel === "high" ? "영향 범위가 큰 변경입니다. 적용 전 후보를 한 번 더 확인하세요." : null,
       canApply: true,
-      applyLabel: trustLevel === "review_required" ? "검토 후 적용" : "적용",
+      applyLabel: trustLevel === "review_required" ? "확인 후 반영" : "반영하기",
     };
   }
 
