@@ -64,6 +64,36 @@ class AssistantPolicyServiceTest {
     }
 
     @Test
+    void workloadReliefPolicyUsesAvailabilityWindowAndProtectsExistingWorkItems() {
+        StructuredAiCommandBatch resolved = policyService.applyPreflightPolicies(
+                request("이번 주 업무가 너무 빡빡한데 숨 좀 트이게 해줘", context(
+                        List.of(event("고정 고객 미팅", "WORK", "2026-06-06T05:00:00Z", "2026-06-06T06:00:00Z", "DIRTY_PENDING_WRITE")),
+                        List.of(block("SATURDAY", "09:00", "12:00", "업무 집중", "WORK")),
+                        List.of(),
+                        List.of(),
+                        List.of(window("2026-06-06T07:00:00Z", "2026-06-06T07:30:00Z", "토 16:00-16:30"))
+                )),
+                interpretation("create", "event", "업무 정리 시간", null, true)
+        );
+
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.CREATE_EVENT.wireValue());
+        assertThat(command.requiresConfirmation()).isTrue();
+        assertThat(command.payload())
+                .containsEntry("requestKind", "workload_relief")
+                .containsEntry("title", "업무 정리 시간")
+                .containsEntry("startAt", "2026-06-06T07:00:00Z")
+                .containsEntry("endAt", "2026-06-06T07:30:00Z")
+                .containsEntry("externalMutationAllowed", false)
+                .containsEntry("requiresUserConfirmation", true);
+        assertThat(command.payload().get("protectedItems").toString())
+                .contains("고정 고객 미팅")
+                .contains("외부 원본 보호")
+                .contains("업무 집중");
+        assertThat(resolved.explanation()).contains("고정 미팅은 보호");
+    }
+
+    @Test
     void postflightConflictPolicyBlocksOverlappingCreateBeforeValidation() {
         StructuredAiCommandBatch conflict = policyService.applyPostflightPolicies(
                 request("10시에 회의 추가", context(
@@ -123,5 +153,9 @@ class AssistantPolicyServiceTest {
 
     private AiRescheduleClient.ScheduleBlockContext block(String day, String start, String end, String activity, String category) {
         return new AiRescheduleClient.ScheduleBlockContext("block-1", day, start, end, activity, category, null);
+    }
+
+    private AiRescheduleClient.AvailabilityWindowContext window(String startAt, String endAt, String label) {
+        return new AiRescheduleClient.AvailabilityWindowContext(startAt, endAt, label, 30, "test");
     }
 }

@@ -67,6 +67,12 @@ public class AssistantPolicyService {
         if (isBulkDestructiveRequest(text)) {
             return bulkDestructiveBatch(request, text);
         }
+        if (isWorkloadReliefRequest(text)) {
+            StructuredAiCommandBatch workloadRelief = workloadReliefBatch(request, interpretation);
+            if (workloadRelief != null) {
+                return workloadRelief;
+            }
+        }
         if (text.contains("퇴근후")) {
             StructuredAiCommandBatch afterWork = afterWorkCreateBatch(request, interpretation);
             if (afterWork != null) {
@@ -311,6 +317,54 @@ public class AssistantPolicyService {
         );
     }
 
+    private StructuredAiCommandBatch workloadReliefBatch(
+            AiAgentRequest request,
+            AiAgentInterpretation interpretation
+    ) {
+        AiRescheduleClient.RescheduleAiContext context = request.context();
+        if (context == null || context.availabilityWindows() == null || context.availabilityWindows().isEmpty()) {
+            return null;
+        }
+        AiRescheduleClient.AvailabilityWindowContext window = context.availabilityWindows().stream()
+                .filter(candidate -> candidate.durationMinutes() >= 15)
+                .findFirst()
+                .orElse(null);
+        if (window == null || isBlank(window.startAt()) || isBlank(window.endAt())) {
+            return null;
+        }
+        String title = interpretation != null && !isBlank(interpretation.title()) && !"일정".equals(interpretation.title().trim())
+                ? interpretation.title().trim()
+                : "업무 정리 시간";
+        List<String> protectedWorkItems = protectedWorkItems(context);
+        String explanation = protectedWorkItems.isEmpty()
+                ? "일정을 바로 비우지 않고 빈 시간에 짧은 완충 시간을 제안합니다. 적용 전 한 번만 확인해 주세요."
+                : "고정 미팅은 보호하고 빈 시간에 짧은 완충 시간을 제안합니다. 적용 전 한 번만 확인해 주세요.";
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("requestKind", "workload_relief");
+        payload.put("title", title);
+        payload.put("startAt", window.startAt());
+        payload.put("endAt", window.endAt());
+        payload.put("category", ScheduleCategory.WORK.name());
+        payload.put("candidateWindows", List.of(window.localLabel()));
+        payload.put("protectedItems", protectedWorkItems);
+        payload.put("externalMutationAllowed", false);
+        payload.put("requiresUserConfirmation", true);
+        payload.put("message", explanation);
+        payload.putAll(contextMetadata(request));
+        return new StructuredAiCommandBatch(
+                title + " 추가",
+                explanation,
+                List.of(new StructuredAiCommand(
+                        AgentCommandActionType.CREATE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        null,
+                        Map.copyOf(payload),
+                        "과부하 완충 시간을 빈 시간 후보에 배치했습니다.",
+                        true
+                ))
+        );
+    }
+
     private StructuredAiCommandBatch assistantProposalBatch(
             AiAgentRequest request,
             String summary,
@@ -406,6 +460,11 @@ public class AssistantPolicyService {
         return (text.contains("다지워") || text.contains("다없애") || text.contains("싹비워") || text.contains("전부지워")
                 || text.contains("모두지워") || text.contains("clearall") || text.contains("deleteall"))
                 && (text.contains("일정") || text.contains("회의") || text.contains("일관련") || text.contains("오늘") || text.contains("내일") || text.contains("이번주"));
+    }
+
+    private boolean isWorkloadReliefRequest(String text) {
+        return (text.contains("빡빡") || text.contains("숨좀트") || text.contains("숨통") || text.contains("여유") || text.contains("과부하"))
+                && (text.contains("업무") || text.contains("일정") || text.contains("회의") || text.contains("이번주") || text.contains("오늘") || text.contains("내일"));
     }
 
     private boolean isRecurringRoutineRequest(String text) {
@@ -569,6 +628,29 @@ public class AssistantPolicyService {
         String text = normalize((title == null ? "" : title) + " " + (description == null ? "" : description) + " " + (category == null ? "" : category));
         return text.contains("work") || text.contains("업무") || text.contains("근무") || text.contains("회의") || text.contains("미팅")
                 || text.contains("출근") || text.contains("퇴근") || text.contains("focus") || text.contains("집중");
+    }
+
+    private List<String> protectedWorkItems(AiRescheduleClient.RescheduleAiContext context) {
+        List<String> protectedItems = new ArrayList<>();
+        if (context.events() != null) {
+            context.events().stream()
+                    .filter(event -> isWorkLike(event.title(), event.description(), event.category()))
+                    .limit(6)
+                    .map(event -> event.title() + externalSuffix(event.syncState()))
+                    .forEach(protectedItems::add);
+        }
+        if (context.weeklyBlocks() != null) {
+            context.weeklyBlocks().stream()
+                    .filter(block -> isWorkLike(block.activity(), block.note(), block.category()))
+                    .limit(6)
+                    .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
+                    .forEach(protectedItems::add);
+        }
+        return protectedItems.stream()
+                .filter(item -> item != null && !item.isBlank())
+                .distinct()
+                .limit(8)
+                .toList();
     }
 
     private String externalSuffix(String syncState) {
