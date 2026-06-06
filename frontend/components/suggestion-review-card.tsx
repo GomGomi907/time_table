@@ -2,6 +2,7 @@ import {
   formatAiActionLabel,
   formatAiPreviewDetail,
   formatServiceCopy,
+  formatUserFacingAiCopy,
   getSuggestionDisplayState,
   getSuggestionResultDetail,
 } from "@/lib/format";
@@ -11,7 +12,9 @@ import type { AiDecisionDisplaySection, RescheduleSuggestion } from "@/lib/types
 function getDecisionSections(suggestion: RescheduleSuggestion): AiDecisionDisplaySection[] {
   const directSections = suggestion.decisionPackage?.displaySections ?? [];
   if (directSections.length) {
-    return directSections.filter((section) => section.body || (section.items ?? []).length);
+    return directSections
+      .map(sanitizeDecisionSection)
+      .filter((section) => section.body || (section.items ?? []).length);
   }
 
   const legacySections = suggestion.decisionPackage?.trustUxSections;
@@ -19,13 +22,29 @@ function getDecisionSections(suggestion: RescheduleSuggestion): AiDecisionDispla
     return [];
   }
 
-  return Object.entries(legacySections).map(([label, body], index) => ({
-    key: `legacy-${index}`,
-    label,
+  return Object.entries(legacySections)
+    .map(([label, body], index) => sanitizeDecisionSection({
+      key: `legacy-${index}`,
+      label,
+      body,
+      items: [],
+      severity: "neutral",
+    }))
+    .filter((section) => section.body || (section.items ?? []).length);
+}
+
+function sanitizeDecisionSection(section: AiDecisionDisplaySection): AiDecisionDisplaySection {
+  const body = formatUserFacingAiCopy(section.body);
+  const items = (section.items ?? [])
+    .map((item) => formatUserFacingAiCopy(item))
+    .filter(Boolean);
+
+  return {
+    ...section,
+    label: formatUserFacingAiCopy(section.label, "확인 내용"),
     body,
-    items: [],
-    severity: "neutral",
-  }));
+    items,
+  };
 }
 
 function DecisionSectionList({ sections }: { sections: AiDecisionDisplaySection[] }) {
@@ -34,7 +53,7 @@ function DecisionSectionList({ sections }: { sections: AiDecisionDisplaySection[
   }
 
   return (
-    <dl className="suggestion-decision-sections" aria-label="AI 판단 근거">
+    <dl className="suggestion-decision-sections" aria-label="변경 확인 내용">
       {sections.map((section) => (
         <div className={`suggestion-decision-section ${section.severity}`} key={section.key || section.label}>
           <dt>{section.label}</dt>

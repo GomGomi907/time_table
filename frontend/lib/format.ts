@@ -115,16 +115,17 @@ export function formatServiceCopy(value: string | null | undefined) {
 const TEST_OR_INTERNAL_MEMO_PATTERN =
   /(e2e|playwright|qa seed|service improvement|mock|dashboard briefing pending approval)/i;
 
-export function formatUserMemo(value: string | null | undefined) {
+export function formatUserFacingAiCopy(value: string | null | undefined, fallback = "") {
   const normalized = formatServiceCopy(value).trim();
-  if (!normalized) {
-    return null;
+  if (!normalized || INTERNAL_AI_METADATA_PATTERN.test(normalized)) {
+    return fallback;
   }
+  return normalized;
+}
 
-  if (
-    TEST_OR_INTERNAL_MEMO_PATTERN.test(normalized) ||
-    INTERNAL_AI_METADATA_PATTERN.test(normalized)
-  ) {
+export function formatUserMemo(value: string | null | undefined) {
+  const normalized = formatUserFacingAiCopy(value);
+  if (!normalized || TEST_OR_INTERNAL_MEMO_PATTERN.test(normalized)) {
     return null;
   }
 
@@ -169,10 +170,11 @@ export function formatAiPreviewDetail(value: string | null | undefined) {
     return null;
   }
 
-  return Object.entries(DAY_LABELS).reduce(
+  const detail = Object.entries(DAY_LABELS).reduce(
     (detail, [day, label]) => detail.split(day).join(label),
     formatServiceCopy(value),
   );
+  return formatUserFacingAiCopy(detail) || null;
 }
 
 export type SuggestionDisplayKind = "executable" | "clarification" | "provider_unavailable" | "non_executable";
@@ -187,7 +189,7 @@ export interface SuggestionDisplayState {
 }
 
 const INTERNAL_AI_METADATA_PATTERN =
-  /\b(confidence|stage|draft|canonical|command|payload|requestKind|resolutionType|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|reason|missingFields|ambiguousFields|schedule block)\b/i;
+  /\b(confidence|stage|draft|canonical|commandBatch|command|payload|requestKind|resolutionType|matchEvidence|validationTrace|validation|repairAttempt|chainOfThought|reasoning|missingFields|ambiguousFields|schedule block)\b|초안|명령|제공자|검증|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
 
 function getFirstCommandPayload(suggestion: RescheduleSuggestion) {
   const payload = suggestion.commandBatch?.commands?.[0]?.payload;
@@ -200,11 +202,7 @@ function getStringField(record: Record<string, unknown> | null, key: string) {
 }
 
 function toSafeSuggestionText(value: string | null | undefined, fallback: string) {
-  const normalized = formatServiceCopy(value).trim();
-  if (!normalized || INTERNAL_AI_METADATA_PATTERN.test(normalized)) {
-    return fallback;
-  }
-  return normalized;
+  return formatUserFacingAiCopy(value, fallback);
 }
 
 export function getSuggestionResolutionType(suggestion: RescheduleSuggestion) {

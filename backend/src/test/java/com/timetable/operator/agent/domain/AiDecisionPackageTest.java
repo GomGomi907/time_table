@@ -140,4 +140,43 @@ class AiDecisionPackageTest {
                         "AIza-secret"
                 );
     }
+
+    @Test
+    void userFacingPackageCopyDoesNotExposeInternalWorkflowTerms() throws Exception {
+        StructuredAiCommandBatch batch = new StructuredAiCommandBatch(
+                "draft commandBatch summary",
+                "canonical payload validationTrace repairAttempt",
+                List.of(new StructuredAiCommand(
+                        AgentCommandActionType.EXPLAIN_ONLY.wireValue(),
+                        AgentCommandTargetType.NONE.wireValue(),
+                        null,
+                        Map.of(
+                                "requestKind", "status_declaration",
+                                "requiresUserConfirmation", true,
+                                "eventCandidates", List.of("payload matchEvidence candidate"),
+                                "message", "chainOfThought reasoning details"
+                        ),
+                        "INTERNAL_REASON_SHOULD_NOT_RENDER",
+                        false
+                ))
+        );
+
+        String serialized = objectMapper.writeValueAsString(AiDecisionPackage.from(batch, "Asia/Seoul", null, null));
+
+        assertThat(serialized)
+                .doesNotContain(
+                        "draft",
+                        "canonical",
+                        "commandBatch",
+                        "payload",
+                        "matchEvidence",
+                        "validationTrace",
+                        "repairAttempt",
+                        "chainOfThought",
+                        "reasoning",
+                        "INTERNAL_REASON_SHOULD_NOT_RENDER",
+                        "후보 명령"
+                )
+                .contains("변경 후보");
+    }
 }

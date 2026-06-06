@@ -52,7 +52,20 @@ public record AiDecisionPackage(
             "(?i)x-goog-api-key",
             "(?i)api[_-]?key",
             "AIza[0-9A-Za-z_-]+",
-            "(?i)Bearer\\s+\\S+"
+            "(?i)Bearer\\s+\\S+",
+            "(?i)\\bdraft\\b",
+            "(?i)\\bcanonical\\b",
+            "(?i)\\bcommandBatch\\b",
+            "(?i)\\bcommand\\b",
+            "(?i)\\bpayload\\b",
+            "(?i)\\brequestKind\\b",
+            "(?i)\\bresolutionType\\b",
+            "(?i)\\bmatchEvidence\\b",
+            "(?i)\\bvalidationTrace\\b",
+            "(?i)\\brepairAttempt\\b",
+            "(?i)\\bchainOfThought\\b",
+            "(?i)\\breasoning\\b",
+            "(?i)INTERNAL_REASON_[A-Z0-9_]+"
     );
 
     public static AiDecisionPackage from(String requestKind, StructuredAiCommandBatch commandBatch) {
@@ -367,7 +380,7 @@ public record AiDecisionPackage(
                 new DisplaySection("protected_items", "건드리지 않는 항목", listBody(protectedItems, "개인/보호 일정은 명시적 확인 전 변경하지 않습니다."), protectedItems, "safe"),
                 new DisplaySection("external_blocked", "외부 일정이라 직접 바꾸지 않는 항목", listBody(externalItems, "없음"), externalItems, externalItems.isEmpty() ? "neutral" : "warning"),
                 new DisplaySection("confirmation_reason", "확인이 필요한 이유", compact(confirmationReason, MAX_SECTION_BODY_LENGTH), List.of(), "high".equals(riskLevel) ? "warning" : "neutral"),
-                new DisplaySection("proposed_changes", "적용 전 변경 요약", proposedChanges.size() + "개 후보 명령", proposedChanges.stream().map(ProposedChange::title).toList(), "neutral")
+                new DisplaySection("proposed_changes", "적용 전 변경 요약", proposedChanges.size() + "개 변경 후보", proposedChanges.stream().map(ProposedChange::title).toList(), "neutral")
         );
     }
 

@@ -14,6 +14,7 @@ import {
   formatAiActionLabel,
   formatClockValue,
   formatServiceCopy,
+  formatUserFacingAiCopy,
   formatUserMemo,
   getSuggestionDisplayState,
   getSuggestionNoticeDetail,
@@ -1128,9 +1129,10 @@ function buildAiDraftProjectionItems(suggestions: RescheduleSuggestion[], timeZo
         .filter((command) => command.executable && command.actionType !== "explain_only")
         .map((command, index) => {
           const payload = command.payload;
-          const title = payloadString(payload, "activity", "title", "summary")
+          const rawTitle = payloadString(payload, "activity", "title", "summary")
             ?? suggestion.previewItems.find((item) => item.executable && item.actionType === command.actionType)?.title
             ?? suggestion.summary;
+          const title = formatUserFacingAiCopy(rawTitle, "변경 항목");
           const startAt = payloadString(payload, "startAt", "start_at");
           const endAt = payloadString(payload, "endAt", "end_at");
           return {
@@ -1139,7 +1141,7 @@ function buildAiDraftProjectionItems(suggestions: RescheduleSuggestion[], timeZo
             targetType: command.targetType,
             title,
             detail: draftProjectionDetail(payload, timeZone),
-            reason: command.reason ?? suggestion.reason,
+            reason: formatUserFacingAiCopy(command.reason ?? suggestion.reason) || null,
             startAt,
             endAt,
           } satisfies AiDraftProjectionItem;
