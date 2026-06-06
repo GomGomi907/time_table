@@ -52,6 +52,37 @@ function DecisionSectionList({ sections }: { sections: AiDecisionDisplaySection[
     </dl>
   );
 }
+function getCompactStatusLine(suggestion: RescheduleSuggestion, display: ReturnType<typeof getSuggestionDisplayState>, readOnlyDetail: string) {
+  if (suggestion.status === "applied") {
+    return "일정표에 반영했습니다.";
+  }
+
+  if (suggestion.status === "rejected") {
+    return "반영하지 않았습니다.";
+  }
+
+  if (suggestion.status === "reverted") {
+    return "되돌렸습니다.";
+  }
+
+  if (suggestion.status !== "pending") {
+    return readOnlyDetail || "처리했습니다.";
+  }
+
+  if (display.canApply) {
+    return "확인이 필요합니다.";
+  }
+
+  if (display.kind === "clarification") {
+    return "조금 더 알려주세요.";
+  }
+
+  if (display.kind === "provider_unavailable") {
+    return "지금은 처리하지 못했습니다.";
+  }
+
+  return "바꿀 일정이 없습니다.";
+}
 interface SuggestionReviewCardProps {
   suggestion: RescheduleSuggestion;
   isPending: boolean;
@@ -84,11 +115,7 @@ export function SuggestionReviewCard({
   const readOnlyDetail = compact && suggestion.status === "applied"
     ? "일정표에 반영했습니다."
     : resultDetail ?? suggestion.statusLabel;
-  const compactTitle = readOnly
-    ? readOnlyDetail
-    : display.canApply
-      ? "확인이 필요합니다."
-      : display.title;
+  const compactStatusLine = getCompactStatusLine(suggestion, display, readOnlyDetail);
   const title =
     titleElement === "h2"
       ? <h2>{display.title}</h2>
@@ -98,13 +125,13 @@ export function SuggestionReviewCard({
     <div className={`${className} ${display.kind}`}>
       {compact ? null : <p className="panel-kicker">{kicker}</p>}
       <div className="suggestion-diff-head">
-        {compact ? <strong>{compactTitle}</strong> : title}
-        {!compact || !display.canApply ? <p className="section-header-note">{display.detail}</p> : null}
+        {compact ? <strong>{compactStatusLine}</strong> : title}
+        {!compact ? <p className="section-header-note">{display.detail}</p> : null}
         {!compact && display.guidance ? <p className="micro-copy suggestion-guidance">{display.guidance}</p> : null}
       </div>
       <DecisionSectionList sections={decisionSections} />
       {previewItems.length ? (
-        <ul className="suggestion-preview-list" aria-label="적용될 변경">
+        <ul className="suggestion-preview-list" aria-label={compact ? "확인할 일정" : "적용될 변경"}>
           {previewItems.map((item, index) => {
             const detail = formatAiPreviewDetail(item.detail);
             return (
@@ -115,7 +142,7 @@ export function SuggestionReviewCard({
               </li>
             );
           })}
-          {hiddenPreviewCount ? <li className="suggestion-preview-more">외 {hiddenPreviewCount}개 변경</li> : null}
+          {hiddenPreviewCount ? <li className="suggestion-preview-more">외 {hiddenPreviewCount}개</li> : null}
         </ul>
       ) : null}
       {readOnly && !compact ? (
@@ -127,7 +154,7 @@ export function SuggestionReviewCard({
             {compact ? "닫기" : "이 제안 사용 안 함"}
           </button>
           <button className="solid-btn" disabled={isPending || !display.canApply} onClick={onApply} type="button">
-            {display.applyLabel}
+            {compact ? "반영하기" : display.applyLabel}
           </button>
         </div>
       )}

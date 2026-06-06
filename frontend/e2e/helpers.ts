@@ -3,7 +3,7 @@ import { expect, Page, TestInfo } from "@playwright/test";
 const API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8080";
 const KOREA_TIME_ZONE = "Asia/Seoul";
 export const BANNED_USER_COPY =
-  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어|월간 모자이크|아젠다|Selected Day|Range spine|캘린더 range|range 응답|confidence|stage|matchEvidence|validationTrace|repairAttempt|chainOfThought|reasoning|["']reason["']\s*:|missingFields|ambiguousFields|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
+  /Google 연결|Google 계정 연결됨|Google 읽기|Google 반영 대기|마지막 동기화|연결 상태 확인|근거|기준으로 재배치|AI 비서 메모|예상 영향|확인한 내용|권한 상태|조정안 핵심 요약|추천 집중|실제 집중 상태|접어|월간 모자이크|아젠다|Selected Day|Range spine|캘린더 range|range 응답|draft|canonical|commandBatch|command|providerMetadata|payload|requestKind|resolutionType|confidence|stage|matchEvidence|validation|validationTrace|repairAttempt|chainOfThought|reasoning|["']reason["']\s*:|missingFields|ambiguousFields|초안|명령|제공자|검증|INTERNAL_REASON_SHOULD_NOT_RENDER/i;
 
 const BACKEND_DAY_BY_WEEKDAY: Record<string, string> = {
   Monday: "MONDAY",

@@ -137,7 +137,7 @@ test("UltraQA hostile AI request remains user content and does not break layout"
   await page.getByTestId("schedule-ai-request-input").fill(hostileRequest);
   await page.getByTestId("schedule-ai-request-submit").click();
 
-  await expect(page.getByRole("status")).toContainText("변경 요청을 만들었습니다.", { timeout: 30_000 });
+  await expect(page.getByRole("status")).toContainText("확인이 필요합니다.", { timeout: 30_000 });
   await expect(page.locator("[data-user-content='true']").filter({ hasText: "IGNORE PREVIOUS INSTRUCTIONS" }).first()).toBeVisible({ timeout: 30_000 });
   await assertNoInternalUserCopy(page);
   await assertNoHorizontalOverflow(page);
@@ -155,11 +155,11 @@ test("UltraQA clarification copy wraps inside the AI request rail", async ({ pag
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto("/schedule");
   await expect(page.getByTestId("schedule-ai-right-rail")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("확인이 필요합니다")).toBeVisible();
-  await expect(page.getByText("어떤 활동을 12시에 추가하거나 변경하고 싶으신가요?")).toBeVisible();
+  await expect(page.getByText("조금 더 알려주세요.")).toBeVisible();
+  await expect(page.getByText("어떤 활동을 12시에 추가하거나 변경하고 싶으신가요?")).toHaveCount(0);
   await expect(page.getByText("일정 정리 입력에 답변을 적어 다시 보내세요.")).toHaveCount(0);
+  await expect(page.locator(".chat-suggestion-card .section-header-note")).toHaveCount(0);
 
   await assertNoHorizontalOverflow(page);
   await assertSelectorTextDoesNotOverflow(page, ".chat-suggestion-card .suggestion-diff-head");
-  await assertSelectorTextDoesNotOverflow(page, ".chat-suggestion-card .section-header-note");
 });

@@ -2233,7 +2233,7 @@ export function ScheduleView() {
       setRequestReason("");
       showNotice({
         tone: "success",
-        title: "확인할 변경안을 준비했습니다.",
+        title: "확인이 필요합니다.",
       });
       await Promise.all([loadSchedulePage(), refreshSession({ silent: true })]);
     } catch (requestError) {
@@ -2332,7 +2332,7 @@ export function ScheduleView() {
               <div className="ai-chat-turn" key={suggestion.id}>
                 <div className="chat-bubble user">
                   <span>요청</span>
-                  <p data-user-content="true">{formatServiceCopy(suggestion.reason || suggestion.summary)}</p>
+                  <p data-user-content="true">{formatServiceCopy(suggestion.originalRequest || suggestion.reason || suggestion.summary)}</p>
                 </div>
                 <div className={`chat-bubble assistant ${display.kind}`}>
                   <span>답변</span>
