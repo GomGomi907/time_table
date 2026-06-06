@@ -58,7 +58,7 @@ function getCompactStatusLine(suggestion: RescheduleSuggestion, display: ReturnT
   }
 
   if (suggestion.status === "rejected") {
-    return "반영하지 않았습니다.";
+    return "취소했습니다.";
   }
 
   if (suggestion.status === "reverted") {
@@ -151,7 +151,7 @@ export function SuggestionReviewCard({
         readOnly ? null :
         <div className="suggestion-actions approval-actions">
           <button className="ghost-btn" disabled={isPending} onClick={onReject} type="button">
-            {compact ? "닫기" : "이 제안 사용 안 함"}
+            {compact ? "취소" : "이 제안 사용 안 함"}
           </button>
           <button className="solid-btn" disabled={isPending || !display.canApply} onClick={onApply} type="button">
             {compact ? "반영하기" : display.applyLabel}

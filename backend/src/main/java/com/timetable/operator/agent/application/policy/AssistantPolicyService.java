@@ -14,16 +14,22 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.DayOfWeek;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 @Service
 public class AssistantPolicyService {
 
     private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Seoul");
+    private static final Pattern WEEKDAY_RANGE_PATTERN = Pattern.compile("([월화수목금토일])(?:요일)?[~\\-–—부터]+([월화수목금토일])(?:요일)?");
+    private static final Pattern TIME_RANGE_PATTERN = Pattern.compile("(오전|오후)?(\\d{1,2})(?::(\\d{2})|시(?:(\\d{1,2})분?)?)?[~\\-–—]+(오전|오후)?(\\d{1,2})(?::(\\d{2})|시(?:(\\d{1,2})분?)?)?");
 
     public StructuredAiCommandBatch preflight(AiAgentRequest request, AiAgentInterpretation interpretation) {
         return applyPreflightPolicies(request, interpretation);
@@ -35,6 +41,10 @@ public class AssistantPolicyService {
 
     public StructuredAiCommandBatch applyPreflightPolicies(AiAgentRequest request, AiAgentInterpretation interpretation) {
         String text = normalize(request.reason());
+        StructuredAiCommandBatch explicitWeekdayCreate = explicitWeekdayRangeCreateBatch(request, interpretation, text);
+        if (explicitWeekdayCreate != null) {
+            return explicitWeekdayCreate;
+        }
         if (isRecurringRoutineRequest(text)) {
             return clarificationBatch(
                     request,
@@ -75,6 +85,52 @@ public class AssistantPolicyService {
             );
         }
         return null;
+    }
+
+    private StructuredAiCommandBatch explicitWeekdayRangeCreateBatch(
+            AiAgentRequest request,
+            AiAgentInterpretation interpretation,
+            String normalizedText
+    ) {
+        if (interpretation == null) {
+            return null;
+        }
+        if ((!isCreateAction(interpretation.action()) && !containsExplicitCreateVerb(normalizedText))
+                || !isEventTarget(interpretation.targetType())) {
+            return null;
+        }
+        List<DayOfWeek> days = parseWeekdayRange(normalizedText);
+        TimeRange timeRange = parseTimeRange(normalizedText);
+        if (days.isEmpty() || timeRange == null) {
+            return null;
+        }
+        String activity = inferExplicitActivity(request.reason(), normalizedText, timeRange.endIndex(), interpretation.title());
+        if (isBlank(activity)) {
+            return null;
+        }
+        ScheduleCategory category = inferCategory(activity + " " + request.reason());
+        List<StructuredAiCommand> commands = new ArrayList<>();
+        for (DayOfWeek day : days) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("dayOfWeek", day.name());
+            payload.put("startTime", timeRange.start().toString());
+            payload.put("endTime", timeRange.end().toString());
+            payload.put("activity", activity);
+            payload.put("category", category.name());
+            commands.add(new StructuredAiCommand(
+                    AgentCommandActionType.CREATE_EVENT.wireValue(),
+                    AgentCommandTargetType.EVENT.wireValue(),
+                    null,
+                    Map.copyOf(payload),
+                    "요일과 시간이 명확해 반복 주간 일정으로 준비했습니다.",
+                    true
+            ));
+        }
+        return new StructuredAiCommandBatch(
+                activity + " 추가",
+                "확인이 필요합니다.",
+                commands
+        );
     }
 
     public StructuredAiCommandBatch applyPostflightPolicies(AiAgentRequest request, StructuredAiCommandBatch draft) {
@@ -366,6 +422,140 @@ public class AssistantPolicyService {
                 && (interpretation.startTime() == null || interpretation.startTime().isBlank()));
     }
 
+    private List<DayOfWeek> parseWeekdayRange(String normalizedText) {
+        Matcher matcher = WEEKDAY_RANGE_PATTERN.matcher(normalizedText);
+        if (!matcher.find()) {
+            return List.of();
+        }
+        DayOfWeek start = koreanDayOfWeek(matcher.group(1));
+        DayOfWeek end = koreanDayOfWeek(matcher.group(2));
+        if (start == null || end == null) {
+            return List.of();
+        }
+        List<DayOfWeek> days = new ArrayList<>();
+        int current = start.getValue();
+        int target = end.getValue();
+        while (true) {
+            days.add(DayOfWeek.of(current));
+            if (current == target) {
+                return days;
+            }
+            current = current == 7 ? 1 : current + 1;
+            if (days.size() > 7) {
+                return List.of();
+            }
+        }
+    }
+
+    private TimeRange parseTimeRange(String normalizedText) {
+        Matcher matcher = TIME_RANGE_PATTERN.matcher(normalizedText);
+        if (!matcher.find()) {
+            return null;
+        }
+        LocalTime start = parseKoreanTime(matcher.group(1), matcher.group(2), firstNonBlank(matcher.group(3), matcher.group(4)));
+        String endMeridiem = matcher.group(5) == null ? matcher.group(1) : matcher.group(5);
+        LocalTime end = parseKoreanTime(endMeridiem, matcher.group(6), firstNonBlank(matcher.group(7), matcher.group(8)));
+        if (start == null || end == null || !end.isAfter(start)) {
+            return null;
+        }
+        return new TimeRange(start, end, matcher.end());
+    }
+
+    private LocalTime parseKoreanTime(String meridiem, String hourValue, String minuteValue) {
+        if (isBlank(hourValue)) {
+            return null;
+        }
+        try {
+            int hour = Integer.parseInt(hourValue);
+            int minute = isBlank(minuteValue) ? 0 : Integer.parseInt(minuteValue);
+            if ("오후".equals(meridiem) && hour < 12) {
+                hour += 12;
+            }
+            if ("오전".equals(meridiem) && hour == 12) {
+                hour = 0;
+            }
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                return null;
+            }
+            return LocalTime.of(hour, minute);
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private String inferExplicitActivity(String originalText, String normalizedText, int titleStartIndex, String interpretedTitle) {
+        if (!isBlank(interpretedTitle) && !"일정".equals(interpretedTitle.trim())) {
+            return interpretedTitle.trim();
+        }
+        if (titleStartIndex < 0 || titleStartIndex >= normalizedText.length()) {
+            return inferTitleFromText(originalText);
+        }
+        String title = normalizedText.substring(titleStartIndex);
+        String[] removableTokens = {
+                "일정추가하라고", "일정추가해줘", "일정넣어줘", "일정등록해줘",
+                "추가하라고", "추가해줘", "넣어줘", "등록해줘",
+                "일정추가", "추가", "넣어", "등록", "하라고", "해줘", "해"
+        };
+        boolean changed;
+        do {
+            changed = false;
+            for (String token : removableTokens) {
+                if (title.endsWith(token)) {
+                    title = title.substring(0, title.length() - token.length());
+                    changed = true;
+                }
+            }
+        } while (changed);
+        title = title.replaceAll("^[\\s,./:;]+|[\\s,./:;]+$", "");
+        if (!title.isBlank()) {
+            return title;
+        }
+        return inferTitleFromText(originalText);
+    }
+
+    private DayOfWeek koreanDayOfWeek(String value) {
+        return switch (value) {
+            case "월" -> DayOfWeek.MONDAY;
+            case "화" -> DayOfWeek.TUESDAY;
+            case "수" -> DayOfWeek.WEDNESDAY;
+            case "목" -> DayOfWeek.THURSDAY;
+            case "금" -> DayOfWeek.FRIDAY;
+            case "토" -> DayOfWeek.SATURDAY;
+            case "일" -> DayOfWeek.SUNDAY;
+            default -> null;
+        };
+    }
+
+    private boolean isCreateAction(String action) {
+        if (action == null) {
+            return false;
+        }
+        String normalized = action.trim().replace('-', '_').replace(' ', '_').toLowerCase(Locale.ROOT);
+        return normalized.equals("create")
+                || normalized.equals("add")
+                || normalized.equals("schedule")
+                || normalized.equals("create_event");
+    }
+
+    private boolean containsExplicitCreateVerb(String normalizedText) {
+        return normalizedText.contains("넣어")
+                || normalizedText.contains("추가")
+                || normalizedText.contains("등록")
+                || normalizedText.contains("만들")
+                || normalizedText.contains("잡아");
+    }
+
+    private boolean isEventTarget(String targetType) {
+        if (targetType == null) {
+            return true;
+        }
+        String normalized = targetType.trim().replace('-', '_').replace(' ', '_').toLowerCase(Locale.ROOT);
+        return normalized.equals("event")
+                || normalized.equals("schedule")
+                || normalized.equals("calendar")
+                || normalized.equals("meeting");
+    }
+
     private boolean isFollowUpReference(String text) {
         return text.contains("그거") || text.contains("그건") || text.contains("아니") || text.equals("12시");
     }
@@ -483,11 +673,18 @@ public class AssistantPolicyService {
         return null;
     }
 
+    private String firstNonBlank(String first, String second) {
+        return isBlank(first) ? second : first;
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+    }
+
+    private record TimeRange(LocalTime start, LocalTime end, int endIndex) {
     }
 }

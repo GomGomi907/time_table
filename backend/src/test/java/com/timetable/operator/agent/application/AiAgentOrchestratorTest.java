@@ -105,6 +105,53 @@ class AiAgentOrchestratorTest {
     }
 
     @Test
+    void weekdayRangeCommuteCreateUsesDeterministicFiveDayDraft() {
+        when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "create", "event", null, "출근(이동)", null, "08:30", "09:30",
+                null, null, null,
+                List.of(), List.of(), 0.95, true, ""
+        ));
+
+        StructuredAiCommandBatch resolved = orchestrator.resolve(request("월~금요일 오전 08:30 ~ 09:30 출근(이동) 넣어줘"));
+
+        assertThat(resolved.explanation()).isEqualTo("확인이 필요합니다.");
+        assertThat(resolved.commands()).hasSize(5);
+        assertThat(resolved.commands()).allSatisfy(command -> {
+            assertThat(command.actionType()).isEqualTo(AgentCommandActionType.CREATE_EVENT.wireValue());
+            assertThat(command.targetType()).isEqualTo(AgentCommandTargetType.EVENT.wireValue());
+            assertThat(command.targetId()).isNull();
+            assertThat(command.requiresConfirmation()).isTrue();
+            assertThat(command.payload())
+                    .containsEntry("startTime", "08:30")
+                    .containsEntry("endTime", "09:30")
+                    .containsEntry("activity", "출근(이동)")
+                    .containsEntry("category", ScheduleCategory.WORK.name());
+        });
+        assertThat(resolved.commands())
+                .extracting(command -> command.payload().get("dayOfWeek"))
+                .containsExactly("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY");
+        verify(stageClient, never()).draft(any(), any());
+        verify(stageClient, never()).repair(any(), any(), any(), any());
+    }
+
+    @Test
+    void weekdayRangeCreateCanRecoverWhenInterpretActionIsTooBroad() {
+        when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
+                "request_reschedule", "event", null, "출근(이동)", null, "08:30", "09:30",
+                null, null, null,
+                List.of(), List.of(), 0.65, true, ""
+        ));
+
+        StructuredAiCommandBatch resolved = orchestrator.resolve(request("월~금요일 오전 08:30 ~ 09:30 출근(이동) 일정 추가하라고"));
+
+        assertThat(resolved.commands()).hasSize(5);
+        assertThat(resolved.commands())
+                .extracting(command -> command.payload().get("dayOfWeek"))
+                .containsExactly("MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY");
+        verify(stageClient, never()).draft(any(), any());
+    }
+
+    @Test
     void missingUserInfoSkipsDraftAndRepair() {
         when(stageClient.interpret(any())).thenReturn(new AiAgentInterpretation(
                 "create", "event", null, "회의", null, null, null, null, null, null,
