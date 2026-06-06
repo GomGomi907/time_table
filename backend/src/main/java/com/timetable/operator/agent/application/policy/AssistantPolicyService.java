@@ -140,7 +140,14 @@ public class AssistantPolicyService {
     }
 
     public StructuredAiCommandBatch applyPostflightPolicies(AiAgentRequest request, StructuredAiCommandBatch draft) {
-        if (draft == null || draft.commands() == null || request.context() == null || request.context().events() == null) {
+        if (draft == null || draft.commands() == null) {
+            return null;
+        }
+        StructuredAiCommandBatch safetyGuard = postflightMutationSafetyGuard(request, draft);
+        if (safetyGuard != null) {
+            return safetyGuard;
+        }
+        if (request.context() == null || request.context().events() == null) {
             return null;
         }
         for (StructuredAiCommand command : draft.commands()) {
@@ -172,6 +179,99 @@ public class AssistantPolicyService {
             }
         }
         return null;
+    }
+
+    private StructuredAiCommandBatch postflightMutationSafetyGuard(AiAgentRequest request, StructuredAiCommandBatch draft) {
+        for (StructuredAiCommand command : draft.commands()) {
+            CommandRiskAssessment risk = assessCommandRisk(request, command);
+            if (risk.blocked()) {
+                return assistantProposalBatch(request, risk.summary(), risk.message(), risk.reason(), risk.payload());
+            }
+        }
+        return null;
+    }
+
+    private CommandRiskAssessment assessCommandRisk(AiAgentRequest request, StructuredAiCommand command) {
+        if (!AgentCommandActionType.DELETE_EVENT.wireValue().equals(command.actionType())) {
+            return CommandRiskAssessment.allowed();
+        }
+        String normalizedReason = normalize(request == null ? null : request.reason());
+        if (isBlank(command.targetId()) || isBulkDestructiveRequest(normalizedReason)) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("requestKind", "destructive_bulk");
+            payload.put("blockedAction", command.actionType());
+            payload.put("eventCandidates", eventCandidates(request, normalizedReason));
+            payload.put("scheduleBlockCandidates", scheduleBlockCandidates(request, normalizedReason));
+            payload.put("externalMutationAllowed", false);
+            payload.put("requiresUserConfirmation", true);
+            return CommandRiskAssessment.blocked(
+                    "삭제 전 확인이 필요합니다",
+                    "삭제/취소 후보를 먼저 분류했습니다. AI 초안만으로 바로 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.",
+                    "postflight_destructive_candidate_confirmation",
+                    payload
+            );
+        }
+        List<String> protectedTargets = protectedExternalTargets(request, command);
+        if (!protectedTargets.isEmpty()) {
+            return CommandRiskAssessment.blocked(
+                    "외부 원본 변경은 확인이 필요합니다",
+                    "외부 캘린더 일정은 AI 초안이 바로 삭제하지 않습니다. 먼저 후보를 확인하고 Google 반영 여부를 명시적으로 선택해야 합니다.",
+                    "external_direct_mutation_blocked",
+                    Map.of(
+                            "requestKind", "external_calendar_protection",
+                            "blockedAction", command.actionType(),
+                            "protectedTargets", protectedTargets,
+                            "externalMutationAllowed", false,
+                            "requiresUserConfirmation", true
+                    )
+            );
+        }
+        return CommandRiskAssessment.allowed();
+    }
+
+    private List<String> eventCandidates(AiAgentRequest request, String normalizedText) {
+        AiRescheduleClient.RescheduleAiContext context = request == null ? null : request.context();
+        return context == null || context.events() == null ? List.of() : context.events().stream()
+                .filter(event -> !normalizedText.contains("일관련") || isWorkLike(event.title(), event.description(), event.category()))
+                .limit(12)
+                .map(event -> event.title() + externalSuffix(event.syncState()))
+                .toList();
+    }
+
+    private List<String> scheduleBlockCandidates(AiAgentRequest request, String normalizedText) {
+        AiRescheduleClient.RescheduleAiContext context = request == null ? null : request.context();
+        return context == null || context.weeklyBlocks() == null ? List.of() : context.weeklyBlocks().stream()
+                .filter(block -> !normalizedText.contains("일관련") || isWorkLike(block.activity(), block.note(), block.category()))
+                .limit(12)
+                .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
+                .toList();
+    }
+
+    private List<String> protectedExternalTargets(AiAgentRequest request, StructuredAiCommand command) {
+        AiRescheduleClient.RescheduleAiContext context = request == null ? null : request.context();
+        if (context == null || isBlank(command.targetId())) {
+            return List.of();
+        }
+        String targetType = normalize(command.targetType());
+        if (AgentCommandTargetType.EVENT.wireValue().equals(targetType) && context.events() != null) {
+            return context.events().stream()
+                    .filter(event -> command.targetId().equals(event.id()))
+                    .filter(event -> isExternalSyncState(event.syncState()))
+                    .map(event -> event.title() + externalSuffix(event.syncState()))
+                    .toList();
+        }
+        if (AgentCommandTargetType.TASK.wireValue().equals(targetType) && context.tasks() != null) {
+            return context.tasks().stream()
+                    .filter(task -> command.targetId().equals(task.id()))
+                    .filter(task -> isExternalSyncState(task.syncState()))
+                    .map(task -> task.title() + externalSuffix(task.syncState()))
+                    .toList();
+        }
+        return List.of();
+    }
+
+    private boolean isExternalSyncState(String syncState) {
+        return syncState != null && !syncState.isBlank() && !syncState.equalsIgnoreCase("LOCAL_ONLY");
     }
 
     private StructuredAiCommandBatch afterWorkCreateBatch(AiAgentRequest request, AiAgentInterpretation interpretation) {
@@ -260,17 +360,8 @@ public class AssistantPolicyService {
     }
 
     private StructuredAiCommandBatch bulkDestructiveBatch(AiAgentRequest request, String normalizedText) {
-        AiRescheduleClient.RescheduleAiContext context = request.context();
-        List<String> eventCandidates = context == null ? List.of() : context.events().stream()
-                .filter(event -> !normalizedText.contains("일관련") || isWorkLike(event.title(), event.description(), event.category()))
-                .limit(12)
-                .map(event -> event.title() + externalSuffix(event.syncState()))
-                .toList();
-        List<String> blockCandidates = context == null ? List.of() : context.weeklyBlocks().stream()
-                .filter(block -> !normalizedText.contains("일관련") || isWorkLike(block.activity(), block.note(), block.category()))
-                .limit(12)
-                .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
-                .toList();
+        List<String> eventCandidates = eventCandidates(request, normalizedText);
+        List<String> blockCandidates = scheduleBlockCandidates(request, normalizedText);
         String message = "삭제/취소 후보를 먼저 분류했습니다. 외부 일정은 직접 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.";
         return assistantProposalBatch(
                 request,
@@ -767,6 +858,23 @@ public class AssistantPolicyService {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
     }
 
+    private record CommandRiskAssessment(
+            boolean blocked,
+            String summary,
+            String message,
+            String reason,
+            Map<String, Object> payload
+    ) {
+        private static CommandRiskAssessment allowed() {
+            return new CommandRiskAssessment(false, null, null, null, Map.of());
+        }
+
+        private static CommandRiskAssessment blocked(String summary, String message, String reason, Map<String, Object> payload) {
+            return new CommandRiskAssessment(true, summary, message, reason, payload);
+        }
+    }
+
     private record TimeRange(LocalTime start, LocalTime end, int endIndex) {
     }
 }
+

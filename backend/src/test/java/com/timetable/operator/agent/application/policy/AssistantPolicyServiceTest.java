@@ -120,6 +120,94 @@ class AssistantPolicyServiceTest {
         assertThat(conflict.commands().getFirst().payload().get("conflicts").toString()).contains("기존 회의");
     }
 
+    @Test
+    void postflightSafetyPolicyBlocksExternalDirectDeletionDraft() {
+        StructuredAiCommandBatch resolved = policyService.applyPostflightPolicies(
+                request("외부 회의 삭제해줘", context(
+                        List.of(event("외부 회의", "WORK", "2026-06-05T01:00:00Z", "2026-06-05T02:00:00Z", "GOOGLE")),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                )),
+                new StructuredAiCommandBatch("외부 회의 삭제", "draft", List.of(new StructuredAiCommand(
+                        AgentCommandActionType.DELETE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        "event-1",
+                        Map.of(),
+                        "draft",
+                        true
+                )))
+        );
+
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.requiresConfirmation()).isFalse();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
+        assertThat(command.reason()).isEqualTo("external_direct_mutation_blocked");
+        assertThat(command.payload())
+                .containsEntry("requestKind", "external_calendar_protection")
+                .containsEntry("blockedAction", AgentCommandActionType.DELETE_EVENT.wireValue())
+                .containsEntry("externalMutationAllowed", false)
+                .containsEntry("requiresUserConfirmation", true);
+        assertThat(command.payload().get("protectedTargets").toString()).contains("외부 회의", "외부 원본 보호");
+    }
+
+    @Test
+    void postflightSafetyPolicyTurnsUntargetedDeleteDraftIntoCandidateReview() {
+        StructuredAiCommandBatch resolved = policyService.applyPostflightPolicies(
+                request("회의 없애줘", context(
+                        List.of(event("제품 회의", "WORK", "2026-06-05T01:00:00Z", "2026-06-05T02:00:00Z", "LOCAL_ONLY")),
+                        List.of(block("MONDAY", "09:00", "10:00", "업무 계획", "WORK")),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                )),
+                new StructuredAiCommandBatch("회의 삭제", "draft", List.of(new StructuredAiCommand(
+                        AgentCommandActionType.DELETE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        null,
+                        Map.of(),
+                        "draft",
+                        true
+                )))
+        );
+
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.requiresConfirmation()).isFalse();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
+        assertThat(command.reason()).isEqualTo("postflight_destructive_candidate_confirmation");
+        assertThat(command.payload())
+                .containsEntry("requestKind", "destructive_bulk")
+                .containsEntry("blockedAction", AgentCommandActionType.DELETE_EVENT.wireValue())
+                .containsEntry("externalMutationAllowed", false)
+                .containsEntry("requiresUserConfirmation", true);
+        assertThat(command.payload().get("eventCandidates").toString()).contains("제품 회의");
+        assertThat(command.payload().get("scheduleBlockCandidates").toString()).contains("업무 계획");
+    }
+
+    @Test
+    void postflightSafetyPolicyAllowsExplicitLocalSingleDeleteForValidationAndMatch() {
+        StructuredAiCommandBatch resolved = policyService.applyPostflightPolicies(
+                request("제품 회의 삭제해줘", context(
+                        List.of(event("제품 회의", "WORK", "2026-06-05T01:00:00Z", "2026-06-05T02:00:00Z", "LOCAL_ONLY")),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                )),
+                new StructuredAiCommandBatch("제품 회의 삭제", "draft", List.of(new StructuredAiCommand(
+                        AgentCommandActionType.DELETE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        "event-1",
+                        Map.of(),
+                        "draft",
+                        true
+                )))
+        );
+
+        assertThat(resolved).isNull();
+    }
+
     private AiAgentRequest request(String reason, AiRescheduleClient.RescheduleAiContext context) {
         return new AiAgentRequest(user, reason, context);
     }
@@ -159,3 +247,4 @@ class AssistantPolicyServiceTest {
         return new AiRescheduleClient.AvailabilityWindowContext(startAt, endAt, label, 30, "test");
     }
 }
+
