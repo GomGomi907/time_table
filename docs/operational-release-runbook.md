@@ -216,3 +216,22 @@ Write `.omx/reports/release-readiness-<timestamp>.md` with:
 - desktop/mobile QA evidence
 - ops sheet/runbook links
 - explicit beta invitation decision
+
+### AI live scenario gate
+
+Before claiming AI-assistant readiness, run the deterministic scenario harness and then the gated live probe when credentials are available:
+
+```powershell
+cd backend
+.\gradlew.bat test --tests com.timetable.operator.agent.application.AiScenarioEvaluationHarnessTest
+cd ..
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\llm-live-probe.ps1 `
+  -BaseUrl 'http://127.0.0.1:8080' `
+  -ScenarioSetPath 'backend/src/test/resources/ai-scenarios' `
+  -Repeat 3 `
+  -MaxP95LatencyMs 8000 `
+  -FailOnUnsafe `
+  -FailOnUnstable
+```
+
+Attach the `.omx/reports/llm-live-probe-*.json` path to the release evidence. Do not commit raw live reports.

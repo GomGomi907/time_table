@@ -378,6 +378,85 @@ export interface StructuredAiCommandBatch {
   commands: StructuredAiCommand[];
 }
 
+
+export interface AiDecisionScope {
+  start: string | null;
+  end: string | null;
+  timezone: string;
+}
+
+export interface AiDecisionUnderstanding {
+  summary: string;
+  explanation: string;
+  interpretedAs: string;
+  mode: string | null;
+}
+
+export interface AiDecisionAnalysis {
+  affectedWorkItems: string[];
+  protectedPersonalItems: string[];
+  externalItems: string[];
+  conflicts: string[];
+  risks: string[];
+}
+
+export interface AiDecisionProposedChange {
+  actionType: string;
+  targetType: string;
+  targetId: string | null;
+  title: string;
+  detail: string;
+  reason: string;
+  executable: boolean;
+}
+
+export interface AiDecisionProposal {
+  proposedChanges: AiDecisionProposedChange[];
+  requiresConfirmation: boolean;
+  externalMutationAllowed: boolean;
+}
+
+export interface AiDecisionUserEffort {
+  needsClarification: boolean;
+  question: string | null;
+  reviewComplexity: string;
+}
+
+export interface AiDecisionPrivacy {
+  contextMinimized: boolean;
+  sensitiveFieldsRedacted: string[];
+  privacyExposureScore: number;
+  estimatedCharacters: number;
+}
+
+export interface AiDecisionDisplaySection {
+  key: string;
+  label: string;
+  body: string;
+  items: string[];
+  severity: "neutral" | "safe" | "warning" | string;
+}
+
+export interface AiDecisionPackage {
+  requestKind: string;
+  trustLevel: string;
+  scope: AiDecisionScope;
+  understanding: AiDecisionUnderstanding;
+  analysis: AiDecisionAnalysis;
+  proposal: AiDecisionProposal;
+  userEffort: AiDecisionUserEffort;
+  privacy: AiDecisionPrivacy;
+  trustUxSections: Record<string, string>;
+  displaySections: AiDecisionDisplaySection[];
+  affectedItems: string[];
+  protectedItems: string[];
+  externalBlockedItems: string[];
+  proposedChanges: AiDecisionProposedChange[];
+  requiresConfirmation: boolean;
+  confirmationReason: string;
+  clarificationQuestion: string | null;
+  riskLevel: "low" | "medium" | "high" | string;
+}
 export interface RescheduleSuggestion {
   id: string;
   triggerType: string;
@@ -390,6 +469,7 @@ export interface RescheduleSuggestion {
   decisionReason: string | null;
   explanation: string;
   commandBatch: StructuredAiCommandBatch;
+  decisionPackage: AiDecisionPackage | null;
   previewItems: SuggestionPreviewItem[];
   executableCommandCount: number;
   executable: boolean;

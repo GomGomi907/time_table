@@ -213,14 +213,54 @@ export function getSuggestionResolutionType(suggestion: RescheduleSuggestion) {
 }
 
 export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): SuggestionDisplayState {
+  const decisionPackage = suggestion.decisionPackage;
+  const trustLevel = decisionPackage?.trustLevel;
+  const understanding = decisionPackage?.understanding;
+
+  if (trustLevel === "provider_unavailable") {
+    return {
+      kind: "provider_unavailable",
+      title: "AI 요청을 처리하지 못했습니다.",
+      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation || suggestion.explanation, "잠시 후 다시 시도해 주세요."),
+      guidance: "요청 내용은 보존됩니다. 원인을 확인한 뒤 다시 요청하세요.",
+      canApply: false,
+      applyLabel: "다시 요청 필요",
+    };
+  }
+
+  if (trustLevel === "clarification_required" || decisionPackage?.userEffort?.needsClarification) {
+    return {
+      kind: "clarification",
+      title: toSafeSuggestionText(understanding?.summary || suggestion.summary, "확인이 필요합니다."),
+      detail: toSafeSuggestionText(
+        decisionPackage?.clarificationQuestion || decisionPackage?.userEffort?.question || understanding?.explanation || suggestion.explanation,
+        "바꾸고 싶은 내용을 한 문장으로 더 알려주세요.",
+      ),
+      guidance: null,
+      canApply: false,
+      applyLabel: "추가 정보 필요",
+    };
+  }
+
   if (suggestion.executable) {
     return {
       kind: "executable",
-      title: "변경 제안",
-      detail: "변경 시간을 확인하고 적용하세요.",
-      guidance: null,
+      title: trustLevel === "review_required" ? "검토가 필요한 변경 제안" : "변경 제안",
+      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation, "변경 시간을 확인하고 적용하세요."),
+      guidance: decisionPackage?.riskLevel === "high" ? "영향 범위가 큰 변경입니다. 적용 전 후보를 한 번 더 확인하세요." : null,
       canApply: true,
-      applyLabel: "적용",
+      applyLabel: trustLevel === "review_required" ? "검토 후 적용" : "적용",
+    };
+  }
+
+  if (trustLevel === "review_required" || decisionPackage?.requiresConfirmation) {
+    return {
+      kind: "clarification",
+      title: toSafeSuggestionText(understanding?.summary || suggestion.summary, "확인이 필요합니다."),
+      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation || suggestion.explanation, "적용 전 후보가 맞는지 확인이 필요합니다."),
+      guidance: "AI가 바로 바꾸지 않고 확인이 필요한 항목만 정리했습니다.",
+      canApply: false,
+      applyLabel: "확인 필요",
     };
   }
 
@@ -238,7 +278,7 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
       ),
       guidance: null,
       canApply: false,
-      applyLabel: "적용할 변경 없음",
+      applyLabel: "추가 정보 필요",
     };
   }
 
@@ -256,11 +296,11 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
 
   return {
     kind: "non_executable",
-    title: toSafeSuggestionText(suggestion.summary, "적용할 변경이 없습니다."),
-    detail: toSafeSuggestionText(suggestion.explanation, "요청을 더 구체적으로 다시 보내주세요."),
+    title: toSafeSuggestionText(understanding?.summary || suggestion.summary, "적용할 변경이 없습니다."),
+    detail: toSafeSuggestionText(understanding?.explanation || suggestion.explanation, "요청을 더 구체적으로 다시 보내주세요."),
     guidance: "필요하면 일정을 다시 작성해 보내세요.",
     canApply: false,
-    applyLabel: "적용할 변경 없음",
+    applyLabel: "정보 확인",
   };
 }
 

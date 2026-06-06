@@ -37,6 +37,7 @@ public class AssistantPolicyService {
         String text = normalize(request.reason());
         if (isRecurringRoutineRequest(text)) {
             return clarificationBatch(
+                    request,
                     "반복 일정으로 바꿀 범위를 확인해야 합니다. 요일, 시간, 기간이 이번만인지 앞으로 계속인지 알려주세요.",
                     "recurring_routine_scope_required",
                     Map.of("requestKind", "recurring_routine")
@@ -44,6 +45,7 @@ public class AssistantPolicyService {
         }
         if (text.contains("출장") && !hasDateCue(text)) {
             return clarificationBatch(
+                    request,
                     "출장 날짜와 대략적인 시간대, 장소를 알려주면 해당 기간의 근무/출퇴근/루틴 영향을 정리해 드릴게요.",
                     "travel_range_required",
                     Map.of("requestKind", "status_declaration", "mode", "출장")
@@ -66,6 +68,7 @@ public class AssistantPolicyService {
         }
         if (isFollowUpReference(text) && !hasSingleHistoryAnchor(request)) {
             return clarificationBatch(
+                    request,
                     "어떤 제안을 말하는지 하나로 좁혀지지 않습니다. 바꿀 일정이나 직전 제안을 다시 찍어 주세요.",
                     "ambiguous_follow_up_target",
                     Map.of("requestKind", "follow_up")
@@ -94,6 +97,7 @@ public class AssistantPolicyService {
                     .toList();
             if (!conflicts.isEmpty()) {
                 return assistantProposalBatch(
+                        request,
                         "시간 충돌이 있습니다",
                         "요청한 시간에 이미 일정이 있어 바로 추가하지 않았습니다. 겹친 일정을 확인하고 다른 시간을 고르거나 조정 여부를 알려주세요.",
                         "event_time_conflict",
@@ -140,6 +144,7 @@ public class AssistantPolicyService {
         payload.put("startAt", startAt.toInstant().toString());
         payload.put("endAt", endAt.toInstant().toString());
         payload.put("category", inferCategory(request.reason()).name());
+        payload.putAll(contextMetadata(request));
         return new StructuredAiCommandBatch(
                 title + " 추가",
                 "퇴근 이후 빈 시간대로 해석해 확인용 일정을 만들었습니다.",
@@ -176,6 +181,7 @@ public class AssistantPolicyService {
                         (normalizedText.contains("아파") || normalizedText.contains("몸이안좋") || normalizedText.contains("병가")) ? "저에너지/병가" : "휴가";
         String message = "%s 모드로 보고 근무/회의/출퇴근/업무 태스크 영향을 검토했습니다. 개인 일정은 보존하고 외부 일정은 직접 삭제하지 않습니다.".formatted(mode);
         return assistantProposalBatch(
+                request,
                 mode + " 일정 조정안",
                 message,
                 "status_declaration_impact_analysis",
@@ -205,6 +211,7 @@ public class AssistantPolicyService {
                 .toList();
         String message = "삭제/취소 후보를 먼저 분류했습니다. 외부 일정은 직접 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.";
         return assistantProposalBatch(
+                request,
                 "삭제 전 확인이 필요합니다",
                 message,
                 "destructive_candidate_confirmation",
@@ -235,6 +242,7 @@ public class AssistantPolicyService {
                 ? inferTitleFromText(request.reason())
                 : interpretation.title();
         return assistantProposalBatch(
+                request,
                 title + " 후보 시간",
                 "정확한 시간이 없어 가능한 시간 후보를 먼저 골랐습니다. 원하는 후보를 고르면 확인용 일정으로 만들 수 있습니다.",
                 "availability_candidates",
@@ -248,12 +256,14 @@ public class AssistantPolicyService {
     }
 
     private StructuredAiCommandBatch assistantProposalBatch(
+            AiAgentRequest request,
             String summary,
             String explanation,
             String reason,
             Map<String, Object> payload
     ) {
         Map<String, Object> copy = new LinkedHashMap<>(payload);
+        copy.putAll(contextMetadata(request));
         copy.put("resolutionType", "assistant_confirmation_required");
         copy.put("message", explanation);
         return new StructuredAiCommandBatch(
@@ -270,8 +280,9 @@ public class AssistantPolicyService {
         );
     }
 
-    private StructuredAiCommandBatch clarificationBatch(String question, String reason, Map<String, Object> extraPayload) {
+    private StructuredAiCommandBatch clarificationBatch(AiAgentRequest request, String question, String reason, Map<String, Object> extraPayload) {
         Map<String, Object> payload = new LinkedHashMap<>(extraPayload);
+        payload.putAll(contextMetadata(request));
         payload.put("resolutionType", "clarification_required");
         payload.put("clarificationQuestion", question);
         payload.put("message", question);
@@ -289,6 +300,26 @@ public class AssistantPolicyService {
         );
     }
 
+
+    private Map<String, Object> contextMetadata(AiAgentRequest request) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (request == null) {
+            return metadata;
+        }
+        if (request.user() != null && request.user().getTimezone() != null && !request.user().getTimezone().isBlank()) {
+            metadata.put("timezone", request.user().getTimezone());
+        }
+        AiRescheduleClient.RescheduleAiContext context = request.context();
+        if (context != null && context.request() != null) {
+            if (!isBlank(context.request().resolvedRangeStart())) {
+                metadata.put("scopeStart", context.request().resolvedRangeStart());
+            }
+            if (!isBlank(context.request().resolvedRangeEnd())) {
+                metadata.put("scopeEnd", context.request().resolvedRangeEnd());
+            }
+        }
+        return metadata;
+    }
     private boolean overlaps(Instant startAt, Instant endAt, Instant otherStartAt, Instant otherEndAt) {
         return startAt != null && endAt != null && otherStartAt != null && otherEndAt != null
                 && startAt.isBefore(otherEndAt) && endAt.isAfter(otherStartAt);

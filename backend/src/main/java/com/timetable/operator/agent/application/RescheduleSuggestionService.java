@@ -3,6 +3,7 @@ package com.timetable.operator.agent.application;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timetable.operator.agent.application.context.AiContextPackageBuilder;
+import com.timetable.operator.agent.application.decision.AiDecisionPackageFactory;
 import com.timetable.operator.agent.domain.AgentCommandActionType;
 import com.timetable.operator.agent.domain.AiDecisionPackage;
 import com.timetable.operator.agent.domain.AgentCommandTargetType;
@@ -45,6 +46,7 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -79,6 +81,7 @@ public class RescheduleSuggestionService {
     private final ProviderWriteOutboxService providerWriteOutboxService;
     private final AiRequestAgentService aiRequestAgentService;
     private final AiContextPackageBuilder aiContextPackageBuilder;
+    private final AiDecisionPackageFactory aiDecisionPackageFactory;
 
     @Transactional
     public RescheduleSuggestionResponse createManualSuggestion(ManualRescheduleRequest request) {
@@ -96,7 +99,14 @@ public class RescheduleSuggestionService {
     }
 
     private StructuredAiCommandBatch resolveManualSuggestionBatch(AppUser user, ManualRescheduleRequest request) {
-        return aiRequestAgentService.resolveManualRequest(user, request.reason(), buildAiContext(user, request));
+        AiRescheduleClient.RescheduleAiContext context = buildAiContext(user, request);
+        StructuredAiCommandBatch batch = aiRequestAgentService.resolveManualRequest(user, request.reason(), context);
+        return enrichBatchWithDecisionMetadata(
+                batch,
+                user.getTimezone(),
+                context.request() == null ? null : context.request().resolvedRangeStart(),
+                context.request() == null ? null : context.request().resolvedRangeEnd()
+        );
     }
 
     @Transactional
@@ -114,9 +124,14 @@ public class RescheduleSuggestionService {
                                 normalizedChatCommand.normalizedMessage()
                         )
                 )
-                : aiRequestAgentService.resolvePrebuiltCommandBatch(
-                        user,
-                        normalizedChatCommand.commandBatch()
+                : enrichBatchWithDecisionMetadata(
+                        aiRequestAgentService.resolvePrebuiltCommandBatch(
+                                user,
+                                normalizedChatCommand.commandBatch()
+                        ),
+                        user.getTimezone(),
+                        null,
+                        null
                 );
         return createSuggestion(
                 user.getId(),
@@ -143,7 +158,7 @@ public class RescheduleSuggestionService {
                 summary,
                 reason,
                 explanation,
-                batch
+                enrichBatchWithDecisionMetadata(batch, user.getTimezone(), null, null)
         );
     }
 
@@ -258,11 +273,12 @@ public class RescheduleSuggestionService {
 
     private RescheduleSuggestionResponse toResponse(RescheduleSuggestion suggestion) {
         StructuredAiCommandBatch batch = readBatch(suggestion.getSuggestionPayload());
-        AiDecisionPackage decisionPackage = AiDecisionPackage.from(
+        AiDecisionPackage decisionPackage = aiDecisionPackageFactory.fromBatch(
                 batch,
-                null,
-                null,
-                null
+                currentUserTimezone(),
+                readBatchPayloadString(batch, "scopeStart"),
+                readBatchPayloadString(batch, "scopeEnd"),
+                readRequestKind(batch)
         );
         List<SuggestionPreviewItemResponse> previewItems = buildPreviewItems(batch);
         int executableCommandCount = (int) batch.commands().stream()
@@ -361,6 +377,111 @@ public class RescheduleSuggestionService {
         };
     }
 
+
+
+    private StructuredAiCommandBatch enrichBatchWithDecisionMetadata(
+            StructuredAiCommandBatch batch,
+            String timezone,
+            String scopeStart,
+            String scopeEnd
+    ) {
+        if (batch == null || batch.commands() == null || batch.commands().isEmpty()) {
+            return batch;
+        }
+        String requestKind = readRequestKind(batch);
+        String resolvedScopeStart = firstNonBlank(scopeStart, deriveScopeStart(batch));
+        String resolvedScopeEnd = firstNonBlank(scopeEnd, deriveScopeEnd(batch));
+        return new StructuredAiCommandBatch(
+                batch.summary(),
+                batch.explanation(),
+                batch.commands().stream()
+                        .map(command -> enrichCommandWithDecisionMetadata(command, timezone, resolvedScopeStart, resolvedScopeEnd, requestKind))
+                        .toList()
+        );
+    }
+
+    private StructuredAiCommand enrichCommandWithDecisionMetadata(
+            StructuredAiCommand command,
+            String timezone,
+            String scopeStart,
+            String scopeEnd,
+            String requestKind
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>(command.payload() == null ? Map.of() : command.payload());
+        putIfPresent(payload, "timezone", timezone);
+        putIfPresent(payload, "scopeStart", scopeStart);
+        putIfPresent(payload, "scopeEnd", scopeEnd);
+        putIfPresent(payload, "requestKind", requestKind);
+        return new StructuredAiCommand(
+                command.actionType(),
+                command.targetType(),
+                command.targetId(),
+                Map.copyOf(payload),
+                command.reason(),
+                command.requiresConfirmation()
+        );
+    }
+
+    private void putIfPresent(Map<String, Object> payload, String key, String value) {
+        if (value != null && !value.isBlank() && !payload.containsKey(key)) {
+            payload.put(key, value.trim());
+        }
+    }
+
+    private String deriveScopeStart(StructuredAiCommandBatch batch) {
+        return batch.commands().stream()
+                .map(command -> readString(command.payload(), "scopeStart", "startAt", "start_at"))
+                .filter(this::isValidInstantText)
+                .min(String::compareTo)
+                .orElse(null);
+    }
+
+    private String deriveScopeEnd(StructuredAiCommandBatch batch) {
+        return batch.commands().stream()
+                .map(command -> readString(command.payload(), "scopeEnd", "endAt", "end_at"))
+                .filter(this::isValidInstantText)
+                .max(String::compareTo)
+                .orElse(null);
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        return second == null || second.isBlank() ? null : second.trim();
+    }
+
+    private boolean isValidInstantText(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        try {
+            Instant.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException exception) {
+            return false;
+        }
+    }
+
+    private String currentUserTimezone() {
+        try {
+            AppUser user = currentUserProvider.getCurrentUser();
+            return user == null ? null : user.getTimezone();
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private String readBatchPayloadString(StructuredAiCommandBatch batch, String key) {
+        if (batch == null || batch.commands() == null || batch.commands().isEmpty()) {
+            return null;
+        }
+        return batch.commands().stream()
+                .map(command -> readString(command.payload(), key))
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElse(null);
+    }
     private String readRequestKind(StructuredAiCommandBatch batch) {
         if (batch == null || batch.commands() == null) {
             return "manual_request";

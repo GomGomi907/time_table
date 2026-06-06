@@ -834,6 +834,57 @@ summary,
   overflow-wrap: anywhere;
 }
 
+
+.suggestion-decision-sections {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.suggestion-decision-section {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 10px 12px;
+}
+
+.suggestion-decision-section.warning {
+  border-color: rgba(191, 126, 42, 0.22);
+  background: rgba(255, 251, 241, 0.8);
+}
+
+.suggestion-decision-section.safe {
+  border-color: rgba(46, 125, 91, 0.16);
+  background: rgba(241, 252, 246, 0.72);
+}
+
+.suggestion-decision-section dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.suggestion-decision-section dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-decision-section ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
 .suggestion-preview-list {
   display: grid;
   gap: 8px;

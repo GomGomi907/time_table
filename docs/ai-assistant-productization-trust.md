@@ -65,3 +65,20 @@ Forbidden by default: raw prompts, API keys, full calendar descriptions, provide
 ## Differentiation versus native calendar AI
 
 The product differentiates through 5-minute orchestration, local routine/workload context, explicit external-calendar protection, and approval-first diff control. The assistant should make review easier, not hide risk behind opaque AI prose.
+
+## AiDecisionPackage v2 contract (2026-06-06)
+
+`AiDecisionPackage` is now the product-facing trust package, not just a wrapper over `StructuredAiCommandBatch`. API/UI consumers must treat it as the source of truth for explaining AI scheduling decisions.
+
+Required stable fields:
+- `requestKind`, `trustLevel`, `scope`
+- `understanding`
+- `affectedItems`, `protectedItems`, `externalBlockedItems`
+- `proposedChanges`
+- `requiresConfirmation`, `confirmationReason`, `clarificationQuestion`, `riskLevel`
+- `privacy`
+- ordered `displaySections`
+
+UI cards must render the ordered display sections so users can see what the assistant understood, what it may change, what it will not touch, which external items are blocked, why confirmation is required, and the apply-time change summary. Internal wire values such as `PENDING` or raw provider/debug labels must not be shown as user copy.
+
+The package must never expose chain-of-thought, raw prompts, provider metadata, validation traces, Authorization headers, API keys, or unsanitized full calendar descriptions.
