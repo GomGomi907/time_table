@@ -31,6 +31,7 @@ services:
       APP_AI_ENABLED: ${APP_AI_ENABLED:-false}
       APP_AI_BASE_URL: ${APP_AI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       APP_GEMINI_API_KEY: ${APP_GEMINI_API_KEY:-}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
       APP_AI_MODEL: ${APP_AI_MODEL:-gemini-2.5-flash}
       GOOGLE_CREDENTIALS_FILE: ${GOOGLE_CREDENTIALS_FILE:-/run/secrets/client_secret.json}
     ports:

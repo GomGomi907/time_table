@@ -168,7 +168,7 @@ class AgentControllerTest {
                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusLabel").value("적용 완료"))
+                .andExpect(jsonPath("$.data.statusLabel").value("반영 완료"))
                 .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1));
 
         ScheduleBlock shiftedBlock = scheduleBlockRepository.findById(savedBlock.getId()).orElseThrow();
@@ -226,7 +226,7 @@ class AgentControllerTest {
                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("rejected"))
-                .andExpect(jsonPath("$.data.statusLabel").value("사용 안 함"))
+                .andExpect(jsonPath("$.data.statusLabel").value("닫힘"))
                 .andExpect(jsonPath("$.data.statusDetail").value("지금은 수동으로 처리"));
 
         mockMvc.perform(get("/api/agent/suggestions").with(user("tester").roles("USER")))
@@ -714,7 +714,7 @@ class AgentControllerTest {
         RescheduleSuggestion savedSuggestion = saveSuggestion("""
                 {
                   "summary": "읽기 전용 Google 회의 이동",
-                  "explanation": "로컬 변경은 가능하지만 Google write는 재연동이 필요하다.",
+                  "explanation": "로컬 변경은 가능하지만 Google 캘린더 반영은 재연동이 필요하다.",
                   "commands": [
                     {
                       "action_type": "move_event",
@@ -739,9 +739,9 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 반영 대기 1개")))
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 캘린더에 나중에 반영할 항목 1개")))
                 .andExpect(jsonPath("$.data.executionSummary.appliedCount").value(1))
-                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 반영 대기 1개")));
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 캘린더에 나중에 반영할 항목 1개")));
 
         Event moved = eventRepository.findById(savedEvent.getId()).orElseThrow();
         assertThat(moved.getStartAt()).isEqualTo(Instant.parse("2026-05-15T01:30:00Z"));
@@ -768,7 +768,7 @@ class AgentControllerTest {
         RescheduleSuggestion savedSuggestion = saveSuggestion("""
                 {
                   "summary": "Google 미연동 상태 일정 추가",
-                  "explanation": "로컬 일정은 생성하지만 Google 쓰기는 예약할 수 없다.",
+                  "explanation": "로컬 일정은 생성하지만 Google 캘린더 반영은 예약할 수 없다.",
                   "commands": [
                     {
                       "action_type": "create_event",
@@ -798,8 +798,8 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 반영 대기 1개")))
-                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 반영 대기 1개")));
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 캘린더에 나중에 반영할 항목 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 캘린더에 나중에 반영할 항목 1개")));
 
         assertThat(eventRepository.count()).isEqualTo(eventCountBefore + 1);
         Event created = eventRepository.findByUserIdOrderByStartAtAsc(savedUser.getId()).stream()
@@ -894,7 +894,7 @@ class AgentControllerTest {
         RescheduleSuggestion savedSuggestion = saveSuggestion("""
                 {
                   "summary": "읽기 전용 Google 할 일 수정",
-                  "explanation": "로컬 변경은 가능하지만 Google Tasks 쓰기는 재연동이 필요하다.",
+                  "explanation": "로컬 변경은 가능하지만 Google Tasks 반영은 재연동이 필요하다.",
                   "commands": [
                     {
                       "action_type": "update_event",
@@ -919,8 +919,8 @@ class AgentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("applied"))
-                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 반영 대기 1개")))
-                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 반영 대기 1개")));
+                .andExpect(jsonPath("$.data.statusDetail", containsString("Google 캘린더에 나중에 반영할 항목 1개")))
+                .andExpect(jsonPath("$.data.executionSummary.detail", containsString("Google 캘린더에 나중에 반영할 항목 1개")));
 
         Task updated = taskRepository.findById(savedTask.getId()).orElseThrow();
         assertThat(updated.getTitle()).isEqualTo("읽기 전용 Google 할 일 - 수정");

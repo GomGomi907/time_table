@@ -117,8 +117,36 @@ export function durationInMinutes(startTime: string, endTime: string) {
   return diff + 24 * 60;
 }
 
+export function scheduleDisplayOrderMinutes(minutes: number) {
+  return minutes;
+}
+
+function scheduleEndDisplayOrderMinutes(startMinutes: number, endMinutes: number) {
+  return endMinutes <= startMinutes ? endMinutes + 24 * 60 : endMinutes;
+}
+
+export function compareScheduleBlocks(left: ScheduleBlock, right: ScheduleBlock) {
+  const leftStart = scheduleDisplayOrderMinutes(minutesFromClock(left.startTime));
+  const rightStart = scheduleDisplayOrderMinutes(minutesFromClock(right.startTime));
+  if (leftStart !== rightStart) {
+    return leftStart - rightStart;
+  }
+
+  const leftEnd = scheduleEndDisplayOrderMinutes(leftStart, minutesFromClock(left.endTime));
+  const rightEnd = scheduleEndDisplayOrderMinutes(rightStart, minutesFromClock(right.endTime));
+  if (leftEnd !== rightEnd) {
+    return leftEnd - rightEnd;
+  }
+
+  return left.activity.localeCompare(right.activity, "ko-KR") || left.id.localeCompare(right.id);
+}
+
+export function sortScheduleBlocks(blocks: ScheduleBlock[]) {
+  return [...blocks].sort(compareScheduleBlocks);
+}
+
 export function getDailyBlocks(week: WeekScheduleResponse | null, dayOfWeek: string) {
-  return week?.week.find((day) => day.dayOfWeek === dayOfWeek)?.blocks ?? [];
+  return sortScheduleBlocks(week?.week.find((day) => day.dayOfWeek === dayOfWeek)?.blocks ?? []);
 }
 
 export function isPlanningSignalBlock(block: ScheduleBlock) {
@@ -145,12 +173,6 @@ function getPlanningSignalBlocks(week: WeekScheduleResponse | null, dayOfWeek: s
   return blocks.length
     ? blocks
     : getDailyBlocks(week, dayOfWeek).filter((block) => block.category !== "SLEEP");
-}
-
-function sortBlocksByStart(blocks: ScheduleBlock[]) {
-  return [...blocks].sort(
-    (left, right) => minutesFromClock(left.startTime) - minutesFromClock(right.startTime),
-  );
 }
 
 export function getCurrentDayName(timeZone?: string) {
@@ -204,7 +226,7 @@ export function getNextScheduleBlocks(
 
   for (let offset = 0; offset < DAY_ORDER.length && upcomingBlocks.length < limit; offset += 1) {
     const dayOfWeek = DAY_ORDER[(startIndex + offset) % DAY_ORDER.length];
-    const dayBlocks = sortBlocksByStart(getPlanningSignalBlocks(week, dayOfWeek));
+    const dayBlocks = sortScheduleBlocks(getPlanningSignalBlocks(week, dayOfWeek));
 
     for (const block of dayBlocks) {
       if (offset === 0 && minutesFromClock(block.startTime) <= nowMinutes) {

@@ -396,7 +396,7 @@ export function FocusView() {
               <Link
                 className="ghost-btn link-btn focus-back-btn"
                 href="/dashboard"
-                aria-label="오늘 화면으로 돌아가기"
+                aria-label="일정표로 돌아가기"
               >
                 <svg
                   aria-hidden="true"

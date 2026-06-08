@@ -32,6 +32,100 @@ function agendaOccurrence(
   };
 }
 
+const WEEK_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function scheduleWeekResponse(mondayBlocks: Array<{ id: string; startTime: string; endTime: string; activity: string }>) {
+  return {
+    week: WEEK_DAYS.map((dayOfWeek) => ({
+      dayOfWeek,
+      blocks: dayOfWeek === "Monday"
+        ? mondayBlocks.map((block) => ({
+            id: block.id,
+            startTime: block.startTime,
+            endTime: block.endTime,
+            activity: block.activity,
+            category: "WORK",
+            note: null,
+            sourceType: "MANUAL",
+            sourceRef: "test",
+          }))
+        : [],
+    })),
+  };
+}
+
+test("weekly stack renders schedule blocks and calendar occurrences by time, not insertion group", async ({
+  page,
+}, testInfo) => {
+  await loginAsUniqueMockUser(page, testInfo);
+  await completeOnboardingIfPresent(page);
+
+  await page.route("**/api/schedule/week", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(scheduleWeekResponse([
+        { id: "late-routine", startTime: "10:00", endTime: "11:00", activity: "늦은 루틴 업무" },
+        { id: "early-routine", startTime: "08:00", endTime: "08:30", activity: "이른 루틴 업무" },
+      ])),
+    });
+  });
+
+  await page.route("**/api/calendar/range**", async (route) => {
+    const url = new URL(route.request().url());
+    const rangeStart = new Date(url.searchParams.get("start") ?? "2026-06-07T15:00:00.000Z");
+    const localTime = (hour: number, minute: number) =>
+      new Date(rangeStart.getTime() + (hour * 60 + minute) * 60_000).toISOString();
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        data: {
+          start: url.searchParams.get("start") ?? rangeStart.toISOString(),
+          end: url.searchParams.get("end") ?? new Date(rangeStart.getTime() + 7 * 24 * 60 * 60_000).toISOString(),
+          view: url.searchParams.get("view")?.toUpperCase() ?? "WEEK",
+          timezone: "Asia/Seoul",
+          occurrences: [
+            agendaOccurrence("calendar-overnight", "이어지는 밤샘 점검", localTime(0, -30), localTime(6, 0)),
+            agendaOccurrence("calendar-middle", "중간 캘린더 회의", localTime(9, 0), localTime(9, 30)),
+            agendaOccurrence("calendar-first", "가장 이른 캘린더", localTime(7, 30), localTime(8, 0)),
+          ],
+          instrumentation: {
+            repositoryGroupCount: 2,
+            repositoryGroups: ["events", "scheduleBlocks"],
+            occurrenceCount: 3,
+            rangeDays: 7,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/agent/suggestions", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, data: [] }),
+    });
+  });
+
+  await page.goto("/schedule");
+  await page.getByTestId("schedule-view-option-week").click();
+  await expect(page.locator(".week-stack-board")).toBeVisible({ timeout: 30_000 });
+
+  const mondayColumn = page.locator(".week-stack-day").filter({ hasText: "월요일" });
+  const orderedItems = await mondayColumn.getByTestId("week-stack-item").evaluateAll((items) =>
+    items.map((item) => item.textContent ?? ""),
+  );
+
+  expect(orderedItems.join("\n")).toMatch(
+    /이어지는 밤샘 점검[\s\S]*07:30[\s\S]*가장 이른 캘린더[\s\S]*08:00[\s\S]*이른 루틴 업무[\s\S]*09:00[\s\S]*중간 캘린더 회의[\s\S]*10:00[\s\S]*늦은 루틴 업무/,
+  );
+});
+
 test("schedule agenda stream groups calendar range occurrences by local date in chronological order", async ({
   page,
 }, testInfo) => {
@@ -53,12 +147,13 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
             agendaOccurrence("multi-day-release", "밤샘 출시 점검", "2026-01-02T14:00:00.000Z", "2026-01-03T02:00:00.000Z"),
             agendaOccurrence("task-next-day", "다음날 성장 과제", "2026-01-03T00:00:00.000Z", "2026-01-03T00:30:00.000Z", "TASK"),
             agendaOccurrence("routine-early", "아침 루틴 정리", "2026-01-01T23:00:00.000Z", "2026-01-01T23:30:00.000Z", "ROUTINE_BLOCK"),
+            agendaOccurrence("offset-early", "오프셋 이른 회의", "2026-01-02T08:10:00+09:00", "2026-01-02T08:40:00+09:00"),
             agendaOccurrence("unscheduled-idea", "날짜 미정 아이디어", null, null, "TASK"),
           ],
           instrumentation: {
             repositoryGroupCount: 3,
             repositoryGroups: ["events", "tasks", "routineBlocks"],
-            occurrenceCount: 5,
+            occurrenceCount: 6,
             rangeDays: 14,
           },
         },
@@ -73,6 +168,7 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
   const groups = page.getByTestId("agenda-day-group");
   await expect(groups).toHaveCount(3);
   await expect(groups.nth(0)).toContainText("아침 루틴 정리");
+  await expect(groups.nth(0)).toContainText("오프셋 이른 회의");
   await expect(groups.nth(0)).toContainText("오전 제품 리뷰");
   await expect(groups.nth(0)).toContainText("밤샘 출시 점검");
   await expect(groups.nth(1)).toContainText("밤샘 출시 점검");
@@ -80,17 +176,17 @@ test("schedule agenda stream groups calendar range occurrences by local date in 
   await expect(groups.nth(2)).toContainText("날짜 미정");
   await expect(groups.nth(2)).toContainText("날짜 미정 아이디어");
   await expect(groups.nth(2).locator(".agenda-day-head")).toBeDisabled();
-  await expect(page.getByTestId("agenda-occurrence")).toHaveCount(6);
+  await expect(page.getByTestId("agenda-occurrence")).toHaveCount(7);
 
   const orderedTitles = await page.getByTestId("agenda-occurrence").evaluateAll((items) =>
     items.map((item) => item.textContent ?? ""),
   );
-  expect(orderedTitles.join("\n")).toMatch(/아침 루틴 정리[\s\S]*오전 제품 리뷰[\s\S]*밤샘 출시 점검[\s\S]*밤샘 출시 점검[\s\S]*다음날 성장 과제/);
+  expect(orderedTitles.join("\n")).toMatch(/아침 루틴 정리[\s\S]*오프셋 이른 회의[\s\S]*오전 제품 리뷰[\s\S]*밤샘 출시 점검[\s\S]*밤샘 출시 점검[\s\S]*다음날 성장 과제/);
 
   await groups.nth(0).locator(".agenda-day-head").click();
   await expect(page.getByTestId("selected-day-timeline")).toBeVisible();
   await expect(page.getByTestId("schedule-view-option-day")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("selected-day-occurrence")).toContainText(["아침 루틴 정리", "오전 제품 리뷰", "밤샘 출시 점검"]);
+  await expect(page.getByTestId("selected-day-occurrence")).toContainText(["아침 루틴 정리", "오프셋 이른 회의", "오전 제품 리뷰", "밤샘 출시 점검"]);
 });
 
 test("agenda and selected day occurrence cards keep long text in the full card width", async ({
@@ -201,8 +297,12 @@ test("schedule renders pending AI draft projection above the timeline", async ({
   await completeOnboardingIfPresent(page);
 
   const draftStart = new Date();
-  draftStart.setSeconds(0, 0);
+  draftStart.setHours(12, 0, 0, 0);
   const draftEnd = new Date(draftStart.getTime() + 30 * 60 * 1000);
+  const earlyOccurrenceStart = new Date(draftStart.getTime() - 30 * 60 * 1000);
+  const earlyOccurrenceEnd = new Date(draftStart.getTime() - 15 * 60 * 1000);
+  const lateOccurrenceStart = new Date(draftStart.getTime() + 60 * 60 * 1000);
+  const lateOccurrenceEnd = new Date(draftStart.getTime() + 90 * 60 * 1000);
 
   await page.route("**/api/calendar/range**", async (route) => {
     const url = new URL(route.request().url());
@@ -215,7 +315,10 @@ test("schedule renders pending AI draft projection above the timeline", async ({
           end: url.searchParams.get("end") ?? draftEnd.toISOString(),
           view: url.searchParams.get("view")?.toUpperCase() ?? "DAY",
           timezone: "Asia/Seoul",
-          occurrences: [],
+          occurrences: [
+            agendaOccurrence("existing-early", "기존 이른 일정", earlyOccurrenceStart.toISOString(), earlyOccurrenceEnd.toISOString()),
+            agendaOccurrence("existing-late", "기존 늦은 일정", lateOccurrenceStart.toISOString(), lateOccurrenceEnd.toISOString()),
+          ],
           instrumentation: {
             repositoryGroupCount: 0,
             repositoryGroups: [],
@@ -248,14 +351,14 @@ test("schedule renders pending AI draft projection above the timeline", async ({
             explanation: "빈 시간에 집중 블록을 제안합니다.",
             commandBatch: {
               summary: "집중 블록 추가",
-              explanation: "타임라인에 draft로 먼저 투영합니다.",
+              explanation: "일정표에서 먼저 확인합니다.",
               commands: [
                 {
                   actionType: "create_event",
                   targetType: "event",
                   targetId: null,
                   payload: {
-                    title: "AI 변경안 집중 시간",
+                    title: "확인할 집중 시간",
                     startAt: draftStart.toISOString(),
                     endAt: draftEnd.toISOString(),
                   },
@@ -269,7 +372,7 @@ test("schedule renders pending AI draft projection above the timeline", async ({
                 actionType: "create_event",
                 targetType: "event",
                 targetId: null,
-                title: "AI 변경안 집중 시간",
+                title: "확인할 집중 시간",
                 detail: "10:00-10:30",
                 reason: "가용 시간 확보",
                 executable: true,
@@ -290,17 +393,21 @@ test("schedule renders pending AI draft projection above the timeline", async ({
 
   await page.goto("/schedule");
   await expect(page.getByTestId("ai-draft-projection")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("ai-draft-projection")).toContainText("AI 변경안 집중 시간");
+  await expect(page.getByTestId("ai-draft-projection")).toContainText("확인할 집중 시간");
 
   await page.getByTestId("schedule-view-option-month").click();
-  await expect(page.getByTestId("monthly-draft-badge").first()).toContainText(/AI 변경안|AI 변경안 집중 시간/, { timeout: 30_000 });
+  await expect(page.getByTestId("monthly-draft-badge").first()).toContainText("확인할 집중 시간", { timeout: 30_000 });
 
   await page.getByTestId("schedule-view-option-agenda").click();
-  await expect(page.getByTestId("agenda-draft-occurrence")).toContainText("AI 변경안 집중 시간", { timeout: 30_000 });
+  await expect(page.getByTestId("agenda-draft-occurrence")).toContainText("확인할 집중 시간", { timeout: 30_000 });
 
   await page.getByTestId("schedule-view-option-day").click();
   await expect(page.getByTestId("selected-day-draft-occurrence")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("selected-day-draft-occurrence")).toContainText("AI 변경안 · 적용 전");
+  await expect(page.getByTestId("selected-day-draft-occurrence")).toContainText("확인할 변경 · 반영 전");
+  const selectedDayItems = await page.locator(".selected-day-occurrence-list .selected-day-occurrence").evaluateAll((items) =>
+    items.map((item) => item.textContent ?? ""),
+  );
+  expect(selectedDayItems.join("\n")).toMatch(/기존 이른 일정[\s\S]*확인할 집중 시간[\s\S]*기존 늦은 일정/);
 });
 
 test("schedule range event occurrence can be opened and patched from the day timeline", async ({
@@ -379,10 +486,10 @@ test("schedule range event occurrence can be opened and patched from the day tim
   await expect(page.getByTestId("agenda-stream")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("agenda-occurrence").filter({ hasText: originalTitle }).locator("button").click();
 
-  const editDialog = page.getByRole("dialog", { name: /캘린더 이벤트 수정/ });
+  const editDialog = page.getByRole("dialog", { name: /일정 수정/ });
   await expect(editDialog).toBeVisible();
   await editDialog.getByLabel("제목").fill(editedTitle);
-  await editDialog.getByRole("button", { name: "원본 저장" }).click();
+  await editDialog.getByRole("button", { name: "저장" }).click();
 
   await expect(editDialog).toHaveCount(0, { timeout: 15_000 });
   expect(patchBody?.title).toBe(editedTitle);

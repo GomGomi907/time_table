@@ -31,6 +31,11 @@ if [ "${APP_RELEASE_MODE:-}" = "beta" ] || [ "${APP_RELEASE_MODE:-}" = "producti
     echo "Unsafe release runtime: APP_GEMINI_API_KEY is required when AI is enabled." >&2
     exit 1
   fi
+
+  if [ -z "${APP_ENCRYPTION_KEY:-}" ]; then
+    echo "Unsafe release runtime: APP_ENCRYPTION_KEY is required." >&2
+    exit 1
+  fi
 fi
 
 java -jar /app/backend/app.jar &

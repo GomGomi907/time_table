@@ -54,6 +54,17 @@ class ReleaseRuntimeGuardTest {
     }
 
     @Test
+    void productionModeRejectsMissingEncryptionKey() {
+        AppProperties properties = propertiesWithEncryption("production", false, true, "client-id", "client-secret", "gemini-key", null);
+        MockEnvironment environment = environment("jdbc:postgresql://localhost:5432/timetable", false);
+
+        assertThatThrownBy(() -> new ReleaseRuntimeGuard(properties, environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Unsafe production runtime configuration")
+                .hasMessageContaining("APP_ENCRYPTION_KEY is required");
+    }
+
+    @Test
     void betaModeRejectsEnabledH2ConsoleEvenWithPostgres() {
         AppProperties properties = properties("beta", false, true, "client-id", "client-secret", "gemini-key");
         MockEnvironment environment = environment("jdbc:postgresql://localhost:5432/timetable", false)
@@ -118,6 +129,18 @@ class ReleaseRuntimeGuardTest {
             String googleClientSecret,
             String aiApiKey
     ) {
+        return propertiesWithEncryption(releaseMode, mockLoginEnabled, aiEnabled, googleClientId, googleClientSecret, aiApiKey, "test-encryption-key");
+    }
+
+    private static AppProperties propertiesWithEncryption(
+            String releaseMode,
+            boolean mockLoginEnabled,
+            boolean aiEnabled,
+            String googleClientId,
+            String googleClientSecret,
+            String aiApiKey,
+            String encryptionKey
+    ) {
         return new AppProperties(
                 releaseMode,
                 "http://localhost:3000",
@@ -142,7 +165,7 @@ class ReleaseRuntimeGuardTest {
                         0.0,
                         8
                 ),
-                new AppProperties.EncryptionProperties("test-encryption-key")
+                encryptionKey == null ? null : new AppProperties.EncryptionProperties(encryptionKey)
         );
     }
 }

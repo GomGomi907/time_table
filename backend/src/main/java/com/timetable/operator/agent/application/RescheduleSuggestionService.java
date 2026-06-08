@@ -62,8 +62,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class RescheduleSuggestionService {
 
-    private static final String PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL = "Google 쓰기는 재연동 후 처리됩니다.";
-    private static final String PROVIDER_WRITE_NO_CONNECTION_DETAIL = "Google 연동이 없어 Google에는 반영되지 않았습니다.";
+    private static final String PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL = "Google 캘린더 반영은 재연동 후 진행됩니다.";
+    private static final String PROVIDER_WRITE_NO_CONNECTION_DETAIL = "Google 연동이 없어 Google 캘린더에는 반영하지 않았습니다.";
     private static final int AI_MESSAGE_HISTORY_LIMIT = 5;
     private static final int AI_HISTORY_FIELD_MAX_CHARS = 1000;
     private static final int DEFAULT_AI_FUTURE_CALENDAR_DAYS = 3;
@@ -181,7 +181,7 @@ public class RescheduleSuggestionService {
         AppUser user = currentUserProvider.getCurrentUser();
         RescheduleSuggestion suggestion = getOwnedSuggestionForUpdate(user.getId(), suggestionId);
         if (suggestion.getStatus() != RescheduleSuggestionStatus.PENDING) {
-            throw new IllegalStateException("대기 중인 suggestion만 적용할 수 있습니다.");
+            throw new IllegalStateException("대기 중인 제안만 반영할 수 있습니다.");
         }
 
         StructuredAiCommandBatch batch = readBatch(suggestion.getSuggestionPayload());
@@ -192,7 +192,7 @@ public class RescheduleSuggestionService {
         }
         SuggestionExecutionSummaryResponse executionSummary = summarizeSnapshots(snapshots);
         if (executionSummary == null || executionSummary.appliedCount() == 0) {
-            throw new UserActionRequiredException("적용할 수 있는 변경이 없습니다. 요청을 더 구체적으로 다시 보내주세요.");
+            throw new UserActionRequiredException("반영할 변경이 없습니다. 원하는 날짜나 시간을 조금 더 알려주세요.");
         }
 
         suggestion.setStatus(RescheduleSuggestionStatus.APPLIED);
@@ -209,7 +209,7 @@ public class RescheduleSuggestionService {
         AppUser user = currentUserProvider.getCurrentUser();
         RescheduleSuggestion suggestion = getOwnedSuggestionForUpdate(user.getId(), suggestionId);
         if (suggestion.getStatus() != RescheduleSuggestionStatus.PENDING) {
-            throw new IllegalStateException("대기 중인 suggestion만 거절할 수 있습니다.");
+            throw new IllegalStateException("대기 중인 제안만 닫을 수 있습니다.");
         }
 
         suggestion.setStatus(RescheduleSuggestionStatus.REJECTED);
@@ -225,7 +225,7 @@ public class RescheduleSuggestionService {
         AppUser user = currentUserProvider.getCurrentUser();
         RescheduleSuggestion suggestion = getOwnedSuggestionForUpdate(user.getId(), suggestionId);
         if (suggestion.getStatus() != RescheduleSuggestionStatus.APPLIED) {
-            throw new IllegalStateException("적용된 suggestion만 되돌릴 수 있습니다.");
+            throw new IllegalStateException("반영 완료된 제안만 되돌릴 수 있습니다.");
         }
 
         List<AppliedCommandSnapshot> snapshots = readSnapshots(suggestion.getExecutionSnapshot());
@@ -263,12 +263,12 @@ public class RescheduleSuggestionService {
 
     private RescheduleSuggestion getOwnedSuggestion(UUID userId, UUID suggestionId) {
         return rescheduleSuggestionRepository.findByIdAndUserId(suggestionId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 suggestion을 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("해당 제안을 찾을 수 없습니다."));
     }
 
     private RescheduleSuggestion getOwnedSuggestionForUpdate(UUID userId, UUID suggestionId) {
         return rescheduleSuggestionRepository.findByIdAndUserIdForUpdate(suggestionId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 suggestion을 찾을 수 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("해당 제안을 찾을 수 없습니다."));
     }
 
     private RescheduleSuggestionResponse toResponse(RescheduleSuggestion suggestion) {
@@ -335,7 +335,7 @@ public class RescheduleSuggestionService {
             detail += " 처리하지 않은 항목 %d개는 그대로 두었습니다.".formatted(noOpCount);
         }
         if (providerWriteBlockedCount > 0) {
-            detail += " Google 반영 대기 %d개가 있습니다.".formatted(providerWriteBlockedCount);
+            detail += " Google 캘린더에 나중에 반영할 항목 %d개가 있습니다.".formatted(providerWriteBlockedCount);
         }
 
         return new SuggestionExecutionSummaryResponse(
@@ -357,10 +357,10 @@ public class RescheduleSuggestionService {
 
     private String statusLabel(RescheduleSuggestionStatus status) {
         return switch (status) {
-            case PENDING -> "검토 대기";
-            case APPLIED -> "적용 완료";
-            case REJECTED -> "사용 안 함";
-            case REVERTED -> "되돌림 완료";
+            case PENDING -> "확인 필요";
+            case APPLIED -> "반영 완료";
+            case REJECTED -> "닫힘";
+            case REVERTED -> "되돌림";
         };
     }
 
@@ -556,7 +556,8 @@ public class RescheduleSuggestionService {
         try {
             return objectMapper.readValue(payload, StructuredAiCommandBatch.class);
         } catch (IOException exception) {
-            throw new IllegalStateException("suggestion payload를 읽을 수 없습니다.", exception);
+            log.error("Failed to read suggestion payload.", exception);
+            throw new IllegalStateException("저장된 제안 내용을 읽지 못했습니다.", exception);
         }
     }
 
@@ -568,7 +569,8 @@ public class RescheduleSuggestionService {
             return objectMapper.readValue(payload, new TypeReference<>() {
             });
         } catch (IOException exception) {
-            throw new IllegalStateException("execution snapshot을 읽을 수 없습니다.", exception);
+            log.error("Failed to read suggestion execution snapshot.", exception);
+            throw new IllegalStateException("적용 기록을 읽지 못했습니다.", exception);
         }
     }
 
@@ -576,7 +578,8 @@ public class RescheduleSuggestionService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (IOException exception) {
-            throw new IllegalStateException("payload를 저장할 수 없습니다.", exception);
+            log.error("Failed to serialize suggestion payload.", exception);
+            throw new IllegalStateException("제안 내용을 저장하지 못했습니다.", exception);
         }
     }
 
@@ -618,7 +621,7 @@ public class RescheduleSuggestionService {
                     "no_op",
                     null,
                     null,
-                    "실행 가능한 명령이 아니어서 상태만 기록했습니다."
+                    "반영할 변경이 없어 상태만 기록했습니다."
             );
         };
     }
@@ -628,7 +631,7 @@ public class RescheduleSuggestionService {
             return applyCommand(userId, userZone, command);
         } catch (DateTimeException | IllegalArgumentException | IllegalStateException exception) {
             String detail = exception instanceof DateTimeParseException
-                    ? "AI가 돌려준 시간 형식을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z"
+                    ? "시간 형식을 확인하지 못했습니다."
                     : exception.getMessage();
             throw new UserActionRequiredException(
                     "일부 변경을 적용할 수 없어 전체 적용을 중단했습니다: " + detail
@@ -688,7 +691,7 @@ public class RescheduleSuggestionService {
                 event.setEndAt(explicitEndAt);
             }
             if (shiftMinutes == null && explicitStartAt == null && explicitEndAt == null) {
-                return noExecutableTarget(command, "이동할 시간 정보가 payload에 없습니다.");
+                return noExecutableTarget(command, "이동할 시간을 확인하지 못했습니다.");
             }
             validateEventRange(event);
             EnqueueResult enqueueResult = providerWriteOutboxService.enqueueEventWrite(event, ProviderWriteOperation.UPDATE);
@@ -736,7 +739,7 @@ public class RescheduleSuggestionService {
         if (isExternalBackedEvent(event)) {
             return noExecutableTarget(
                     command,
-                    "외부 원본 일정은 AI 제안 적용으로 직접 삭제하지 않습니다. Google 캘린더에서 직접 확인하거나 수동 처리해 주세요."
+                    "연동된 캘린더 일정은 바로 삭제하지 않습니다. Google 캘린더에서 확인해 주세요."
             );
         }
         EventRollbackState beforeState = snapshotEventRollback(event);
@@ -839,7 +842,7 @@ public class RescheduleSuggestionService {
         if (isExternalBackedTask(task)) {
             return noExecutableTarget(
                     command,
-                    "외부 원본 할 일은 AI 제안 적용으로 직접 삭제하지 않습니다. Google Tasks에서 직접 확인하거나 수동 처리해 주세요."
+                    "연동된 할 일은 바로 삭제하지 않습니다. Google Tasks에서 확인해 주세요."
             );
         }
         TaskRollbackState beforeState = snapshotTaskRollback(task);
@@ -890,10 +893,10 @@ public class RescheduleSuggestionService {
 
     private String providerWriteDetail(EnqueueResult result) {
         return switch (result) {
-            case ENQUEUED -> "Google 쓰기를 예약했습니다.";
+            case ENQUEUED -> "Google 캘린더 반영을 예약했습니다.";
             case WRITE_SCOPE_REQUIRED -> PROVIDER_WRITE_RECONNECT_REQUIRED_DETAIL;
             case NO_CONNECTION -> PROVIDER_WRITE_NO_CONNECTION_DETAIL;
-            case NOOP -> "외부 대상이 없어 Google 쓰기는 생략했습니다.";
+            case NOOP -> "연동할 외부 항목이 없어 Google 캘린더 반영은 건너뛰었습니다.";
         };
     }
 
@@ -937,7 +940,7 @@ public class RescheduleSuggestionService {
         String explicitEndTime = readString(command.payload(), "endTime", "end_time");
 
         if (shiftMinutes == null && explicitDayOfWeek == null && explicitStartTime == null && explicitEndTime == null) {
-            return noExecutableTarget(command, "이동할 시간 정보가 payload에 없습니다.");
+            return noExecutableTarget(command, "이동할 시간을 확인하지 못했습니다.");
         }
 
         try {
@@ -1023,7 +1026,7 @@ public class RescheduleSuggestionService {
 
     private AppliedCommandSnapshot deleteScheduleBlock(UUID userId, StructuredAiCommand command) {
         if (command.targetId() == null || command.targetId().isBlank()) {
-            return noExecutableTarget(command, "target_id가 없어 delete_event를 적용할 수 없습니다.");
+            return noExecutableTarget(command, "삭제할 일정을 확인하지 못했습니다.");
         }
         ScheduleBlock block = scheduleBlockRepository.findByIdAndUserId(UUID.fromString(command.targetId()), userId)
                 .orElseThrow(() -> new IllegalArgumentException("삭제할 일정 블록을 찾을 수 없습니다."));
@@ -1180,7 +1183,7 @@ public class RescheduleSuggestionService {
         String note = readString(payload, "note", "description");
 
         if (requireAllFields && (dayOfWeek == null || startTime == null || endTime == null || activity == null)) {
-            throw new IllegalArgumentException("create_event payload에는 dayOfWeek, startTime, endTime, activity가 필요합니다.");
+            throw new IllegalArgumentException("일정 추가에 필요한 요일, 시작, 종료, 활동 정보가 없습니다.");
         }
 
         if (dayOfWeek != null) {
@@ -1220,7 +1223,7 @@ public class RescheduleSuggestionService {
         if (title != null) {
             event.setTitle(clampCanonicalTitle(title));
         } else if (requireTimeRange) {
-            event.setTitle("AI 제안 일정");
+            event.setTitle("새 일정");
         }
         if (payload != null && (payload.containsKey("description") || payload.containsKey("note"))) {
             event.setDescription(blankToNull(description));
@@ -1264,7 +1267,7 @@ public class RescheduleSuggestionService {
         if (title != null) {
             task.setTitle(clampCanonicalTitle(title));
         } else if (requireTitle) {
-            task.setTitle("AI 추천 할 일");
+            task.setTitle("새 할 일");
         }
         if (payload != null && (payload.containsKey("description") || payload.containsKey("note"))) {
             task.setDescription(blankToNull(description));

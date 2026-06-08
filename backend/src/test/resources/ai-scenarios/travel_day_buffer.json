@@ -16,7 +16,7 @@
     "requiresExecutable": false,
     "payloadContains": { "requestKind": "status_declaration", "mode": "출장", "externalMutationAllowed": false },
     "payloadListContains": { "workEvents": ["출장일 업무 회의"], "workBlocks": ["근무"] },
-    "explanationContains": ["출장 모드", "외부 일정은 직접 삭제하지 않습니다"],
+    "explanationContains": ["출장 상태", "바로 삭제하지 않습니다"],
     "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "argumentPrecision", "userEffort", "privacyExposure"]
   }
 }

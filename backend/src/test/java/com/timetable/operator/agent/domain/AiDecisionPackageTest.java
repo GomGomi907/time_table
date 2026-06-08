@@ -22,7 +22,7 @@ class AiDecisionPackageTest {
                         null,
                         Map.of(
                                 "requestKind", "destructive_bulk",
-                                "eventCandidates", List.of("외부 회의 (외부 원본 보호)"),
+                                "eventCandidates", List.of("외부 회의 (연동 일정 보호)"),
                                 "externalMutationAllowed", false,
                                 "requiresUserConfirmation", true,
                                 "scopeStart", "2026-06-05T00:00:00Z",
@@ -41,8 +41,8 @@ class AiDecisionPackageTest {
         assertThat(decisionPackage.scope().start()).isEqualTo("2026-06-05T00:00:00Z");
         assertThat(decisionPackage.scope().end()).isEqualTo("2026-06-07T00:00:00Z");
         assertThat(decisionPackage.proposal().externalMutationAllowed()).isFalse();
-        assertThat(decisionPackage.analysis().externalItems()).contains("외부 회의 (외부 원본 보호)");
-        assertThat(decisionPackage.externalBlockedItems()).contains("외부 회의 (외부 원본 보호)");
+        assertThat(decisionPackage.analysis().externalItems()).contains("외부 회의 (연동 일정 보호)");
+        assertThat(decisionPackage.externalBlockedItems()).contains("외부 회의 (연동 일정 보호)");
         assertThat(decisionPackage.requiresConfirmation()).isTrue();
         assertThat(decisionPackage.confirmationReason()).contains("사용자 확인");
         assertThat(decisionPackage.riskLevel()).isEqualTo("high");

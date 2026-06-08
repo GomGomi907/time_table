@@ -397,7 +397,7 @@ class AiAgentOrchestratorTest {
         assertThat(payload).containsEntry("requestKind", "status_declaration")
                 .containsEntry("externalMutationAllowed", false);
         assertThat(payload.get("workEvents").toString()).contains("업무 회의").doesNotContain("친구 약속");
-        assertThat(resolved.explanation()).contains("개인 일정은 보존").contains("외부 일정은 직접 삭제하지 않습니다");
+        assertThat(resolved.explanation()).contains("개인 일정과 연동 일정").contains("바로 삭제하지 않습니다");
     }
 
     @Test
@@ -500,7 +500,7 @@ class AiAgentOrchestratorTest {
                 List.of(), List.of(), List.of(), List.of()
         ));
 
-        assertThat(resolved.commands().getFirst().payload().get("eventCandidates").toString()).contains("외부 원본 보호");
+        assertThat(resolved.commands().getFirst().payload().get("eventCandidates").toString()).contains("연동 일정 보호");
     }
 
     @Test
@@ -517,7 +517,7 @@ class AiAgentOrchestratorTest {
         ));
 
         assertThat(resolved.commands()).noneMatch(StructuredAiCommand::requiresConfirmation);
-        assertThat(resolved.explanation()).contains("삭제/취소 후보");
+        assertThat(resolved.explanation()).contains("삭제할 항목");
     }
 
     @Test

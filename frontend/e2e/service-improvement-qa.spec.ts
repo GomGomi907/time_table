@@ -58,14 +58,14 @@ async function ensurePendingSuggestion(page: Page) {
 }
 
 async function expectPendingSuggestionAction(page: Page, suggestion: Pick<SuggestionResponse, "executable">) {
-  await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^사용 안 함$/ })).toBeVisible();
 
   if (suggestion.executable) {
-    await expect(page.getByRole("button", { name: "적용" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /^(확인 후 반영|반영하기)$/ })).toBeEnabled();
     return;
   }
 
-  await expect(page.getByRole("button", { name: /적용할 변경 없음|다시 요청 필요/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /적용할 변경 없음|추가 정보 필요|다시 보내기/ })).toBeDisabled();
 }
 
 test("simplified schedule UX keeps only today, now, weekly stack, edit controls, and AI input", async ({
@@ -86,7 +86,7 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
   await loginAsUniqueMockUser(page, testInfo, { connectGoogle: true, writeCapable: false });
   if (new URL(page.url()).pathname.includes("/onboarding")) {
     await expect(page.getByRole("button", {
-      name: /답변 저장하고 계속|오늘 화면으로 이동|적용하지 않고 오늘 화면으로|추천 일정 적용하고 시작|바로 시작하기|둘러보기|적용하고 시작/,
+      name: /^(기본값으로 계속|바꾼 시간으로 계속|일정표 보기|건너뛰고 일정표 보기|추천 시간 넣고 일정표 보기|바로 시작하기|둘러보기)$/,
     }).first()).toBeVisible({
       timeout: 45_000,
     });
@@ -113,7 +113,7 @@ test("simplified schedule UX keeps only today, now, weekly stack, edit controls,
 
   const pendingSuggestion = await ensurePendingSuggestion(page);
   await page.goto("/dashboard");
-  await expect(page.getByRole("heading", { name: /변경 제안|확인이 필요합니다\.|AI 요청을 처리하지 못했습니다./ })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /확인할 변경|확인이 필요합니다\.|지금은 요청을 처리하지 못했습니다./ })).toBeVisible({ timeout: 30_000 });
   await expectPendingSuggestionAction(page, pendingSuggestion);
   await assertNoInternalUserCopy(page);
   screenshots.push(await capture(page, "mobile-dashboard-pending", { width: 390, height: 1000 }));

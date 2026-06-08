@@ -23,12 +23,15 @@ import {
   CATEGORY_LABELS,
   DAY_FULL_LABELS,
   DAY_ORDER,
+  compareScheduleBlocks,
   durationInMinutes,
   getCurrentDayName,
   getCurrentMinutes,
   getDailyBlocks,
   isBlockActive,
   minutesFromClock,
+  scheduleDisplayOrderMinutes,
+  sortScheduleBlocks,
 } from "@/lib/schedule";
 import {
   CalendarOccurrence,
@@ -121,10 +124,10 @@ function isAbortError(error: unknown) {
 
 function mutationErrorDetail(error: unknown) {
   if (error instanceof ScheduleMutationTimeoutError) {
-    return "네트워크 응답이 너무 느려 안전을 위해 요청을 취소했습니다. 입력한 내용은 유지되며, 잠시 후 다시 시도해 주세요.";
+    return "응답이 늦어 요청을 취소했습니다. 입력한 내용은 남아 있습니다.";
   }
   if (isConflictError(error)) {
-    return "입력한 내용은 그대로 유지했습니다. 최신 일정표를 다시 불러왔으니 현재 서버 데이터와 비교한 뒤 다시 저장하세요.";
+    return "입력한 내용은 남아 있습니다. 최신 일정표를 확인한 뒤 다시 저장하세요.";
   }
   return error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.";
 }
@@ -176,12 +179,7 @@ function getVisibleDailyBlocks(week: WeekScheduleResponse | null, dayOfWeek: str
 }
 
 function sortBlocks(blocks: ScheduleBlock[]) {
-  return blocks.toSorted((left, right) => {
-    if (left.startTime === right.startTime) {
-      return left.endTime.localeCompare(right.endTime);
-    }
-    return left.startTime.localeCompare(right.startTime);
-  });
+  return sortScheduleBlocks(blocks);
 }
 
 function upsertWeekBlock(
@@ -473,18 +471,12 @@ function removeCalendarRoutine(range: CalendarRangeResponse, blockId: string) {
 }
 
 function compareCalendarOccurrences(left: CalendarOccurrence, right: CalendarOccurrence) {
-  const leftStart = left.startAt ?? left.endAt ?? "";
-  const rightStart = right.startAt ?? right.endAt ?? "";
-  if (leftStart !== rightStart) {
-    if (!leftStart) {
-      return 1;
-    }
-    if (!rightStart) {
-      return -1;
-    }
-    return leftStart.localeCompare(rightStart);
-  }
-  return left.priorityTier - right.priorityTier || left.title.localeCompare(right.title);
+  const leftStart = left.startAt ?? left.endAt;
+  const rightStart = right.startAt ?? right.endAt;
+  return compareOptionalIsoStart(leftStart, rightStart)
+    || left.priorityTier - right.priorityTier
+    || left.title.localeCompare(right.title, "ko-KR")
+    || left.occurrenceId.localeCompare(right.occurrenceId);
 }
 
 function occurrenceLocalDateKeys(occurrence: CalendarOccurrence, timeZone: string) {
@@ -788,6 +780,82 @@ function occurrenceActionLabel(occurrence: CalendarOccurrence, timeZone: string)
   return `${pieces.join(", ")}. 선택하면 일정 편집 창을 엽니다.`;
 }
 
+type WeekTimelineItem =
+  | {
+      kind: "block";
+      key: string;
+      order: number;
+      label: string;
+      block: ScheduleBlock;
+    }
+  | {
+      kind: "occurrence";
+      key: string;
+      order: number;
+      label: string;
+      occurrence: CalendarOccurrence;
+    };
+
+function occurrenceDisplayOrderOnDate(occurrence: CalendarOccurrence, dateKey: string, timeZone: string) {
+  const start = occurrence.startAt ? new Date(occurrence.startAt) : null;
+  const end = occurrence.endAt ? new Date(occurrence.endAt) : null;
+  const validStart = start && !Number.isNaN(start.getTime()) ? start : null;
+  const validEnd = end && !Number.isNaN(end.getTime()) ? end : null;
+  let anchor = validStart ?? validEnd;
+
+  if (isCalendarDateKey(dateKey) && validStart && validEnd && validEnd.getTime() > validStart.getTime()) {
+    const dayStart = new Date(toIsoAtZonedDate(dateKey, "00:00", timeZone)).getTime();
+    const dayEnd = new Date(toIsoAtZonedDate(addDaysToDateKey(dateKey, 1), "00:00", timeZone)).getTime();
+    if (validEnd.getTime() > dayStart && validStart.getTime() < dayEnd) {
+      anchor = new Date(Math.max(validStart.getTime(), dayStart));
+    }
+  }
+
+  if (!anchor) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const parts = getZonedDateTimeParts(anchor, timeZone);
+  return scheduleDisplayOrderMinutes(parts.hour * 60 + parts.minute);
+}
+
+function compareWeekTimelineItems(left: WeekTimelineItem, right: WeekTimelineItem) {
+  if (left.order !== right.order) {
+    return left.order - right.order;
+  }
+  if (left.kind === "block" && right.kind === "block") {
+    return compareScheduleBlocks(left.block, right.block);
+  }
+  if (left.kind === "occurrence" && right.kind === "occurrence") {
+    return compareCalendarOccurrences(left.occurrence, right.occurrence);
+  }
+  return left.label.localeCompare(right.label, "ko-KR") || left.key.localeCompare(right.key);
+}
+
+function buildWeekTimelineItems(
+  dayOfWeek: string,
+  dateKey: string,
+  blocks: ScheduleBlock[],
+  occurrences: CalendarOccurrence[],
+  timeZone: string,
+) {
+  return [
+    ...sortScheduleBlocks(blocks).map((block) => ({
+      kind: "block" as const,
+      key: `block:${dayOfWeek}:${block.id}`,
+      order: scheduleDisplayOrderMinutes(minutesFromClock(block.startTime)),
+      label: block.activity,
+      block,
+    })),
+    ...occurrences.map((occurrence) => ({
+      kind: "occurrence" as const,
+      key: `occurrence:${dayOfWeek}:${occurrence.occurrenceId}`,
+      order: occurrenceDisplayOrderOnDate(occurrence, dateKey, timeZone),
+      label: occurrence.title,
+      occurrence,
+    })),
+  ].toSorted(compareWeekTimelineItems);
+}
+
 function weekStartDateKeyFallback(timeZone: string) {
   return weekStartDateKey(zonedDateKey(new Date(), timeZone));
 }
@@ -874,54 +942,56 @@ function WeeklyStack({
           const isToday = currentDay === day;
           const blocks = getVisibleDailyBlocks(week, day);
           const datedOccurrences = datedOccurrencesByDay.get(day) ?? [];
-          const totalDayItems = blocks.length + datedOccurrences.length;
-          const previewBlocks = blocks.slice(0, isToday ? 4 : 3);
-          const previewOccurrences = datedOccurrences.slice(0, Math.max(0, (isToday ? 4 : 3) - previewBlocks.length));
+          const dateKey = weekDateKeys[DAY_ORDER.indexOf(day as (typeof DAY_ORDER)[number])] ?? rangeWeekStartDateKey;
+          const timelineItems = buildWeekTimelineItems(day, dateKey, blocks, datedOccurrences, resolvedTimeZone);
+          const totalDayItems = timelineItems.length;
+          const previewItems = timelineItems.slice(0, isToday ? 4 : 3);
           const cardContent = (
             <>
               {totalDayItems ? (
                 <div className="mobile-day-blocks">
-                  {previewBlocks.map((block) => (
-                    (() => {
-                      const note = visibleScheduleNote(block.note);
-                      return (
+                  {previewItems.map((item) => (
+                    item.kind === "block" ? (
+                      (() => {
+                        const note = visibleScheduleNote(item.block.note);
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            aria-label={scheduleBlockActionLabel(day, item.block)}
+                            className={`mobile-schedule-block ${categoryTone(item.block.category)}`}
+                            onClick={() =>
+                              onBlockSelect({
+                                ...item.block,
+                                dayOfWeek: day,
+                              })
+                            }
+                          >
+                            <span className="event-time">
+                              {formatClockValue(item.block.startTime)} - {formatClockValue(item.block.endTime)}
+                            </span>
+                            <strong>{formatServiceCopy(item.block.activity)}</strong>
+                            {note ? <span>{note}</span> : null}
+                          </button>
+                        );
+                      })()
+                    ) : (
                         <button
-                          key={block.id}
+                          key={item.key}
                           type="button"
-                          aria-label={scheduleBlockActionLabel(day, block)}
-                          className={`mobile-schedule-block ${categoryTone(block.category)}`}
-                          onClick={() =>
-                            onBlockSelect({
-                              ...block,
-                              dayOfWeek: day,
-                            })
-                          }
+                          aria-label={occurrenceActionLabel(item.occurrence, resolvedTimeZone)}
+                          className={`mobile-schedule-block calendar-occurrence-block ${agendaOccurrenceTone(item.occurrence)}`}
+                          onClick={() => onOccurrenceSelect?.(item.occurrence)}
                         >
-                          <span className="event-time">
-                            {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
-                          </span>
-                          <strong>{formatServiceCopy(block.activity)}</strong>
-                          {note ? <span>{note}</span> : null}
+                          <span className="event-time">{formatOccurrenceTimeRange(item.occurrence, resolvedTimeZone)}</span>
+                          <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                          <span>{occurrenceKindLabel(item.occurrence)}</span>
                         </button>
-                      );
-                    })()
+                    )
                   ))}
-                  {previewOccurrences.map((occurrence) => (
-                    <button
-                      key={occurrence.occurrenceId}
-                      type="button"
-                      aria-label={occurrenceActionLabel(occurrence, resolvedTimeZone)}
-                      className={`mobile-schedule-block calendar-occurrence-block ${agendaOccurrenceTone(occurrence)}`}
-                      onClick={() => onOccurrenceSelect?.(occurrence)}
-                    >
-                      <span className="event-time">{formatOccurrenceTimeRange(occurrence, resolvedTimeZone)}</span>
-                      <strong>{formatServiceCopy(occurrence.title)}</strong>
-                      <span>{occurrenceKindLabel(occurrence)}</span>
-                    </button>
-                  ))}
-                  {totalDayItems > previewBlocks.length + previewOccurrences.length ? (
+                  {totalDayItems > previewItems.length ? (
                     <p className="mobile-empty-day">
-                      나머지 {totalDayItems - previewBlocks.length - previewOccurrences.length}개 일정
+                      나머지 {totalDayItems - previewItems.length}개 일정
                     </p>
                   ) : null}
                 </div>
@@ -1009,7 +1079,9 @@ function WeeklyStack({
             const isToday = currentDay === day;
             const blocks = getVisibleDailyBlocks(week, day);
             const datedOccurrences = datedOccurrencesByDay.get(day) ?? [];
-            const totalDayItems = blocks.length + datedOccurrences.length;
+            const dateKey = weekDateKeys[DAY_ORDER.indexOf(day as (typeof DAY_ORDER)[number])] ?? rangeWeekStartDateKey;
+            const timelineItems = buildWeekTimelineItems(day, dateKey, blocks, datedOccurrences, resolvedTimeZone);
+            const totalDayItems = timelineItems.length;
             return (
               <section key={day} className={`week-stack-day ${isToday ? "today" : ""}`}>
                 <div className="week-stack-day-head">
@@ -1019,44 +1091,48 @@ function WeeklyStack({
 
                 {totalDayItems ? (
                   <div className="week-stack-list">
-                    {blocks.map((block) => {
-                      const isCurrentBlock = day === currentDay && isBlockActive(block, currentMinutes);
-                      const note = visibleScheduleNote(block.note);
+                    {timelineItems.map((item) => {
+                      if (item.kind === "block") {
+                        const isCurrentBlock = day === currentDay && isBlockActive(item.block, currentMinutes);
+                        const note = visibleScheduleNote(item.block.note);
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            data-testid="week-stack-item"
+                            aria-label={scheduleBlockActionLabel(day, item.block, isCurrentBlock ? "지금 일정" : undefined)}
+                            className={`schedule-block week-stack-block ${categoryTone(item.block.category)} ${isCurrentBlock ? "current" : ""}`}
+                            onClick={() =>
+                              onBlockSelect({
+                                ...item.block,
+                                dayOfWeek: day,
+                              })
+                            }
+                          >
+                            <span className="event-time">
+                              {formatClockValue(item.block.startTime)} - {formatClockValue(item.block.endTime)}
+                            </span>
+                            <strong>{formatServiceCopy(item.block.activity)}</strong>
+                            {isCurrentBlock ? <span className="current-event-chip">지금 일정</span> : null}
+                            {note ? <p className="event-note">{note}</p> : null}
+                          </button>
+                        );
+                      }
                       return (
                         <button
-                          key={block.id}
+                          key={item.key}
                           type="button"
-                          aria-label={scheduleBlockActionLabel(day, block, isCurrentBlock ? "지금 일정" : undefined)}
-                          className={`schedule-block week-stack-block ${categoryTone(block.category)} ${isCurrentBlock ? "current" : ""}`}
-                          onClick={() =>
-                            onBlockSelect({
-                              ...block,
-                              dayOfWeek: day,
-                            })
-                          }
+                          data-testid="week-stack-item"
+                          aria-label={occurrenceActionLabel(item.occurrence, resolvedTimeZone)}
+                          className={`schedule-block week-stack-block calendar-occurrence-block ${agendaOccurrenceTone(item.occurrence)}`}
+                          onClick={() => onOccurrenceSelect?.(item.occurrence)}
                         >
-                          <span className="event-time">
-                            {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
-                          </span>
-                          <strong>{formatServiceCopy(block.activity)}</strong>
-                          {isCurrentBlock ? <span className="current-event-chip">지금 일정</span> : null}
-                          {note ? <p className="event-note">{note}</p> : null}
+                          <span className="event-time">{formatOccurrenceTimeRange(item.occurrence, resolvedTimeZone)}</span>
+                          <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                          <span className="current-event-chip">{occurrenceKindLabel(item.occurrence)}</span>
                         </button>
                       );
                     })}
-                    {datedOccurrences.map((occurrence) => (
-                      <button
-                        key={occurrence.occurrenceId}
-                        type="button"
-                        aria-label={occurrenceActionLabel(occurrence, resolvedTimeZone)}
-                        className={`schedule-block week-stack-block calendar-occurrence-block ${agendaOccurrenceTone(occurrence)}`}
-                        onClick={() => onOccurrenceSelect?.(occurrence)}
-                      >
-                        <span className="event-time">{formatOccurrenceTimeRange(occurrence, resolvedTimeZone)}</span>
-                        <strong>{formatServiceCopy(occurrence.title)}</strong>
-                        <span className="current-event-chip">{occurrenceKindLabel(occurrence)}</span>
-                      </button>
-                    ))}
                   </div>
                 ) : (
                   <p className="week-stack-empty">비어 있는 시간입니다.</p>
@@ -1173,13 +1249,13 @@ function AiDraftProjection({
   }
 
   return (
-    <section className="ai-draft-projection" data-testid="ai-draft-projection" aria-label="AI 변경안 타임라인 투영">
+    <section className="ai-draft-projection" data-testid="ai-draft-projection" aria-label="반영 전 변경 확인">
       <div className="ai-draft-projection-head">
         <div>
-          <p className="panel-kicker">AI 변경안 미리보기</p>
-          <strong>아직 적용 전인 변경안을 타임라인 위에서 먼저 확인합니다.</strong>
+          <p className="panel-kicker">반영 전 확인</p>
+          <strong>반영하기 전에 일정표에서 먼저 확인합니다.</strong>
         </div>
-        <span>{draftItems.length}개 변경안</span>
+        <span>{draftItems.length}개 확인</span>
       </div>
       <ol className="ai-draft-projection-list">
         {draftItems.map((item) => (
@@ -1264,14 +1340,14 @@ function MonthlyMosaic({
                   <span className="monthly-day-preview">{formatServiceCopy(occurrences[0].title)}</span>
                   {drafts.length ? (
                     <span className="monthly-day-draft" data-testid="monthly-draft-badge">
-                      AI 변경안 {drafts.length}개
+                      확인할 변경 {drafts.length}개
                     </span>
                   ) : null}
                 </>
               ) : drafts.length ? (
                 <>
-                  <strong>{drafts.length}개 AI 변경안</strong>
-                  <small>적용 전 변경안</small>
+                  <strong>{drafts.length}개 확인할 변경</strong>
+                  <small>반영 전</small>
                   <span className="monthly-day-draft" data-testid="monthly-draft-badge">
                     {formatServiceCopy(drafts[0].title)}
                   </span>
@@ -1319,8 +1395,73 @@ function draftItemDateKeys(item: AiDraftProjectionItem, timeZone: string) {
 function draftItemsForDate(items: AiDraftProjectionItem[], dateKey: string, timeZone: string) {
   return items
     .filter((item) => draftItemDateKeys(item, timeZone).includes(dateKey))
-    .toSorted((left, right) => (left.startAt ?? "").localeCompare(right.startAt ?? "") || left.title.localeCompare(right.title));
+    .toSorted((left, right) => compareOptionalIsoStart(left.startAt, right.startAt) || left.title.localeCompare(right.title, "ko-KR"));
 }
+
+function compareOptionalIsoStart(left: string | null | undefined, right: string | null | undefined) {
+  if (left === right) {
+    return 0;
+  }
+  if (!left) {
+    return 1;
+  }
+  if (!right) {
+    return -1;
+  }
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+  const leftValid = Number.isFinite(leftTime);
+  const rightValid = Number.isFinite(rightTime);
+  if (leftValid && rightValid && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  if (leftValid !== rightValid) {
+    return leftValid ? -1 : 1;
+  }
+  return left.localeCompare(right);
+}
+
+type CalendarDisplayItem =
+  | {
+      kind: "draft";
+      key: string;
+      startAt: string | null;
+      title: string;
+      draft: AiDraftProjectionItem;
+    }
+  | {
+      kind: "occurrence";
+      key: string;
+      startAt: string | null;
+      title: string;
+      occurrence: CalendarOccurrence;
+    };
+
+function compareCalendarDisplayItems(left: CalendarDisplayItem, right: CalendarDisplayItem) {
+  return compareOptionalIsoStart(left.startAt, right.startAt)
+    || left.title.localeCompare(right.title, "ko-KR")
+    || left.key.localeCompare(right.key);
+}
+
+function buildCalendarDisplayItems(drafts: AiDraftProjectionItem[], occurrences: CalendarOccurrence[]) {
+  return [
+    ...drafts.map((draft) => ({
+      kind: "draft" as const,
+      key: `draft:${draft.key}`,
+      startAt: draft.startAt,
+      title: draft.title,
+      draft,
+    })),
+    ...occurrences.map((occurrence) => ({
+      kind: "occurrence" as const,
+      key: `occurrence:${occurrence.occurrenceId}`,
+      startAt: occurrence.startAt ?? occurrence.endAt,
+      title: occurrence.title,
+      occurrence,
+    })),
+  ].toSorted(compareCalendarDisplayItems);
+}
+
 function SelectedDayTimeline({
   week,
   range,
@@ -1355,6 +1496,10 @@ function SelectedDayTimeline({
     () => draftItemsForDate(draftItems, selectedDateKey, timeZone),
     [draftItems, selectedDateKey, timeZone],
   );
+  const selectedDisplayItems = useMemo(
+    () => buildCalendarDisplayItems(selectedDraftItems, selectedOccurrences),
+    [selectedDraftItems, selectedOccurrences],
+  );
   return (
     <section className="selected-day-card" data-testid="selected-day-timeline" aria-label="선택한 하루 일정">
       <div className="selected-day-head">
@@ -1376,43 +1521,40 @@ function SelectedDayTimeline({
         </div>
         {isRangeLoading ? <p className="timeline-state-note">선택한 날짜의 캘린더 항목을 불러오는 중입니다.</p> : null}
         {isRangeError ? <p className="timeline-state-note error">선택한 날짜의 캘린더 항목을 불러오지 못했습니다. 로컬 주간 일정은 계속 표시합니다.</p> : null}
-        {selectedDraftItems.length ? (
-          <ol className="selected-day-occurrence-list selected-day-draft-list" aria-label="AI 변경안 시간 투영">
-            {selectedDraftItems.map((draft) => (
-              <li className="selected-day-occurrence ai-draft-occurrence" data-testid="selected-day-draft-occurrence" key={draft.key}>
-                <div className="occurrence-edit-trigger" aria-label={`AI 변경안: ${formatServiceCopy(draft.title)}`}>
-                  <span className="agenda-occurrence-time">{draft.detail}</span>
-                  <div>
-                    <strong>{formatServiceCopy(draft.title)}</strong>
-                    <span>AI 변경안 · 적용 전</span>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : null}
         {!isRangeLoading && !isRangeError && selectedOccurrences.length === 0 && selectedDraftItems.length === 0 ? (
           <p className="week-stack-empty">캘린더 일정 항목이 없습니다.</p>
         ) : null}
-        {selectedOccurrences.length ? (
+        {selectedDisplayItems.length ? (
           <ol className="selected-day-occurrence-list">
-            {selectedOccurrences.map((occurrence) => (
-              <li
-                className={`selected-day-occurrence ${agendaOccurrenceTone(occurrence)}`}
-                data-testid="selected-day-occurrence"
-                key={occurrence.occurrenceId}
-              >
-                <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(occurrence)}>
-                  <span className="agenda-occurrence-time">{formatOccurrenceTimeRange(occurrence, timeZone)}</span>
-                  <div>
-                    <strong>{formatServiceCopy(occurrence.title)}</strong>
-                    <span>
-                      {occurrenceKindLabel(occurrence)}
-                      {occurrence.synthetic ? " · 반복" : ""}
-                    </span>
+            {selectedDisplayItems.map((item) => (
+              item.kind === "draft" ? (
+                <li className="selected-day-occurrence ai-draft-occurrence" data-testid="selected-day-draft-occurrence" key={item.key}>
+                  <div className="occurrence-edit-trigger" aria-label={`확인할 변경: ${formatServiceCopy(item.draft.title)}`}>
+                    <span className="agenda-occurrence-time">{item.draft.detail}</span>
+                    <div>
+                      <strong>{formatServiceCopy(item.draft.title)}</strong>
+                      <span>확인할 변경 · 반영 전</span>
+                    </div>
                   </div>
-                </button>
-              </li>
+                </li>
+              ) : (
+                <li
+                  className={`selected-day-occurrence ${agendaOccurrenceTone(item.occurrence)}`}
+                  data-testid="selected-day-occurrence"
+                  key={item.key}
+                >
+                  <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(item.occurrence)}>
+                    <span className="agenda-occurrence-time">{formatOccurrenceTimeRange(item.occurrence, timeZone)}</span>
+                    <div>
+                      <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                      <span>
+                        {occurrenceKindLabel(item.occurrence)}
+                        {item.occurrence.synthetic ? " · 반복" : ""}
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              )
             ))}
           </ol>
         ) : null}
@@ -1464,7 +1606,7 @@ function AgendaStream({
         dateKey,
         occurrences: occurrenceGroups.find((group) => group.dateKey === dateKey)?.occurrences ?? [],
         drafts: (draftGroups.get(dateKey) ?? []).toSorted(
-          (left, right) => (left.startAt ?? "").localeCompare(right.startAt ?? "") || left.title.localeCompare(right.title),
+          (left, right) => compareOptionalIsoStart(left.startAt, right.startAt) || left.title.localeCompare(right.title, "ko-KR"),
         ),
       })).toSorted((left, right) => {
         if (left.dateKey === right.dateKey) {
@@ -1492,7 +1634,7 @@ function AgendaStream({
         <div>
           <p className="panel-kicker">시간순 목록</p>
           <h2>다가오는 일정 흐름</h2>
-          <p>캘린더 범위 응답의 발생 항목을 현지 날짜별로 묶어 시간순으로 보여줍니다.</p>
+          <p>불러온 일정을 날짜별로 묶어 시간순으로 보여줍니다.</p>
         </div>
         <span>{itemCount}개</span>
       </div>
@@ -1513,15 +1655,7 @@ function AgendaStream({
         <div className="agenda-stream-groups">
           {groups.map((group) => {
             const canOpenDay = isCalendarDateKey(group.dateKey);
-            const streamItems = [
-              ...group.drafts.map((draft) => ({ kind: "draft" as const, key: draft.key, startAt: draft.startAt, draft })),
-              ...group.occurrences.map((occurrence) => ({
-                kind: "occurrence" as const,
-                key: occurrence.occurrenceId,
-                startAt: occurrence.startAt,
-                occurrence,
-              })),
-            ].toSorted((left, right) => (left.startAt ?? "").localeCompare(right.startAt ?? "") || left.key.localeCompare(right.key));
+            const streamItems = buildCalendarDisplayItems(group.drafts, group.occurrences);
             return (
             <section className="agenda-day-group" key={group.dateKey} data-testid="agenda-day-group">
               <button
@@ -1549,11 +1683,11 @@ function AgendaStream({
                       data-testid="agenda-draft-occurrence"
                       key={item.key}
                     >
-                      <div className="occurrence-edit-trigger" aria-label={`AI 변경안: ${formatServiceCopy(item.draft.title)}`}>
+                      <div className="occurrence-edit-trigger" aria-label={`확인할 변경: ${formatServiceCopy(item.draft.title)}`}>
                         <span className="agenda-occurrence-time">{item.draft.detail}</span>
                         <div>
                           <strong>{formatServiceCopy(item.draft.title)}</strong>
-                          <span>AI 변경안 · 적용 전</span>
+                          <span>확인할 변경 · 반영 전</span>
                         </div>
                       </div>
                     </li>
@@ -2004,7 +2138,7 @@ export function ScheduleView() {
     } catch (openError) {
       showNotice({
         tone: "error",
-        title: "원본 항목을 불러오지 못했습니다.",
+        title: "연동 일정을 불러오지 못했습니다.",
         detail: mutationErrorDetail(openError),
       });
     } finally {
@@ -2079,7 +2213,7 @@ export function ScheduleView() {
       setOccurrenceForm(DEFAULT_OCCURRENCE_FORM);
       showNotice({
         tone: "success",
-        title: "캘린더 원본 항목을 수정했습니다.",
+        title: "연동 일정을 수정했습니다.",
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: calendarRangeQueryRootKey }),
@@ -2093,7 +2227,7 @@ export function ScheduleView() {
       }
       showNotice({
         tone: "error",
-        title: "캘린더 원본 항목 수정에 실패했습니다.",
+        title: "연동 일정 수정에 실패했습니다.",
         detail: mutationErrorDetail(saveError),
       });
     } finally {
@@ -2161,7 +2295,7 @@ export function ScheduleView() {
       if (isConflictError(saveError)) {
         setBlockingConflictMessage(saveError.message);
         setFormConflictDetail(
-          "방금 저장은 적용하지 않았습니다. 입력한 내용은 그대로 남아 있습니다. 최신 일정표와 비교한 뒤 다시 저장하세요.",
+          "방금 저장은 반영하지 않았습니다. 최신 일정표를 확인한 뒤 다시 저장하세요.",
         );
         await loadSchedulePage();
       }
@@ -2446,7 +2580,7 @@ export function ScheduleView() {
             <div className="schedule-mobile-action-strip" aria-label="주간 일정 빠른 작업">
               {isMutating ? (
                 <div className="schedule-mobile-ai-status" data-testid="schedule-mobile-ai-status" aria-live="polite">
-                  AI가 요청을 처리 중입니다. 완료되면 이 화면에 바로 표시됩니다.
+                  요청을 처리 중입니다. 완료되면 이 화면에 바로 표시됩니다.
                 </div>
               ) : null}
               <button
@@ -2556,9 +2690,9 @@ export function ScheduleView() {
           >
             <div className="modal-header">
               <div>
-                <p className="panel-kicker">캘린더 원본 편집</p>
+                <p className="panel-kicker">연동 일정 편집</p>
                 <h2 id="calendar-occurrence-edit-title">
-                  {editingOccurrence.entityType === "EVENT" ? "캘린더 이벤트 수정" : "할 일 수정"}
+                  {editingOccurrence.entityType === "EVENT" ? "일정 수정" : "할 일 수정"}
                 </h2>
               </div>
               <button
@@ -2676,7 +2810,7 @@ export function ScheduleView() {
               </div>
 
               <p className="modal-support-copy">
-                이 편집은 /api/calendar/range에 투영되는 EVENT/TASK 원본을 직접 갱신합니다. 루틴 보호 블록은 주간 스택에서 따로 수정합니다.
+                이 내용은 연동된 일정이나 할 일에 저장됩니다. 루틴 보호 블록은 주간 스택에서 따로 수정합니다.
               </p>
               <div className="modal-actions">
                 <button
@@ -2691,7 +2825,7 @@ export function ScheduleView() {
                   취소
                 </button>
                 <button className="solid-btn" disabled={isMutating} type="submit">
-                  원본 저장
+                  저장
                 </button>
               </div>
             </form>
@@ -2735,7 +2869,7 @@ export function ScheduleView() {
             <form className="modal-form" onSubmit={handleSaveBlock}>
               {formConflictDetail ? (
                 <div className="inline-message error conflict-resolution-message" role="alert">
-                  <strong>서버의 일정이 먼저 바뀌었습니다.</strong>
+                  <strong>다른 곳에서 일정이 먼저 바뀌었습니다.</strong>
                   <p>{formConflictDetail}</p>
                 </div>
               ) : null}
@@ -2866,7 +3000,7 @@ export function ScheduleView() {
               <p>{blockingConflictMessage}</p>
             </div>
             <p className="modal-support-copy">
-              최신 일정과 충돌 내용을 먼저 확인한 뒤 다시 저장하면 됩니다. 입력 중인 내용은 닫기 전까지 유지됩니다.
+              최신 일정과 충돌 내용을 확인한 뒤 다시 저장하세요. 입력 중인 내용은 유지됩니다.
             </p>
             <div className="modal-actions">
               <button

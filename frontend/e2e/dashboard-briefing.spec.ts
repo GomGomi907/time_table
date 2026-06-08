@@ -95,14 +95,14 @@ async function expectDashboardContentWidthMatchesScheduleWorkspace(page: Page) {
 }
 
 async function expectPendingSuggestionAction(page: Page, suggestion: Pick<SuggestionResponse, "executable">) {
-  await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^사용 안 함$/ })).toBeVisible();
 
   if (suggestion.executable) {
-    await expect(page.getByRole("button", { name: "적용" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /^(확인 후 반영|반영하기)$/ })).toBeEnabled();
     return;
   }
 
-  await expect(page.getByRole("button", { name: /적용할 변경 없음|다시 요청 필요/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /적용할 변경 없음|추가 정보 필요|다시 보내기/ })).toBeDisabled();
 }
 
 const WEEK = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
@@ -260,11 +260,11 @@ test("dashboard shows clarification as a question instead of an approval task", 
   await expect(page.getByRole("heading", { name: "확인이 필요합니다." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("어느 날짜로 옮길까요?")).toBeVisible();
   await expect(page.getByText("일정 정리 입력에 답변을 적어 다시 보내세요.")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "적용할 변경 없음" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /^사용 안 함$/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^(적용할 변경 없음|추가 정보 필요)$/ })).toBeDisabled();
   await assertNoInternalUserCopy(page);
 
-  await page.getByRole("button", { name: "이 제안 사용 안 함" }).click();
+  await page.getByRole("button", { name: /^사용 안 함$/ }).click();
   await expect(page.getByRole("status")).toContainText("제안을 닫았습니다.", { timeout: 30_000 });
 });
 
@@ -278,11 +278,11 @@ test("dashboard shows provider-unavailable as retry guidance without AI internal
 
   await page.goto("/dashboard");
 
-  await expect(page.getByRole("heading", { name: "AI 요청을 처리하지 못했습니다." })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "지금은 요청을 처리하지 못했습니다." })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("잠시 후 다시 시도해 주세요.")).toBeVisible();
-  await expect(page.getByText("잠시 후 다시 시도하세요.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "이 제안 사용 안 함" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "다시 요청 필요" })).toBeDisabled();
+  await expect(page.getByText("입력한 요청은 남아 있습니다. 잠시 후 다시 보내 주세요.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^사용 안 함$/ })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "다시 보내기" })).toBeDisabled();
   await assertNoInternalUserCopy(page);
 });
 
@@ -339,7 +339,7 @@ test("stacked today view keeps today's schedule before pending change actions", 
   await expect(page.getByRole("heading", { name: /오늘 일정은/ }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByRole("heading", { name: /변경 제안|확인이 필요합니다\.|AI 요청을 처리하지 못했습니다./ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /확인할 변경|확인이 필요합니다\.|지금은 요청을 처리하지 못했습니다./ })).toBeVisible();
   await expectPendingSuggestionAction(page, pendingSuggestion);
   await expect(page.getByText("승인 전에는 앱 일정이나 Google 캘린더와 할 일을 바꾸지 않습니다.")).toHaveCount(0);
   await assertNoInternalUserCopy(page);

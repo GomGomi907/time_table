@@ -11,7 +11,7 @@ export function AuthCallbackView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session, refreshSession } = useSessionBootstrap();
-  const { onboardingPhase, needsOnboarding, onboardingCompleted } = useOnboardingBootstrap();
+  const { onboardingPhase, needsOnboarding, onboardingCompleted, refreshOnboarding } = useOnboardingBootstrap();
   const status = searchParams.get("status");
   const isMock = searchParams.get("mock") === "true";
   const isError = status === "error";
@@ -48,6 +48,21 @@ export function AuthCallbackView() {
     );
   }
 
+  if (session?.authenticated && !onboardingCompleted && onboardingPhase === "error") {
+    return (
+      <div className="status-screen">
+        <div className="status-panel">
+          <p className="eyebrow">로그인</p>
+          <h1>처음 설정 상태를 확인하지 못했습니다.</h1>
+          <p>로그인은 완료됐지만 처음 설정 화면을 아직 열지 못했습니다.</p>
+          <button className="solid-btn" data-testid="status-retry-action" onClick={() => void refreshOnboarding()}>
+            상태 다시 확인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="status-screen">
       <div className="status-panel">
@@ -63,8 +78,8 @@ export function AuthCallbackView() {
           {isError
             ? "인증이 완료되지 않았습니다. 다시 시도해 주세요."
             : isMock
-            ? "개발용 계정으로 작업 공간을 준비합니다."
-            : "필요한 생활 리듬만 짧게 설정할 수 있습니다."}
+              ? "작업 공간을 준비합니다."
+              : "필요한 생활 리듬만 짧게 설정할 수 있습니다."}
         </p>
         {isError ? (
           <div className="inline-message error">
@@ -72,9 +87,11 @@ export function AuthCallbackView() {
             <p>{errorReason ? "로그인 요청이 만료되었거나 취소되었습니다." : "세션을 만들지 못했습니다."}</p>
           </div>
         ) : null}
-        <Link className="ghost-btn link-btn" data-testid="status-retry-action" href="/login">
-          로그인 화면으로 돌아가기
-        </Link>
+        {isError ? (
+          <Link className="ghost-btn link-btn" data-testid="status-retry-action" href="/login">
+            로그인 화면으로 돌아가기
+          </Link>
+        ) : null}
       </div>
     </div>
   );

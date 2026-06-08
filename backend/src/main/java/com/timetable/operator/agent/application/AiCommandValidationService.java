@@ -43,7 +43,7 @@ public class AiCommandValidationService {
     public StructuredAiCommandBatch requireExecutableOrClarification(UUID userId, String timezone, StructuredAiCommandBatch batch) {
         if (batch == null || batch.commands() == null || batch.commands().isEmpty()) {
             return clarificationBatch(
-                    "요청을 일정이나 할 일 변경으로 해석하지 못했습니다. 원하는 일정/할 일, 날짜와 시간을 더 구체적으로 알려주세요.",
+                    "어떤 일정이나 할 일을 바꿀지 확인이 필요합니다. 원하는 내용과 날짜를 알려주세요.",
                     List.of("action"),
                     List.of(),
                     "empty_command_batch"
@@ -90,7 +90,7 @@ public class AiCommandValidationService {
         }
         if (executableCount == 0) {
             return clarificationBatch(
-                    "실제로 변경할 수 있는 일정이나 할 일이 없습니다. 무엇을 추가/수정/삭제할지 더 구체적으로 알려주세요.",
+                    "바꿀 수 있는 일정이나 할 일을 찾지 못했습니다. 원하는 변경을 한 문장으로 알려주세요.",
                     List.of("executableCommand"),
                     List.of(),
                     "no_executable_command"
@@ -102,8 +102,8 @@ public class AiCommandValidationService {
     public StructuredAiCommandBatch aiDisabledBatch(String reason) {
         return nonExecutableBatch(
                 "AI 설정이 필요합니다",
-                "AI 기능이 비활성화되어 실행 가능한 일정 변경안을 만들지 않았습니다.",
-                "APP_AI_ENABLED와 Gemini API 키를 설정한 뒤 다시 요청해 주세요.",
+                "AI 기능이 꺼져 있어 변경 내용을 만들지 못했습니다.",
+                "AI 설정을 확인한 뒤 다시 시도해 주세요.",
                 "provider_unavailable",
                 reason
         );
@@ -117,7 +117,7 @@ public class AiCommandValidationService {
         String visibleMessage = providerUnavailableMessage(exception);
         return nonExecutableBatch(
                 "AI 요청 처리 실패",
-                "AI 제공자 응답을 받지 못해 실행 가능한 일정 변경안을 만들지 않았습니다.",
+                "AI 응답을 받지 못해 변경 내용을 만들지 못했습니다.",
                 visibleMessage,
                 "provider_unavailable",
                 reason
@@ -129,10 +129,12 @@ public class AiCommandValidationService {
         if (message.contains("resource_exhausted")
                 || message.contains("prepayment credits")
                 || message.contains("quota")
-                || message.contains("429")) {
-            return "AI 사용량 한도 또는 결제 크레딧이 소진되어 요청을 처리하지 못했습니다. 관리자 설정을 확인한 뒤 다시 요청해 주세요.";
+                || message.contains("429")
+                || message.contains("한도")
+                || message.contains("크레딧")) {
+            return "AI 사용량 한도가 소진되어 요청을 처리하지 못했습니다.";
         }
-        return "AI 제공자 응답을 받지 못했습니다. 잠시 후 다시 요청해 주세요.";
+        return "AI 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.";
     }
 
     public StructuredAiCommandBatch clarificationRequiredBatch(
@@ -170,7 +172,7 @@ public class AiCommandValidationService {
 
     private CommandValidation validateCommand(UUID userId, ZoneId userZone, StructuredAiCommand command) {
         if (command == null) {
-            return invalid("변경 내용을 읽지 못했습니다. 요청을 다시 입력해 주세요.", List.of("command"), List.of(), "null_command");
+            return invalid("변경 내용을 읽지 못했습니다. 한 번만 다시 보내 주세요.", List.of("command"), List.of(), "null_command");
         }
 
         AgentCommandActionType actionType;
@@ -179,7 +181,7 @@ public class AiCommandValidationService {
             actionType = AgentCommandActionType.from(command.actionType());
             targetType = AgentCommandTargetType.from(command.targetType());
         } catch (IllegalArgumentException exception) {
-            return invalid("지원하지 않는 변경 형식입니다. 일정/할 일 추가, 수정, 삭제 요청으로 다시 입력해 주세요.",
+            return invalid("지원하지 않는 변경 형식입니다. 일정이나 할 일 추가, 수정, 삭제로 요청해 주세요.",
                     List.of("actionType"), List.of(), "unsupported_action_or_target");
         }
 
@@ -187,11 +189,11 @@ public class AiCommandValidationService {
             return CommandValidation.nonExecutableResult();
         }
         if (!command.requiresConfirmation()) {
-            return invalid("변경 전에는 사용자 확인이 필요합니다. 어떤 변경을 검토할지 다시 입력해 주세요.",
+            return invalid("반영 전 확인이 필요합니다. 확인할 변경을 다시 알려주세요.",
                     List.of("requiresConfirmation"), List.of(), "missing_confirmation_flag");
         }
         if (actionType == AgentCommandActionType.REQUEST_RESCHEDULE) {
-            return invalid("재조율 범위가 너무 넓습니다. 조정할 일정, 기간, 원하는 기준을 더 구체적으로 알려주세요.",
+            return invalid("조정 범위가 넓습니다. 기간과 기준을 조금 더 알려주세요.",
                     List.of("target", "timeRange"), List.of(), "broad_reschedule_request");
         }
         if (isTaskCommand(actionType, targetType)) {
@@ -220,7 +222,7 @@ public class AiCommandValidationService {
 
     private CommandValidation validateTaskCommand(UUID userId, ZoneId userZone, StructuredAiCommand command, AgentCommandActionType actionType) {
         return switch (actionType) {
-            case CREATE_EVENT, RECOMMEND_TASK -> requirePayloadTitle(command, "할 일 제목이 필요합니다. 예: '오늘 할 일에 세금 신고 추가해줘'처럼 입력해 주세요.");
+            case CREATE_EVENT, RECOMMEND_TASK -> requirePayloadTitle(command, "할 일 제목을 알려주세요. 예: '오늘 할 일에 세금 신고 추가'.");
             case UPDATE_EVENT -> validateExistingTaskMutation(userId, userZone, command, true, false, "수정할 할 일 ID와 바꿀 내용이 필요합니다.");
             case MOVE_EVENT -> validateExistingTaskMutation(userId, userZone, command, false, true, "옮길 할 일 ID와 새 마감 또는 이동 시간이 필요합니다.");
             case DELETE_EVENT -> validateExistingTaskMutation(userId, userZone, command, false, false, "삭제할 할 일 ID가 필요합니다.");
@@ -243,7 +245,7 @@ public class AiCommandValidationService {
         }
         Optional<Task> task = taskRepository.findByIdAndUserId(targetId.get(), userId);
         if (task.isEmpty()) {
-            return invalid("해당 할 일을 찾지 못했습니다. 정확한 할 일 ID나 제목을 다시 알려주세요.",
+            return invalid("해당 할 일을 찾지 못했습니다. 할 일 제목을 다시 알려주세요.",
                     List.of("targetId"), List.of(command.targetId()), "task_target_not_found");
         }
         String rawDueDate = readString(command.payload(), "dueDate", "due_date");
@@ -251,7 +253,7 @@ public class AiCommandValidationService {
         try {
             dueDate = readInstant(userZone, command.payload(), "dueDate", "due_date");
         } catch (AiDateTimeFormatException exception) {
-            return invalid("마감 시각 형식을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
+            return invalid("마감 시각을 확인하지 못했습니다. 날짜와 시간을 다시 알려주세요.",
                     List.of("dueDate"), List.of(), "invalid_task_due_date_format");
         }
         if (requireMoveField && dueDate == null
@@ -290,15 +292,15 @@ public class AiCommandValidationService {
             startAt = readInstant(userZone, command.payload(), "startAt", "start_at");
             endAt = readInstant(userZone, command.payload(), "endAt", "end_at");
         } catch (AiDateTimeFormatException exception) {
-            return invalid("일정 시작/종료 시각을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
+            return invalid("일정 시작/종료 시각을 확인하지 못했습니다. 날짜와 시간을 다시 알려주세요.",
                     List.of("startAt", "endAt"), List.of(), "invalid_event_time_range");
         }
         if (rawStartAt != null || rawEndAt != null || startAt != null || endAt != null) {
             if (startAt == null || endAt == null || !endAt.isAfter(startAt)) {
-                return invalid("일정 시작/종료 시각을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
+                return invalid("일정 시작/종료 시각을 확인하지 못했습니다. 날짜와 시간을 다시 알려주세요.",
                         List.of("startAt", "endAt"), List.of(), "invalid_event_time_range");
             }
-            return requirePayloadTitle(command, "일정 제목이 필요합니다.");
+            return requirePayloadTitle(command, "일정 제목을 알려주세요.");
         }
 
         List<String> missing = new ArrayList<>();
@@ -315,7 +317,7 @@ public class AiCommandValidationService {
             missing.add("activity");
         }
         if (!missing.isEmpty()) {
-            return invalid("일정을 추가하려면 요일, 시작 시간, 종료 시간, 할 일을 모두 알려주세요. 예: '수요일 15:00-16:00 회의 추가해줘'.",
+            return invalid("일정 정보를 더 확인해야 합니다. 예: '수요일 15:00-16:00 회의 추가'.",
                     missing, List.of(), "missing_schedule_create_fields");
         }
         try {
@@ -337,7 +339,7 @@ public class AiCommandValidationService {
             candidate.setNote(readString(command.payload(), "note", "description"));
             scheduleBlockRules.validateForUser(userId, candidate);
         } catch (RuntimeException exception) {
-            return invalid("요일, 시간, 분류가 올바르지 않거나 기존 일정과 충돌합니다. 겹치지 않는 정확한 시간으로 다시 알려주세요.",
+            return invalid("시간이나 분류를 확인하지 못했거나 기존 일정과 겹칩니다. 다른 시간을 알려주세요.",
                     List.of("dayOfWeek", "startTime", "endTime"), List.of(), "invalid_schedule_create_fields");
         }
         return CommandValidation.executableResult();
@@ -370,7 +372,7 @@ public class AiCommandValidationService {
         if (block.isPresent()) {
             return validateScheduleBlockMutation(command, requireChangedField, requireMoveField, question);
         }
-        return invalid("해당 일정을 찾지 못했습니다. 정확한 일정 ID나 제목을 다시 알려주세요.",
+        return invalid("해당 일정을 찾지 못했습니다. 일정 제목을 다시 알려주세요.",
                 List.of("targetId"), List.of(command.targetId()), "event_target_not_found");
     }
 
@@ -390,7 +392,7 @@ public class AiCommandValidationService {
                 startAt = readInstant(userZone, command.payload(), "startAt", "start_at");
                 endAt = readInstant(userZone, command.payload(), "endAt", "end_at");
             } catch (AiDateTimeFormatException exception) {
-                return invalid("새 시간 형식을 해석하지 못했습니다. 예: 2026-05-16T19:10 또는 2026-05-16T10:10:00Z처럼 다시 알려주세요.",
+                return invalid("새 시간을 확인하지 못했습니다. 날짜와 시간을 다시 알려주세요.",
                         List.of("startAt", "endAt"), List.of(), "invalid_event_time_format");
             }
             if (startAt == null && endAt == null && readLong(command.payload(), "suggestedShiftMinutes", "suggested_shift_minutes") == null) {
@@ -400,7 +402,7 @@ public class AiCommandValidationService {
                 return invalid("새 시작/종료 시각은 함께 지정해 주세요. 예: 2026-05-16T19:10-20:10", List.of("startAt", "endAt"), List.of(), "partial_event_time_range");
             }
             if (startAt != null && !endAt.isAfter(startAt)) {
-                return invalid("종료 시각은 시작 시각보다 늦어야 합니다. 시간대를 포함하거나 사용자 로컬 시각으로 다시 요청해 주세요.", List.of("endAt"), List.of(), "invalid_event_time_range");
+                return invalid("종료 시각은 시작 시각보다 늦어야 합니다. 다시 확인해 주세요.", List.of("endAt"), List.of(), "invalid_event_time_range");
             }
         }
         if (requireChangedField && !hasAnyPayload(command, "title", "activity", "summary", "description", "note", "startAt", "start_at", "endAt", "end_at", "category", "priority", "goalId", "goal_id")) {

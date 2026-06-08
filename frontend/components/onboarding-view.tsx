@@ -12,29 +12,32 @@ import { useAppStore } from "@/stores/app-store";
 
 type AsyncPhase = "idle" | "loading" | "ready" | "error";
 
+const UNSAFE_USER_COPY_PATTERN =
+  /providerMetadata|provider_metadata|payload|validationTrace|reasoningTrace|rawPrompt|commandBatch|requestKind|resolutionType/i;
+
 const QUESTION_GROUPS = [
   {
     id: "morning",
     title: "아침",
-    description: "",
+    description: "일어나는 시간과 업무 시작 전 흐름을 잡습니다.",
     questionIds: ["wakeTime", "workStartTime"],
   },
   {
     id: "evening",
     title: "저녁",
-    description: "",
+    description: "저녁과 수면 보호 시간을 정합니다.",
     questionIds: ["dinnerTime", "sleepTime"],
   },
   {
     id: "weekend",
     title: "주말",
-    description: "",
+    description: "주말을 쉬는 쪽으로 둘지, 개인 작업 시간을 둘지 고릅니다.",
     questionIds: ["weekendStyle"],
   },
   {
     id: "focus",
     title: "집중 시간",
-    description: "",
+    description: "실행 모드가 권할 집중/휴식 리듬을 정합니다.",
     questionIds: ["focusSessionMinutes", "focusBreakMinutes", "focusInterventionStyle"],
   },
 ] as const;
@@ -71,13 +74,46 @@ function optionLabel(question: OnboardingQuestion, value: string | undefined) {
   return question.options.find((option) => option.value === value)?.label ?? value ?? "미선택";
 }
 
+function categoryCopy(category: string | undefined) {
+  switch (category) {
+    case "SLEEP":
+      return "수면";
+    case "TRANSIT":
+      return "이동";
+    case "LIFE":
+      return "생활";
+    case "WORK":
+      return "업무";
+    case "GROWTH":
+      return "성장";
+    default:
+      return "일정";
+  }
+}
+
+function timezoneCopy(timezone: string | undefined) {
+  if (!timezone) {
+    return "나중에 언제든 바꿀 수 있습니다.";
+  }
+  if (timezone === "Asia/Seoul") {
+    return "서울 시간 기준으로 저장합니다.";
+  }
+  return "현재 시간대 기준으로 저장합니다.";
+}
+
+function previewTitleCopy(title: string | undefined, category: string | undefined) {
+  if (!title || UNSAFE_USER_COPY_PATTERN.test(title)) {
+    return `${categoryCopy(category)} 시간`;
+  }
+  return formatServiceCopy(title);
+}
+
 export function OnboardingView() {
   const router = useRouter();
   const { session, sessionPhase, refreshSession } = useSessionBootstrap();
   const {
     onboardingPhase,
     onboardingStatus,
-    onboardingError,
     onboardingCompleted,
     refreshOnboarding,
     applyOnboardingStatus,
@@ -91,6 +127,7 @@ export function OnboardingView() {
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [completionPhase, setCompletionPhase] = useState<AsyncPhase>("idle");
   const [isEditingAnswers, setIsEditingAnswers] = useState(false);
+  const [touchedAnswers, setTouchedAnswers] = useState<Record<string, boolean>>({});
 
   const questions = useMemo(() => onboardingStatus?.questions ?? [], [onboardingStatus?.questions]);
   const displayName = onboardingStatus?.displayName || session?.displayName || "새 사용자";
@@ -100,6 +137,9 @@ export function OnboardingView() {
   const visibleOnboardingPreviewItems = onboardingPreviewItems.slice(0, 3);
   const hiddenOnboardingPreviewCount = Math.max(onboardingPreviewItems.length - visibleOnboardingPreviewItems.length, 0);
   const canApplyOnboardingSuggestion = Boolean(suggestionId && onboardingPreviewItems.length > 0);
+  const onboardingExperienceSummary = canApplyOnboardingSuggestion
+    ? `추천 시간 ${onboardingPreviewItems.length}개를 준비했습니다.`
+    : "일정표를 바로 열 수 있습니다.";
 
   const groupedQuestions = useMemo(
     () =>
@@ -165,13 +205,11 @@ export function OnboardingView() {
         setBootstrapPhase("loading");
         const response = await api.bootstrapOnboarding();
         applyOnboardingStatus(response.status);
-        setBootstrapMessage(response.message);
+        setBootstrapMessage("필요한 정보를 준비했습니다.");
         setBootstrapPhase("ready");
-      } catch (error) {
+      } catch {
         setBootstrapPhase("error");
-        setBootstrapMessage(
-          error instanceof Error ? error.message : "초기 데이터 가져오기에 실패했습니다.",
-        );
+        setBootstrapMessage("필요한 정보를 준비하지 못했습니다.");
       }
     }
 
@@ -197,26 +235,48 @@ export function OnboardingView() {
 
   const answeredCount = questions.filter((question) => Boolean(answers[question.id])).length;
   const canSubmitAnswers = questions.length > 0 && questions.every((question) => Boolean(answers[question.id]));
+  const touchedAnswerCount = Object.values(touchedAnswers).filter(Boolean).length;
   const answerReadyLabel = canSubmitAnswers
-    ? `${answeredCount}/${questions.length} 답변 완료`
-    : `${answeredCount}/${questions.length} 답변`;
-  const primaryActionLabel = submitPhase === "loading" ? "답변 저장 중..." : "답변 저장하고 계속";
+    ? touchedAnswerCount > 0
+      ? `${touchedAnswerCount}개 조정됨`
+      : "추천 기본값 준비됨"
+    : `${answeredCount}/${questions.length} 준비`;
+  const primaryActionLabel = submitPhase === "loading"
+    ? "준비 중..."
+    : touchedAnswerCount > 0
+      ? "바꾼 시간으로 계속"
+      : "기본값으로 계속";
   const readinessStateCopy = canSubmitAnswers
-    ? "답변을 저장하면 마지막 확인으로 넘어갑니다."
+    ? touchedAnswerCount > 0
+      ? "바꾼 시간으로 오늘 일정표를 준비합니다."
+      : "추천 기본값을 그대로 쓰거나 필요한 것만 바꾸세요."
     : "모두 고르면 마지막 확인으로 넘어갑니다.";
+
+  function updateAnswer(questionId: string, value: string) {
+    setAnswers((current) => ({
+      ...current,
+      [questionId]: value,
+    }));
+    setTouchedAnswers((current) => ({
+      ...current,
+      [questionId]: true,
+    }));
+    setSubmitMessage(null);
+    if (submitPhase === "error") {
+      setSubmitPhase("idle");
+    }
+  }
 
   async function handleBootstrapRetry() {
     try {
       setBootstrapPhase("loading");
       const response = await api.bootstrapOnboarding();
       applyOnboardingStatus(response.status);
-      setBootstrapMessage(response.message);
+      setBootstrapMessage("필요한 정보를 준비했습니다.");
       setBootstrapPhase("ready");
-    } catch (error) {
+    } catch {
       setBootstrapPhase("error");
-      setBootstrapMessage(
-        error instanceof Error ? error.message : "초기 데이터 가져오기에 실패했습니다.",
-      );
+      setBootstrapMessage("필요한 정보를 준비하지 못했습니다.");
     }
   }
 
@@ -229,23 +289,24 @@ export function OnboardingView() {
       setSubmitPhase("loading");
       const response = await api.saveOnboardingAnswers({ answers });
       applyOnboardingStatus(response.status);
-      setSubmitMessage(response.message);
+      setSubmitMessage("오늘 일정표 준비를 마쳤습니다.");
       setSubmitPhase("ready");
       setIsEditingAnswers(false);
+      setTouchedAnswers({});
       showNotice({
         tone: "success",
-        title: "설정을 저장했습니다.",
+        title: "오늘 일정표를 준비했습니다.",
         detail: "마지막 확인으로 이어집니다.",
       });
-    } catch (error) {
+    } catch {
       setSubmitPhase("error");
       setSubmitMessage(
-        error instanceof Error ? error.message : "처음 설정 답변 저장에 실패했습니다.",
+        "오늘 일정표를 준비하지 못했습니다.",
       );
       showNotice({
         tone: "error",
-        title: "생활 리듬 저장에 실패했습니다.",
-        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
+        title: "오늘 일정표를 준비하지 못했습니다.",
+        detail: "잠시 후 다시 시도하면 됩니다.",
       });
     }
   }
@@ -263,15 +324,15 @@ export function OnboardingView() {
       showNotice({
         tone: "success",
         title: "처음 설정을 마쳤습니다.",
-        detail: response.message,
+        detail: "일정표를 엽니다.",
       });
       router.replace("/dashboard");
-    } catch (error) {
+    } catch {
       setCompletionPhase("error");
       showNotice({
         tone: "error",
         title: "처음 설정 완료 처리에 실패했습니다.",
-        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
+        detail: "잠시 후 다시 시도하면 됩니다.",
       });
     }
   }
@@ -299,7 +360,7 @@ export function OnboardingView() {
         <div className="status-panel">
           <p className="eyebrow">처음 설정</p>
           <h1>처음 설정 상태를 불러오지 못했습니다.</h1>
-          <p>{onboardingError ?? "잠시 후 다시 시도하면 됩니다."}</p>
+          <p>잠시 후 다시 시도하면 됩니다.</p>
           <button className="solid-btn" data-testid="status-retry-action" onClick={() => void refreshOnboarding()}>
             다시 시도
           </button>
@@ -333,7 +394,7 @@ export function OnboardingView() {
                 <button className="solid-btn" data-testid="status-retry-action" onClick={() => void handleBootstrapRetry()}>
                   다시 읽기
                 </button>
-                <button className="ghost-btn" data-testid="status-retry-action" onClick={() => void refreshOnboarding()}>
+                <button className="ghost-btn" data-testid="onboarding-refresh-status-action" onClick={() => void refreshOnboarding()}>
                   상태 새로고침
                 </button>
               </div>
@@ -351,8 +412,8 @@ export function OnboardingView() {
           <section className="onboarding-sidebar onboarding-sidebar-compact onboarding-quickstart-rail">
             <div className="onboarding-sidebar-body">
               <p className="eyebrow">처음 설정</p>
-              <h1>평소 시간을 몇 개만 고르세요.</h1>
-              <p>오늘 일정표를 바로 볼 수 있습니다. 나중에 언제든 바꿀 수 있습니다.</p>
+              <h1>{displayName}님, 평소 시간을 몇 개만 고르세요.</h1>
+              <p>오늘 일정표를 바로 볼 수 있습니다. {timezoneCopy(onboardingTimeZone)}</p>
             </div>
 
             <div className="onboarding-sidebar-meta onboarding-readiness-card" aria-label="처음 설정 답변 상태">
@@ -361,7 +422,7 @@ export function OnboardingView() {
                 <strong>{answerReadyLabel}</strong>
               </div>
               <p>{readinessStateCopy}</p>
-              <div className="onboarding-readiness-summary" aria-label="오늘 화면에 반영되는 항목">
+              <div className="onboarding-readiness-summary" aria-label="일정표에 반영되는 항목">
                 {QUESTION_GROUPS.map((group) => (
                   <span key={group.id}>{group.title}</span>
                 ))}
@@ -412,12 +473,8 @@ export function OnboardingView() {
                                 key={option.value}
                                 className={`onboarding-option-card ${selected ? "selected" : ""}`}
                                 type="button"
-                                onClick={() =>
-                                  setAnswers((current) => ({
-                                    ...current,
-                                    [question.id]: option.value,
-                                  }))
-                                }
+                                aria-pressed={selected}
+                                onClick={() => updateAnswer(question.id, option.value)}
                               >
                                 <span className="onboarding-option-indicator" aria-hidden="true" />
                                 <span className="onboarding-option-copy">
@@ -480,26 +537,32 @@ export function OnboardingView() {
                 <h2>오늘 일정표를 바로 열 수 있습니다.</h2>
                 <p className="onboarding-card-intro">
                   {canApplyOnboardingSuggestion
-                    ? "추천 일정을 적용할지 선택한 뒤 오늘 화면으로 이동합니다."
+                    ? "추천 시간을 넣을지 고른 뒤 일정표를 엽니다."
                     : "나중에 다시 바꿀 수 있습니다."}
                 </p>
               </div>
             </div>
 
+            {onboardingExperienceSummary ? (
+              <div className="onboarding-preview-summary" aria-label="추천 시간 요약">
+                <span>추천 시간</span>
+                <strong>{onboardingExperienceSummary}</strong>
+              </div>
+            ) : null}
+
             {visibleOnboardingPreviewItems.length ? (
-              <ul className="suggestion-preview-list" aria-label="온보딩에서 적용될 추천 일정">
+              <ul className="suggestion-preview-list" aria-label="온보딩에서 넣을 수 있는 추천 시간">
                 {visibleOnboardingPreviewItems.map((item, index) => (
                   <li className="suggestion-preview-item" key={`${item.title}-${item.startTime}-${index}`}>
-                    <span>{item.category}</span>
-                    <strong>{formatServiceCopy(item.title)}</strong>
+                    <span>{categoryCopy(item.category)}</span>
+                    <strong>{previewTitleCopy(item.title, item.category)}</strong>
                     <p>
                       {item.days} · {item.startTime} - {item.endTime}
-                      {item.reason ? ` · ${item.reason}` : ""}
                     </p>
                   </li>
                 ))}
                 {hiddenOnboardingPreviewCount ? (
-                  <li className="suggestion-preview-more">외 {hiddenOnboardingPreviewCount}개 추천 일정</li>
+                  <li className="suggestion-preview-more">외 {hiddenOnboardingPreviewCount}개 추천 시간</li>
                 ) : null}
               </ul>
             ) : null}
@@ -522,7 +585,7 @@ export function OnboardingView() {
                   onClick={() => void handleComplete(false)}
                   type="button"
                 >
-                  {canApplyOnboardingSuggestion ? "적용하지 않고 오늘 화면으로" : "오늘 화면으로 이동"}
+                  {canApplyOnboardingSuggestion ? "건너뛰고 일정표 보기" : "일정표 보기"}
                 </button>
                 {canApplyOnboardingSuggestion ? (
                   <button
@@ -532,7 +595,7 @@ export function OnboardingView() {
                     onClick={() => void handleComplete(true)}
                     type="button"
                   >
-                    {completionPhase === "loading" ? "추천 일정 적용 중..." : "추천 일정 적용하고 시작"}
+                    {completionPhase === "loading" ? "추천 시간 넣는 중..." : "추천 시간 넣고 일정표 보기"}
                   </button>
                 ) : null}
               </div>

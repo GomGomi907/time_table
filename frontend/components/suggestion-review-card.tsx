@@ -170,7 +170,7 @@ export function SuggestionReviewCard({
         readOnly ? null :
         <div className="suggestion-actions approval-actions">
           <button className="ghost-btn" disabled={isPending} onClick={onReject} type="button">
-            {compact ? "취소" : "이 제안 사용 안 함"}
+            {compact ? "닫기" : "사용 안 함"}
           </button>
           <button className="solid-btn" disabled={isPending || !display.canApply} onClick={onApply} type="button">
             {compact ? "반영하기" : display.applyLabel}

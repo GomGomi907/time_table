@@ -190,16 +190,24 @@ export interface SuggestionDisplayState {
 
 const INTERNAL_AI_SENTINEL_PATTERN = /INTERNAL_REASON_SHOULD_NOT_RENDER/i;
 const INTERNAL_AI_METADATA_TERMS =
-  "confidence|stage|draft|canonical|commandBatch|command|payload|requestKind|resolutionType|matchEvidence|validationTrace|validation|repairAttempt|chainOfThought|reasoning|missingFields|ambiguousFields|schedule block";
+  "confidence|stage|draft|canonical|commandBatch|command|providerMetadata|provider_metadata|payload|requestKind|resolutionType|matchEvidence|validationTrace|validation|repairAttempt|chainOfThought|reasoning|missingFields|ambiguousFields|schedule block";
 const INTERNAL_AI_METADATA_LABEL_PATTERN = new RegExp(
   `\\b(?:${INTERNAL_AI_METADATA_TERMS})\\b\\s*[:=]\\s*[^,.;\\n]+[,.;\\n]?`,
   "gi",
 );
 const INTERNAL_AI_METADATA_TOKEN_PATTERN = new RegExp(`\\b(?:${INTERNAL_AI_METADATA_TERMS})\\b`, "gi");
+const INTERNAL_AI_COPY_MESSAGE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/AI\s*재조율\s*응답\s*스키마[^.?!。]*(?:[.?!。]|$)/g, "요청을 준비하지 못했습니다."],
+  [/Gemini\s+provider\s+quota\s+exhausted[^\n]*/gi, "사용량 한도나 결제 크레딧이 부족해 요청을 처리하지 못했습니다."],
+  [/Gemini\s+provider\s+request\s+failed[^\n]*/gi, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."],
+  [/(?:suggestion\s+)?payload[^\n.?!。]*(?:읽|저장)[^.?!。]*(?:[.?!。]|$)/gi, "제안 내용을 처리하지 못했습니다."],
+  [/execution\s+snapshot[^\n.?!。]*(?:읽|저장)[^.?!。]*(?:[.?!。]|$)/gi, "적용 기록을 처리하지 못했습니다."],
+  [/AI\s*repair\s*(?:응답|요청)[^.?!。]*(?:[.?!。]|$)/gi, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."],
+];
 const INTERNAL_AI_COPY_REPLACEMENTS: Array<[RegExp, string]> = [
-  [/AI\s*초안/g, "AI 판단"],
-  [/후보\s*명령/g, "변경 후보"],
-  [/초안/g, "변경안"],
+  [/AI\s*초안/g, "확인할 변경"],
+  [/후보\s*명령/g, "확인할 변경"],
+  [/초안/g, "확인할 변경"],
   [/명령/g, "변경"],
   [/제공자/g, "AI"],
   [/검증/g, "확인"],
@@ -209,6 +217,10 @@ export function sanitizeInternalAiCopy(value: string | null | undefined) {
   let normalized = (value ?? "").trim();
   if (!normalized || INTERNAL_AI_SENTINEL_PATTERN.test(normalized)) {
     return "";
+  }
+
+  for (const [pattern, replacement] of INTERNAL_AI_COPY_MESSAGE_REPLACEMENTS) {
+    normalized = normalized.replace(pattern, replacement);
   }
 
   const hadMetadata = INTERNAL_AI_METADATA_LABEL_PATTERN.test(normalized)
@@ -260,11 +272,11 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
   if (trustLevel === "provider_unavailable") {
     return {
       kind: "provider_unavailable",
-      title: "AI 요청을 처리하지 못했습니다.",
+      title: "지금은 요청을 처리하지 못했습니다.",
       detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation || suggestion.explanation, "잠시 후 다시 시도해 주세요."),
-      guidance: "요청 내용은 보존됩니다. 원인을 확인한 뒤 다시 요청하세요.",
+      guidance: "입력한 요청은 남아 있습니다. 잠시 후 다시 보내 주세요.",
       canApply: false,
-      applyLabel: "다시 요청 필요",
+      applyLabel: "다시 보내기",
     };
   }
 
@@ -285,9 +297,9 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
   if (suggestion.executable) {
     return {
       kind: "executable",
-      title: trustLevel === "review_required" ? "확인이 필요한 변경" : "반영할 변경",
-      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation, "변경 시간을 확인하고 적용하세요."),
-      guidance: decisionPackage?.riskLevel === "high" ? "영향 범위가 큰 변경입니다. 적용 전 후보를 한 번 더 확인하세요." : null,
+      title: "확인할 변경",
+      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation, "시간과 내용을 확인해 주세요."),
+      guidance: decisionPackage?.riskLevel === "high" ? "영향이 큰 변경입니다. 반영 전에 내용을 확인해 주세요." : null,
       canApply: true,
       applyLabel: trustLevel === "review_required" ? "확인 후 반영" : "반영하기",
     };
@@ -297,8 +309,8 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
     return {
       kind: "clarification",
       title: toSafeSuggestionText(understanding?.summary || suggestion.summary, "확인이 필요합니다."),
-      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation || suggestion.explanation, "적용 전 후보가 맞는지 확인이 필요합니다."),
-      guidance: "AI가 바로 바꾸지 않고 확인이 필요한 항목만 정리했습니다.",
+      detail: toSafeSuggestionText(decisionPackage?.confirmationReason || understanding?.explanation || suggestion.explanation, "반영 전에 내용 확인이 필요합니다."),
+      guidance: "반영 전에 확인할 내용을 정리했습니다.",
       canApply: false,
       applyLabel: "확인 필요",
     };
@@ -326,19 +338,19 @@ export function getSuggestionDisplayState(suggestion: RescheduleSuggestion): Sug
     const message = getStringField(payload, "message");
     return {
       kind: "provider_unavailable",
-      title: "AI 요청을 처리하지 못했습니다.",
+      title: "지금은 요청을 처리하지 못했습니다.",
       detail: toSafeSuggestionText(message || suggestion.explanation, "잠시 후 다시 시도해 주세요."),
-      guidance: "요청 내용은 보존됩니다. 원인을 확인한 뒤 다시 요청하세요.",
+      guidance: "입력한 요청은 남아 있습니다. 잠시 후 다시 보내 주세요.",
       canApply: false,
-      applyLabel: "다시 요청 필요",
+      applyLabel: "다시 보내기",
     };
   }
 
   return {
     kind: "non_executable",
-    title: toSafeSuggestionText(understanding?.summary || suggestion.summary, "적용할 변경이 없습니다."),
-    detail: toSafeSuggestionText(understanding?.explanation || suggestion.explanation, "요청을 더 구체적으로 다시 보내주세요."),
-    guidance: "필요하면 일정을 다시 작성해 보내세요.",
+    title: toSafeSuggestionText(understanding?.summary || suggestion.summary, "반영할 내용이 없습니다."),
+    detail: toSafeSuggestionText(understanding?.explanation || suggestion.explanation, "원하는 날짜나 시간을 조금 더 알려주세요."),
+    guidance: null,
     canApply: false,
     applyLabel: "정보 확인",
   };

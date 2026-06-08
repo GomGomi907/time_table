@@ -248,7 +248,7 @@ public class ChatCommandOrchestrationService {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("chat command payload를 저장할 수 없습니다.", exception);
+            throw new IllegalStateException("채팅 명령 내용을 저장할 수 없습니다.", exception);
         }
     }
 

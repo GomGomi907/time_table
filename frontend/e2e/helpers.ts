@@ -53,7 +53,10 @@ interface WeekScheduleResponse {
   }>;
 }
 
-export async function loginThroughStartButton(page: Page) {
+export async function loginThroughStartButton(
+  page: Page,
+  options: { finalUrl?: RegExp } = {},
+) {
   await page.goto("/login");
   await page.waitForLoadState("domcontentloaded");
 
@@ -72,7 +75,7 @@ export async function loginThroughStartButton(page: Page) {
   await expect(page).toHaveURL(/\/(auth\/callback|onboarding|dashboard)(?:$|\?)/, {
     timeout: 30_000,
   });
-  await expect(page).toHaveURL(/\/(onboarding|dashboard)(?:$|\?)/, {
+  await expect(page).toHaveURL(options.finalUrl ?? /\/(onboarding|dashboard)(?:$|\?)/, {
     timeout: 30_000,
   });
 }
@@ -118,11 +121,11 @@ export async function completeOnboardingIfPresent(page: Page) {
 
   await expect(
     page.getByRole("button", {
-      name: /답변 저장하고 계속|오늘 화면으로 이동|적용하지 않고 오늘 화면으로|추천 일정 적용하고 시작|바로 시작하기|둘러보기|적용하고 시작/,
+      name: /^(기본값으로 계속|바꾼 시간으로 계속|일정표 보기|건너뛰고 일정표 보기|추천 시간 넣고 일정표 보기|바로 시작하기|둘러보기)$/,
     }).first(),
   ).toBeVisible({ timeout: 45_000 });
 
-  const browseButton = page.getByRole("button", { name: /둘러보기|오늘 화면으로 이동|적용하지 않고 오늘 화면으로/ }).first();
+  const browseButton = page.getByRole("button", { name: /^(둘러보기|일정표 보기|건너뛰고 일정표 보기)$/ }).first();
   if (await browseButton.isVisible({ timeout: 500 }).catch(() => false)) {
     await browseButton.click();
     await expect(page).toHaveURL(/\/dashboard(?:$|\?)/, { timeout: 30_000 });
@@ -135,10 +138,7 @@ export async function completeOnboardingIfPresent(page: Page) {
   await clickOptionalButton(page, /^23:30/);
   await clickOptionalButton(page, /균형 있게/);
 
-  const stickySaveButton = page.getByTestId("onboarding-sticky-continue-button");
-  const saveButton = await stickySaveButton.isVisible({ timeout: 500 }).catch(() => false)
-    ? stickySaveButton
-    : page.getByTestId("onboarding-continue-button");
+  const saveButton = page.getByTestId("onboarding-continue-button");
   await expect(saveButton).toBeEnabled({ timeout: 30_000 });
   await saveButton.click();
 

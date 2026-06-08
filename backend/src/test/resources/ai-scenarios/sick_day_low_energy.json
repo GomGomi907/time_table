@@ -16,7 +16,7 @@
     "requiresExecutable": false,
     "payloadContains": { "requestKind": "status_declaration", "mode": "저에너지/병가", "externalMutationAllowed": false },
     "payloadListContains": { "workTasks": ["긴급 마감"] },
-    "explanationContains": ["저에너지/병가", "개인 일정은 보존"],
+    "explanationContains": ["저에너지/병가", "개인 일정과 연동 일정"],
     "forbiddenExecutableActions": ["delete_event"],
     "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "clarificationQuality", "userEffort", "privacyExposure"]
   }

@@ -227,9 +227,9 @@ test("schedule mobile shows request progress while AI is processing", async ({ p
   await page.getByTestId("schedule-ai-request-input").fill("모바일에서 처리중 표시 확인");
   await page.getByTestId("schedule-ai-request-submit").click();
   await requestStartedPromise;
-  await expect(page.getByTestId("schedule-mobile-ai-status")).toContainText("AI가 요청을 처리 중입니다.");
+  await expect(page.getByTestId("schedule-mobile-ai-status")).toContainText("요청을 처리 중입니다.");
   releaseResponse();
-  await expect(page.locator(".notice-center")).toContainText("변경 요청을 만들었습니다.", { timeout: 30_000 });
+  await expect(page.locator(".notice-center")).toContainText(/확인이 필요합니다|변경 요청을 만들었습니다/, { timeout: 30_000 });
   await expect(page.getByTestId("schedule-mobile-ai-status")).toHaveCount(0, { timeout: 30_000 });
 
   await page.unroute("**/api/agent/reschedule");

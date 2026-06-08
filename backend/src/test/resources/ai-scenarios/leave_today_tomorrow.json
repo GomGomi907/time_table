@@ -19,9 +19,9 @@
   "expectation": {
     "requiresExecutable": false,
     "payloadContains": { "requestKind": "status_declaration", "mode": "휴가", "externalMutationAllowed": false, "requiresUserConfirmation": true },
-    "payloadListContains": { "workEvents": ["업무 회의", "외부 원본 보호"], "workBlocks": ["근무"], "workTasks": ["보고서 작성"] },
+    "payloadListContains": { "workEvents": ["업무 회의", "연동 일정 보호"], "workBlocks": ["근무"], "workTasks": ["보고서 작성"] },
     "payloadListNotContains": { "workEvents": ["친구 약속"] },
-    "explanationContains": ["개인 일정은 보존", "외부 일정은 직접 삭제하지 않습니다"],
+    "explanationContains": ["개인 일정과 연동 일정", "바로 삭제하지 않습니다"],
     "forbiddenExecutableActions": ["delete_event"],
     "requiredMetrics": ["intentAccuracy", "dateRangeAccuracy", "contextRecall", "commandSafety", "userEffort", "privacyExposure"]
   }

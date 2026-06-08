@@ -41,6 +41,9 @@ public class AiRescheduleClient implements AiAgentStageClient {
             AgentCommandActionType.RECOMMEND_TASK.wireValue(),
             AgentCommandActionType.EXPLAIN_ONLY.wireValue()
     );
+    private static final String AI_DISABLED_MESSAGE = "일정 조정 기능이 꺼져 있습니다.";
+    private static final String AI_REQUEST_FAILED_MESSAGE = "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+    private static final String AI_RESPONSE_EMPTY_MESSAGE = "변경 내용을 읽지 못했습니다.";
 
     private static final String SYSTEM_PROMPT = """
             You are an AI schedule adjustment planner for a Korean time-table app.
@@ -257,7 +260,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
     @Override
     public AiAgentInterpretation interpret(AiAgentRequest request) {
         if (!appProperties.ai().enabled()) {
-            throw new IllegalStateException("AI reschedule planner is disabled.");
+            throw new IllegalStateException(AI_DISABLED_MESSAGE);
         }
         try {
             String content = extractGeneratedText(callGeminiGenerateContent(buildRequest(
@@ -266,21 +269,21 @@ public class AiRescheduleClient implements AiAgentStageClient {
                     INTERPRETATION_SCHEMA
             )));
             if (content == null || content.isBlank()) {
-                throw new IllegalStateException("AI 요청 해석 응답을 읽지 못했습니다.");
+                throw new IllegalStateException("요청 내용을 읽지 못했습니다.");
             }
             return objectMapper.readValue(normalizeJsonObject(content), AiAgentInterpretation.class);
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
             log.error("Failed to call Gemini interpretation stage.", exception);
-            throw new IllegalStateException("AI 요청 해석에 실패했습니다.");
+            throw new IllegalStateException("요청 내용을 파악하지 못했습니다.");
         }
     }
 
     @Override
     public StructuredAiCommandBatch draft(AiAgentRequest request, AiAgentInterpretation interpretation) {
         if (!appProperties.ai().enabled()) {
-            throw new IllegalStateException("AI reschedule planner is disabled.");
+            throw new IllegalStateException(AI_DISABLED_MESSAGE);
         }
         try {
             DraftRequest draftRequest = new DraftRequest(promptPayload(request), interpretation);
@@ -290,14 +293,14 @@ public class AiRescheduleClient implements AiAgentStageClient {
                     RESPONSE_SCHEMA
             )));
             if (content == null || content.isBlank()) {
-                throw new IllegalStateException("AI draft 응답을 읽지 못했습니다.");
+                throw new IllegalStateException("변경 내용을 읽지 못했습니다.");
             }
             return canonicalize(content);
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
             log.error("Failed to call Gemini draft stage.", exception);
-            throw new IllegalStateException("AI draft 요청에 실패했습니다.");
+            throw new IllegalStateException("변경 내용을 준비하지 못했습니다.");
         }
     }
 
@@ -309,7 +312,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
             AiRequestProposalMatchService.MatchResult failure
     ) {
         if (!appProperties.ai().enabled()) {
-            throw new IllegalStateException("AI reschedule planner is disabled.");
+            throw new IllegalStateException(AI_DISABLED_MESSAGE);
         }
         try {
             RepairRequest repairRequest = new RepairRequest(promptPayload(request), interpretation, failedBatch, failure);
@@ -319,20 +322,20 @@ public class AiRescheduleClient implements AiAgentStageClient {
                     RESPONSE_SCHEMA
             )));
             if (content == null || content.isBlank()) {
-                throw new IllegalStateException("AI repair 응답을 읽지 못했습니다.");
+                throw new IllegalStateException(AI_RESPONSE_EMPTY_MESSAGE);
             }
             return canonicalize(content);
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
             log.error("Failed to call Gemini repair stage.", exception);
-            throw new IllegalStateException("AI repair 요청에 실패했습니다.");
+            throw new IllegalStateException(AI_REQUEST_FAILED_MESSAGE);
         }
     }
 
     public StructuredAiCommandBatch suggest(RescheduleAiContext context) {
         if (!appProperties.ai().enabled()) {
-            throw new IllegalStateException("AI reschedule planner is disabled.");
+            throw new IllegalStateException(AI_DISABLED_MESSAGE);
         }
 
         try {
@@ -340,14 +343,14 @@ public class AiRescheduleClient implements AiAgentStageClient {
 
             String content = extractGeneratedText(response);
             if (content == null || content.isBlank()) {
-                throw new IllegalStateException("AI 재조율 응답을 해석하지 못했습니다.");
+                throw new IllegalStateException(AI_RESPONSE_EMPTY_MESSAGE);
             }
             return canonicalize(content);
         } catch (IllegalStateException exception) {
             throw exception;
         } catch (IOException | IllegalArgumentException exception) {
             log.error("Failed to call Gemini reschedule planner.", exception);
-            throw new IllegalStateException("AI 재조율 요청에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+            throw new IllegalStateException(AI_REQUEST_FAILED_MESSAGE);
         }
     }
 
@@ -385,9 +388,9 @@ public class AiRescheduleClient implements AiAgentStageClient {
                 || normalizedBody.contains("resource_exhausted")
                 || normalizedBody.contains("prepayment credits")
                 || normalizedBody.contains("quota")) {
-            return "Gemini provider quota exhausted: status=" + statusCode + ", body=" + body;
+            return "사용량 한도가 소진되어 요청을 처리하지 못했습니다.";
         }
-        return "Gemini provider request failed: status=" + statusCode;
+        return AI_REQUEST_FAILED_MESSAGE;
     }
 
     private String readBody(InputStream inputStream) throws IOException {
@@ -447,7 +450,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
         try {
             userPayload = objectMapper.writeValueAsString(context);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("AI 재조율 컨텍스트를 만들지 못했습니다.", exception);
+            throw new IllegalStateException("요청 정보를 준비하지 못했습니다.", exception);
         }
         return buildRequest(SYSTEM_PROMPT, userPayload, RESPONSE_SCHEMA);
     }
@@ -469,7 +472,8 @@ public class AiRescheduleClient implements AiAgentStageClient {
         try {
             return objectMapper.readTree(schema);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("AI 재조율 응답 스키마를 준비하지 못했습니다.", exception);
+            log.error("Failed to parse Gemini response schema.", exception);
+            throw new IllegalStateException("요청을 준비하지 못했습니다.", exception);
         }
     }
 
@@ -517,8 +521,8 @@ public class AiRescheduleClient implements AiAgentStageClient {
             if (batch == null) {
                 throw new IllegalArgumentException("AI response body is null.");
             }
-            String summary = blankToDefault(batch.summary(), "AI 재조율 제안");
-            String explanation = blankToDefault(batch.explanation(), "AI가 현재 일정과 요청을 기준으로 재조율 명령을 생성했습니다.");
+            String summary = blankToDefault(batch.summary(), "일정 변경 제안");
+            String explanation = blankToDefault(batch.explanation(), "현재 일정과 요청을 기준으로 변경 내용을 준비했습니다.");
             List<StructuredAiCommand> commands = batch.commands() == null ? List.of() : batch.commands().stream()
                     .map(this::canonicalizeCommand)
                     .toList();
@@ -527,15 +531,15 @@ public class AiRescheduleClient implements AiAgentStageClient {
                         AgentCommandActionType.EXPLAIN_ONLY.wireValue(),
                         AgentCommandTargetType.NONE.wireValue(),
                         null,
-                        Map.of("summary", "실행 가능한 변경이 없습니다."),
-                        "AI returned no commands.",
+                        Map.of("summary", "반영할 변경이 없습니다."),
+                        "반영할 변경이 없습니다.",
                         false
                 ));
             }
             return new StructuredAiCommandBatch(summary, explanation, commands);
         } catch (JsonProcessingException | IllegalArgumentException exception) {
             log.error("Failed to parse AI reschedule response.", exception);
-            throw new IllegalStateException("AI 재조율 응답을 해석하지 못했습니다.");
+            throw new IllegalStateException(AI_RESPONSE_EMPTY_MESSAGE);
         }
     }
 
@@ -552,7 +556,7 @@ public class AiRescheduleClient implements AiAgentStageClient {
                 targetType,
                 blankToNull(command.targetId()),
                 command.payload() == null ? Map.of() : command.payload(),
-                blankToDefault(command.reason(), "AI 일정 재조율 제안"),
+                blankToDefault(command.reason(), "일정 변경 제안"),
                 executable
         );
     }

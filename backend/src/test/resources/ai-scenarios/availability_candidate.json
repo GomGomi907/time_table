@@ -30,7 +30,7 @@
     "requiresExecutable": false,
     "payloadContains": { "requestKind": "availability_candidate", "title": "병원", "requiresUserConfirmation": true },
     "payloadListContains": { "candidateWindows": ["금요일 14:00-15:00", "월요일 10:00-11:00"] },
-    "explanationContains": ["병원 후보 시간", "가능한 시간 후보"],
+    "explanationContains": ["병원 후보 시간", "가능한 후보"],
     "forbiddenExecutableActions": ["delete_event"],
     "requiredMetrics": ["intentAccuracy", "contextRecall", "commandSafety", "userEffort", "privacyExposure"]
   }

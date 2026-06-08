@@ -235,7 +235,7 @@ public record AiDecisionPackage(
             return distinctCompact(explicit);
         }
         if (!externalItems.isEmpty()) {
-            return distinctCompact(combine(List.of("외부 원본 일정은 직접 변경하지 않음"), externalItems));
+            return distinctCompact(combine(List.of("연동 일정은 바로 변경하지 않음"), externalItems));
         }
         return List.of("개인/보호 일정은 명시적 확인 전 변경하지 않음");
     }
@@ -255,7 +255,7 @@ public record AiDecisionPackage(
             risks.add("사용자 확인 전에는 변경을 적용하지 않음");
         }
         if (!externalItems.isEmpty()) {
-            risks.add("외부 원본 일정은 직접 수정/삭제하지 않음");
+            risks.add("연동 일정은 바로 수정/삭제하지 않음");
         }
         if (!conflicts.isEmpty()) {
             risks.add("기존 일정과 시간 충돌 가능");
@@ -474,7 +474,7 @@ public record AiDecisionPackage(
 
     private static boolean looksExternal(String value) {
         String normalized = value.toLowerCase(Locale.ROOT);
-        return value.contains("외부") || normalized.contains("external") || normalized.contains("provider") || value.contains("원본 보호");
+        return value.contains("외부") || normalized.contains("external") || normalized.contains("provider") || value.contains("원본 보호") || value.contains("연동 일정 보호");
     }
 
     private static String normalizeTimezone(String timezone) {
@@ -483,7 +483,7 @@ public record AiDecisionPackage(
 
     private static String userFacingRequestKind(String requestKind) {
         return switch (requestKind == null ? "" : requestKind) {
-            case "destructive_bulk" -> "삭제/취소 후보 분류";
+            case "destructive_bulk" -> "삭제할 항목 확인";
             case "status_declaration" -> "상태 변화에 따른 일정 영향 검토";
             case "availability_candidate" -> "가능한 시간 후보 탐색";
             case "recurring_routine" -> "반복 루틴 범위 확인";

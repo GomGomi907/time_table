@@ -60,7 +60,38 @@ class AssistantPolicyServiceTest {
                 .containsEntry("requestKind", "destructive_bulk")
                 .containsEntry("externalMutationAllowed", false)
                 .containsEntry("requiresUserConfirmation", true);
-        assertThat(command.payload().get("eventCandidates").toString()).contains("외부 원본 보호");
+        assertThat(command.payload().get("eventCandidates").toString()).contains("연동 일정 보호");
+    }
+
+    @Test
+    void destructivePolicyTreatsDeleteSynonymsAsBulkAndFiltersWorkScope() {
+        StructuredAiCommandBatch resolved = policyService.applyPreflightPolicies(
+                request("내일 업무 일정 전부 삭제해줘", context(
+                        List.of(
+                                event("업무 회의", "WORK", "2026-06-06T01:00:00Z", "2026-06-06T02:00:00Z", "LOCAL_ONLY"),
+                                event("저녁 약속", "LIFE", "2026-06-06T10:00:00Z", "2026-06-06T11:00:00Z", "LOCAL_ONLY")
+                        ),
+                        List.of(
+                                block("MONDAY", "09:00", "10:00", "업무 계획", "WORK"),
+                                block("MONDAY", "20:00", "21:00", "영화", "LIFE")
+                        ),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                )),
+                interpretation("delete", "event", null, null, false)
+        );
+
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.requiresConfirmation()).isFalse();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
+        assertThat(command.payload()).containsEntry("requestKind", "destructive_bulk");
+        assertThat(command.payload().get("eventCandidates").toString())
+                .contains("업무 회의")
+                .doesNotContain("저녁 약속");
+        assertThat(command.payload().get("scheduleBlockCandidates").toString())
+                .contains("업무 계획")
+                .doesNotContain("영화");
     }
 
     @Test
@@ -88,10 +119,32 @@ class AssistantPolicyServiceTest {
                 .containsEntry("requiresUserConfirmation", true);
         assertThat(command.payload().get("protectedItems").toString())
                 .contains("고정 고객 미팅")
-                .contains("외부 원본 보호")
+                .contains("연동 일정 보호")
                 .contains("업무 집중");
         assertThat(resolved.explanation()).contains("고정 미팅은 보호");
     }
+
+    @Test
+    void policyHandlesMalformedContextWithNullListsAsEmptyContext() {
+        StructuredAiCommandBatch statusResolved = policyService.applyPreflightPolicies(
+                request("오늘 연차를 썼다. 일정을 수정해라", nullListContext()),
+                interpretation("request_reschedule", "event", null, null, true)
+        );
+        StructuredAiCommandBatch availabilityResolved = policyService.applyPreflightPolicies(
+                request("이번주안에 병원 아무때나 넣어줘", nullListContext()),
+                interpretation("create", "event", "병원", null, true)
+        );
+
+        assertThat(statusResolved.commands().getFirst().payload())
+                .containsEntry("requestKind", "status_declaration")
+                .containsEntry("workEvents", List.of())
+                .containsEntry("workBlocks", List.of())
+                .containsEntry("workTasks", List.of());
+        assertThat(availabilityResolved.commands().getFirst().payload())
+                .containsEntry("requestKind", "availability_candidate")
+                .containsEntry("candidateWindows", List.of());
+    }
+
 
     @Test
     void postflightConflictPolicyBlocksOverlappingCreateBeforeValidation() {
@@ -118,6 +171,55 @@ class AssistantPolicyServiceTest {
                 .containsEntry("requestKind", "conflict")
                 .containsEntry("requiresUserConfirmation", true);
         assertThat(conflict.commands().getFirst().payload().get("conflicts").toString()).contains("기존 회의");
+    }
+
+    @Test
+    void preflightWeekdayRangeCreateBlocksOverlappingWeeklyBlockBeforeExecutableProposal() {
+        StructuredAiCommandBatch conflict = policyService.applyPreflightPolicies(
+                request("월~금요일 오전 09:30 ~ 10:30 출근 넣어줘", context(
+                        List.of(),
+                        List.of(block("MONDAY", "09:00", "10:00", "기존 출근", "WORK")),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                )),
+                interpretation("create", "event", "출근", null, true)
+        );
+
+        StructuredAiCommand command = conflict.commands().getFirst();
+        assertThat(command.requiresConfirmation()).isFalse();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
+        assertThat(command.payload())
+                .containsEntry("requestKind", "conflict")
+                .containsEntry("requiresUserConfirmation", true);
+        assertThat(command.payload().get("conflicts").toString()).contains("기존 출근");
+    }
+
+    @Test
+    void postflightSafetyPolicyBlocksTargetedDeletesWhenRequestIsBulkSynonym() {
+        StructuredAiCommandBatch resolved = policyService.applyPostflightPolicies(
+                request("오늘 일정 모두 삭제해줘", context(
+                        List.of(event("개인 약속", "LIFE", "2026-06-05T10:00:00Z", "2026-06-05T11:00:00Z", "LOCAL_ONLY")),
+                        List.of(),
+                        List.of(),
+                        List.of(),
+                        List.of()
+                )),
+                new StructuredAiCommandBatch("일정 삭제", "draft", List.of(new StructuredAiCommand(
+                        AgentCommandActionType.DELETE_EVENT.wireValue(),
+                        AgentCommandTargetType.EVENT.wireValue(),
+                        "event-1",
+                        Map.of(),
+                        "draft",
+                        true
+                )))
+        );
+
+        StructuredAiCommand command = resolved.commands().getFirst();
+        assertThat(command.requiresConfirmation()).isFalse();
+        assertThat(command.actionType()).isEqualTo(AgentCommandActionType.EXPLAIN_ONLY.wireValue());
+        assertThat(command.reason()).isEqualTo("postflight_destructive_candidate_confirmation");
+        assertThat(command.payload()).containsEntry("requestKind", "destructive_bulk");
     }
 
     @Test
@@ -150,7 +252,7 @@ class AssistantPolicyServiceTest {
                 .containsEntry("blockedAction", AgentCommandActionType.DELETE_EVENT.wireValue())
                 .containsEntry("externalMutationAllowed", false)
                 .containsEntry("requiresUserConfirmation", true);
-        assertThat(command.payload().get("protectedTargets").toString()).contains("외부 회의", "외부 원본 보호");
+        assertThat(command.payload().get("protectedTargets").toString()).contains("외부 회의", "연동 일정 보호");
     }
 
     @Test
@@ -229,6 +331,18 @@ class AssistantPolicyServiceTest {
                 tasks,
                 history,
                 windows
+        );
+    }
+
+    private AiRescheduleClient.RescheduleAiContext nullListContext() {
+        return new AiRescheduleClient.RescheduleAiContext(
+                new AiRescheduleClient.UserContext("user-1", "Asia/Seoul"),
+                new AiRescheduleClient.RequestContext("manual_request", "test", null, null, "2026-06-05T00:00:00Z", "2026-06-06T00:00:00Z"),
+                null,
+                null,
+                null,
+                null,
+                null
         );
     }
 

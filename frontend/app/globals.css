@@ -1123,6 +1123,27 @@ summary,
   line-height: 1.65;
 }
 
+.onboarding-preview-summary {
+  display: grid;
+  gap: 6px;
+  border-radius: 18px;
+  border: 1px solid rgba(91, 110, 225, 0.16);
+  background: linear-gradient(180deg, rgba(246, 248, 255, 0.86), rgba(255, 255, 255, 0.78));
+  padding: 14px 16px;
+}
+
+.onboarding-preview-summary span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.onboarding-preview-summary strong {
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
 .onboarding-question-groups {
   display: grid;
   gap: 14px;
@@ -2791,6 +2812,14 @@ button.current-schedule-card:hover {
   .onboarding-card-intro {
     font-size: 0.86rem;
     line-height: 1.48;
+  }
+
+  .onboarding-preview-summary {
+    padding: 12px 14px;
+  }
+
+  .onboarding-preview-summary strong {
+    font-size: 0.94rem;
   }
 
   .onboarding-group-head p,

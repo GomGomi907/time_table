@@ -124,6 +124,7 @@ try {
   $env:APP_AUTH_MOCK_LOGIN_ENABLED = "true"
   $env:APP_SYNC_GOOGLE_MOCK_ENABLED = "true"
   $env:APP_AI_ENABLED = "false"
+  $env:APP_ENCRYPTION_KEY = "time-table-e2e-local-encryption-key"
   $env:SERVER_PORT = "$backendPort"
   $env:APP_FRONTEND_URL = "http://localhost:$frontendPort"
   $e2eDbName = "timetable-e2e-$((Get-Date).ToUniversalTime().ToString('yyyyMMddHHmmss'))-$PID-$([guid]::NewGuid().ToString('N').Substring(0, 8))"

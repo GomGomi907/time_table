@@ -56,7 +56,7 @@ public class AssistantPolicyService {
         if (text.contains("출장") && !hasDateCue(text)) {
             return clarificationBatch(
                     request,
-                    "출장 날짜와 대략적인 시간대, 장소를 알려주면 해당 기간의 근무/출퇴근/루틴 영향을 정리해 드릴게요.",
+                    "출장 날짜, 대략적인 시간대, 장소를 알려주면 해당 기간의 근무/출퇴근/루틴 영향을 정리하겠습니다.",
                     "travel_range_required",
                     Map.of("requestKind", "status_declaration", "mode", "출장")
             );
@@ -114,6 +114,20 @@ public class AssistantPolicyService {
         if (isBlank(activity)) {
             return null;
         }
+        List<String> conflicts = weeklyBlockConflicts(request, days, timeRange);
+        if (!conflicts.isEmpty()) {
+            return assistantProposalBatch(
+                    request,
+                    "시간 충돌이 있습니다",
+                    "반복 일정 시간에 이미 일정이 있습니다. 다른 시간을 고르거나 겹친 일정을 먼저 조정해 주세요.",
+                    "weekly_block_time_conflict",
+                    Map.of(
+                            "requestKind", "conflict",
+                            "conflicts", conflicts,
+                            "requiresUserConfirmation", true
+                    )
+            );
+        }
         ScheduleCategory category = inferCategory(activity + " " + request.reason());
         List<StructuredAiCommand> commands = new ArrayList<>();
         for (DayOfWeek day : days) {
@@ -147,7 +161,7 @@ public class AssistantPolicyService {
         if (safetyGuard != null) {
             return safetyGuard;
         }
-        if (request.context() == null || request.context().events() == null) {
+        if (request.context() == null || events(request.context()).isEmpty()) {
             return null;
         }
         for (StructuredAiCommand command : draft.commands()) {
@@ -159,7 +173,7 @@ public class AssistantPolicyService {
             if (startAt == null || endAt == null) {
                 continue;
             }
-            List<String> conflicts = request.context().events().stream()
+            List<String> conflicts = events(request.context()).stream()
                     .filter(event -> overlaps(startAt, endAt, parseInstant(event.startAt()), parseInstant(event.endAt())))
                     .limit(5)
                     .map(AiRescheduleClient.EventContext::title)
@@ -168,7 +182,7 @@ public class AssistantPolicyService {
                 return assistantProposalBatch(
                         request,
                         "시간 충돌이 있습니다",
-                        "요청한 시간에 이미 일정이 있어 바로 추가하지 않았습니다. 겹친 일정을 확인하고 다른 시간을 고르거나 조정 여부를 알려주세요.",
+                        "요청한 시간에 이미 일정이 있습니다. 다른 시간을 고르거나 겹친 일정을 조정해 주세요.",
                         "event_time_conflict",
                         Map.of(
                                 "requestKind", "conflict",
@@ -206,7 +220,7 @@ public class AssistantPolicyService {
             payload.put("requiresUserConfirmation", true);
             return CommandRiskAssessment.blocked(
                     "삭제 전 확인이 필요합니다",
-                    "삭제/취소 후보를 먼저 분류했습니다. AI 판단만으로 바로 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.",
+                    "삭제할 항목을 먼저 골랐습니다. 반영 전에 맞는지 확인해 주세요.",
                     "postflight_destructive_candidate_confirmation",
                     payload
             );
@@ -214,8 +228,8 @@ public class AssistantPolicyService {
         List<String> protectedTargets = protectedExternalTargets(request, command);
         if (!protectedTargets.isEmpty()) {
             return CommandRiskAssessment.blocked(
-                    "외부 원본 변경은 확인이 필요합니다",
-                    "외부 캘린더 일정은 AI 판단만으로 바로 삭제하지 않습니다. 먼저 후보를 확인하고 Google 반영 여부를 명시적으로 선택해야 합니다.",
+                    "연동 일정은 확인이 필요합니다",
+                    "연동된 캘린더 일정은 바로 삭제하지 않습니다. 먼저 후보를 확인해 주세요.",
                     "external_direct_mutation_blocked",
                     Map.of(
                             "requestKind", "external_calendar_protection",
@@ -231,8 +245,8 @@ public class AssistantPolicyService {
 
     private List<String> eventCandidates(AiAgentRequest request, String normalizedText) {
         AiRescheduleClient.RescheduleAiContext context = request == null ? null : request.context();
-        return context == null || context.events() == null ? List.of() : context.events().stream()
-                .filter(event -> !normalizedText.contains("일관련") || isWorkLike(event.title(), event.description(), event.category()))
+        return events(context).stream()
+                .filter(event -> !hasWorkScopeCue(normalizedText) || isWorkLike(event.title(), event.description(), event.category()))
                 .limit(12)
                 .map(event -> event.title() + externalSuffix(event.syncState()))
                 .toList();
@@ -240,8 +254,8 @@ public class AssistantPolicyService {
 
     private List<String> scheduleBlockCandidates(AiAgentRequest request, String normalizedText) {
         AiRescheduleClient.RescheduleAiContext context = request == null ? null : request.context();
-        return context == null || context.weeklyBlocks() == null ? List.of() : context.weeklyBlocks().stream()
-                .filter(block -> !normalizedText.contains("일관련") || isWorkLike(block.activity(), block.note(), block.category()))
+        return weeklyBlocks(context).stream()
+                .filter(block -> !hasWorkScopeCue(normalizedText) || isWorkLike(block.activity(), block.note(), block.category()))
                 .limit(12)
                 .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
                 .toList();
@@ -253,15 +267,15 @@ public class AssistantPolicyService {
             return List.of();
         }
         String targetType = normalize(command.targetType());
-        if (AgentCommandTargetType.EVENT.wireValue().equals(targetType) && context.events() != null) {
-            return context.events().stream()
+        if (AgentCommandTargetType.EVENT.wireValue().equals(targetType)) {
+            return events(context).stream()
                     .filter(event -> command.targetId().equals(event.id()))
                     .filter(event -> isExternalSyncState(event.syncState()))
                     .map(event -> event.title() + externalSuffix(event.syncState()))
                     .toList();
         }
-        if (AgentCommandTargetType.TASK.wireValue().equals(targetType) && context.tasks() != null) {
-            return context.tasks().stream()
+        if (AgentCommandTargetType.TASK.wireValue().equals(targetType)) {
+            return tasks(context).stream()
                     .filter(task -> command.targetId().equals(task.id()))
                     .filter(task -> isExternalSyncState(task.syncState()))
                     .map(task -> task.title() + externalSuffix(task.syncState()))
@@ -276,10 +290,10 @@ public class AssistantPolicyService {
 
     private StructuredAiCommandBatch afterWorkCreateBatch(AiAgentRequest request, AiAgentInterpretation interpretation) {
         AiRescheduleClient.RescheduleAiContext context = request.context();
-        if (context == null || context.weeklyBlocks() == null) {
+        if (weeklyBlocks(context).isEmpty()) {
             return null;
         }
-        AiRescheduleClient.ScheduleBlockContext workBlock = context.weeklyBlocks().stream()
+        AiRescheduleClient.ScheduleBlockContext workBlock = weeklyBlocks(context).stream()
                 .filter(block -> isWorkLike(block.activity(), block.note(), block.category()))
                 .findFirst()
                 .orElse(null);
@@ -323,17 +337,17 @@ public class AssistantPolicyService {
 
     private StructuredAiCommandBatch statusDeclarationBatch(AiAgentRequest request, String normalizedText) {
         AiRescheduleClient.RescheduleAiContext context = request.context();
-        List<String> impactedEvents = context == null ? List.of() : context.events().stream()
+        List<String> impactedEvents = events(context).stream()
                 .filter(event -> isWorkLike(event.title(), event.description(), event.category()))
                 .limit(8)
                 .map(event -> event.title() + externalSuffix(event.syncState()))
                 .toList();
-        List<String> impactedBlocks = context == null ? List.of() : context.weeklyBlocks().stream()
+        List<String> impactedBlocks = weeklyBlocks(context).stream()
                 .filter(block -> isWorkLike(block.activity(), block.note(), block.category()))
                 .limit(8)
                 .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
                 .toList();
-        List<String> impactedTasks = context == null ? List.of() : context.tasks().stream()
+        List<String> impactedTasks = tasks(context).stream()
                 .filter(task -> isWorkLike(task.title(), task.description(), task.category()))
                 .limit(8)
                 .map(AiRescheduleClient.TaskContext::title)
@@ -341,7 +355,7 @@ public class AssistantPolicyService {
         String mode = normalizedText.contains("반차") ? "반차" :
                 normalizedText.contains("출장") ? "출장" :
                         (normalizedText.contains("아파") || normalizedText.contains("몸이안좋") || normalizedText.contains("병가")) ? "저에너지/병가" : "휴가";
-        String message = "%s 모드로 보고 근무/회의/출퇴근/업무 태스크 영향을 검토했습니다. 개인 일정은 보존하고 외부 일정은 직접 삭제하지 않습니다.".formatted(mode);
+        String message = "%s 상태로 보고 근무, 회의, 출퇴근 영향을 확인했습니다. 개인 일정과 연동 일정은 바로 삭제하지 않습니다.".formatted(mode);
         return assistantProposalBatch(
                 request,
                 mode + " 일정 조정안",
@@ -362,7 +376,7 @@ public class AssistantPolicyService {
     private StructuredAiCommandBatch bulkDestructiveBatch(AiAgentRequest request, String normalizedText) {
         List<String> eventCandidates = eventCandidates(request, normalizedText);
         List<String> blockCandidates = scheduleBlockCandidates(request, normalizedText);
-        String message = "삭제/취소 후보를 먼저 분류했습니다. 외부 일정은 직접 삭제하지 않고, 실제 적용 전 이 후보들이 맞는지 확인해야 합니다.";
+        String message = "삭제할 항목을 먼저 골랐습니다. 연동 일정은 바로 삭제하지 않습니다.";
         return assistantProposalBatch(
                 request,
                 "삭제 전 확인이 필요합니다",
@@ -384,7 +398,7 @@ public class AssistantPolicyService {
             String normalizedText
     ) {
         AiRescheduleClient.RescheduleAiContext context = request.context();
-        List<String> windows = context == null ? List.of() : context.availabilityWindows().stream()
+        List<String> windows = availabilityWindows(context).stream()
                 .limit(3)
                 .map(AiRescheduleClient.AvailabilityWindowContext::localLabel)
                 .toList();
@@ -397,7 +411,7 @@ public class AssistantPolicyService {
         return assistantProposalBatch(
                 request,
                 title + " 후보 시간",
-                "정확한 시간이 없어 가능한 시간 후보를 먼저 골랐습니다. 원하는 후보를 고르면 확인용 일정으로 만들 수 있습니다.",
+                "시간이 정해지지 않아 가능한 후보를 골랐습니다. 원하는 시간을 선택해 주세요.",
                 "availability_candidates",
                 Map.of(
                         "requestKind", "availability_candidate",
@@ -413,10 +427,10 @@ public class AssistantPolicyService {
             AiAgentInterpretation interpretation
     ) {
         AiRescheduleClient.RescheduleAiContext context = request.context();
-        if (context == null || context.availabilityWindows() == null || context.availabilityWindows().isEmpty()) {
+        if (availabilityWindows(context).isEmpty()) {
             return null;
         }
-        AiRescheduleClient.AvailabilityWindowContext window = context.availabilityWindows().stream()
+        AiRescheduleClient.AvailabilityWindowContext window = availabilityWindows(context).stream()
                 .filter(candidate -> candidate.durationMinutes() >= 15)
                 .findFirst()
                 .orElse(null);
@@ -548,9 +562,17 @@ public class AssistantPolicyService {
     }
 
     private boolean isBulkDestructiveRequest(String text) {
-        return (text.contains("다지워") || text.contains("다없애") || text.contains("싹비워") || text.contains("전부지워")
-                || text.contains("모두지워") || text.contains("clearall") || text.contains("deleteall"))
+        return (text.contains("다지워") || text.contains("다삭제") || text.contains("다없애")
+                || text.contains("싹비워") || text.contains("싹삭제")
+                || text.contains("전부지워") || text.contains("전부삭제")
+                || text.contains("모두지워") || text.contains("모두삭제")
+                || text.contains("전체삭제") || text.contains("clearall") || text.contains("deleteall"))
                 && (text.contains("일정") || text.contains("회의") || text.contains("일관련") || text.contains("오늘") || text.contains("내일") || text.contains("이번주"));
+    }
+
+    private boolean hasWorkScopeCue(String text) {
+        return text.contains("일관련") || text.contains("업무") || text.contains("근무")
+                || text.contains("일정리") || text.contains("회사") || text.contains("출근") || text.contains("퇴근");
     }
 
     private boolean isWorkloadReliefRequest(String text) {
@@ -595,6 +617,24 @@ public class AssistantPolicyService {
                 return List.of();
             }
         }
+    }
+
+    private List<String> weeklyBlockConflicts(AiAgentRequest request, List<DayOfWeek> days, TimeRange timeRange) {
+        AiRescheduleClient.RescheduleAiContext context = request == null ? null : request.context();
+        if (days == null || days.isEmpty() || timeRange == null) {
+            return List.of();
+        }
+        return weeklyBlocks(context).stream()
+                .filter(block -> days.stream().anyMatch(day -> day.name().equalsIgnoreCase(block.dayOfWeek())))
+                .filter(block -> overlaps(timeRange.start(), timeRange.end(), parseLocalTime(block.startTime()), parseLocalTime(block.endTime())))
+                .limit(5)
+                .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
+                .toList();
+    }
+
+    private boolean overlaps(LocalTime start, LocalTime end, LocalTime otherStart, LocalTime otherEnd) {
+        return start != null && end != null && otherStart != null && otherEnd != null
+                && start.isBefore(otherEnd) && end.isAfter(otherStart);
     }
 
     private TimeRange parseTimeRange(String normalizedText) {
@@ -712,7 +752,7 @@ public class AssistantPolicyService {
 
     private boolean hasSingleHistoryAnchor(AiAgentRequest request) {
         AiRescheduleClient.RescheduleAiContext context = request.context();
-        return context != null && context.messageHistory() != null && context.messageHistory().size() == 1;
+        return messageHistory(context).size() == 1;
     }
 
     private boolean isWorkLike(String title, String description, String category) {
@@ -723,15 +763,15 @@ public class AssistantPolicyService {
 
     private List<String> protectedWorkItems(AiRescheduleClient.RescheduleAiContext context) {
         List<String> protectedItems = new ArrayList<>();
-        if (context.events() != null) {
-            context.events().stream()
+        if (!events(context).isEmpty()) {
+            events(context).stream()
                     .filter(event -> isWorkLike(event.title(), event.description(), event.category()))
                     .limit(6)
                     .map(event -> event.title() + externalSuffix(event.syncState()))
                     .forEach(protectedItems::add);
         }
-        if (context.weeklyBlocks() != null) {
-            context.weeklyBlocks().stream()
+        if (!weeklyBlocks(context).isEmpty()) {
+            weeklyBlocks(context).stream()
                     .filter(block -> isWorkLike(block.activity(), block.note(), block.category()))
                     .limit(6)
                     .map(block -> block.dayOfWeek() + " " + block.startTime() + "-" + block.endTime() + " " + block.activity())
@@ -748,7 +788,7 @@ public class AssistantPolicyService {
         if (syncState == null || syncState.equalsIgnoreCase("LOCAL_ONLY")) {
             return "";
         }
-        return " (외부 원본 보호)";
+        return " (연동 일정 보호)";
     }
 
     private String inferTitleFromText(String reason) {
@@ -856,6 +896,26 @@ public class AssistantPolicyService {
 
     private String normalize(String value) {
         return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+    }
+
+    private List<AiRescheduleClient.EventContext> events(AiRescheduleClient.RescheduleAiContext context) {
+        return context == null || context.events() == null ? List.of() : context.events();
+    }
+
+    private List<AiRescheduleClient.ScheduleBlockContext> weeklyBlocks(AiRescheduleClient.RescheduleAiContext context) {
+        return context == null || context.weeklyBlocks() == null ? List.of() : context.weeklyBlocks();
+    }
+
+    private List<AiRescheduleClient.TaskContext> tasks(AiRescheduleClient.RescheduleAiContext context) {
+        return context == null || context.tasks() == null ? List.of() : context.tasks();
+    }
+
+    private List<AiRescheduleClient.MessageHistoryContext> messageHistory(AiRescheduleClient.RescheduleAiContext context) {
+        return context == null || context.messageHistory() == null ? List.of() : context.messageHistory();
+    }
+
+    private List<AiRescheduleClient.AvailabilityWindowContext> availabilityWindows(AiRescheduleClient.RescheduleAiContext context) {
+        return context == null || context.availabilityWindows() == null ? List.of() : context.availabilityWindows();
     }
 
     private record CommandRiskAssessment(
