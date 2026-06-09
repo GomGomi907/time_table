@@ -65,6 +65,11 @@ const DEFAULT_OCCURRENCE_FORM = {
   goalId: null,
 };
 const SCHEDULE_MUTATION_TIMEOUT_MS = 10_000;
+const AI_REQUEST_PROGRESS_STEPS = [
+  "요청을 정리하고 있어요",
+  "일정을 확인하고 있어요",
+  "확인할 내용을 준비하고 있어요",
+] as const;
 const SCHEDULE_TIMELINE_VIEWS = ["month", "week", "day", "agenda"] as const;
 
 type ScheduleTimelineView = (typeof SCHEDULE_TIMELINE_VIEWS)[number];
@@ -1733,6 +1738,7 @@ export function ScheduleView() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [requestReason, setRequestReason] = useState("");
+  const [aiRequestProgress, setAiRequestProgress] = useState<{ prompt: string; step: number } | null>(null);
   const [formConflictDetail, setFormConflictDetail] = useState<string | null>(null);
   const [blockingConflictMessage, setBlockingConflictMessage] = useState<string | null>(null);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -1756,6 +1762,10 @@ export function ScheduleView() {
   const scheduleMutationActiveRef = useRef(false);
   const queryClient = useQueryClient();
   const scheduleTimeZone = safeTimeZone(session?.timezone);
+  const aiRequestProgressMessage = aiRequestProgress
+    ? AI_REQUEST_PROGRESS_STEPS[Math.min(aiRequestProgress.step, AI_REQUEST_PROGRESS_STEPS.length - 1)]
+    : null;
+
   const agendaRangeWindow = useMemo(
     () => buildAgendaRangeWindow(session?.timezone),
     [session?.timezone],
@@ -1998,14 +2008,34 @@ export function ScheduleView() {
   }, [session?.authenticated]);
 
   useEffect(() => {
-    if (!data.suggestions.length) {
+    if (!data.suggestions.length && !aiRequestProgress) {
       return;
     }
     if (!shouldStickToAiThreadBottomRef.current) {
       return;
     }
     aiThreadEndRef.current?.scrollIntoView({ block: "end" });
-  }, [data.suggestions]);
+  }, [data.suggestions, aiRequestProgress]);
+
+  useEffect(() => {
+    if (!aiRequestProgress) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setAiRequestProgress((current) => {
+        if (!current) {
+          return current;
+        }
+        return {
+          ...current,
+          step: Math.min(current.step + 1, AI_REQUEST_PROGRESS_STEPS.length - 1),
+        };
+      });
+    }, 1400);
+
+    return () => window.clearInterval(intervalId);
+  }, [aiRequestProgress?.prompt]);
 
   useBodyScrollLock(isCreateModalOpen || Boolean(editingOccurrence) || Boolean(blockingConflictMessage));
 
@@ -2364,6 +2394,7 @@ export function ScheduleView() {
 
     try {
       setIsMutating(true);
+      setAiRequestProgress({ prompt: trimmedReason, step: 0 });
       const response = await api.requestManualReschedule(trimmedReason);
       aiConversationSuggestionIdsRef.current.add(response.data.id);
       setRequestReason("");
@@ -2380,6 +2411,7 @@ export function ScheduleView() {
           requestError instanceof Error ? requestError.message : "잠시 후 다시 시도하면 됩니다.",
       });
     } finally {
+      setAiRequestProgress(null);
       setIsMutating(false);
     }
   }
@@ -2460,32 +2492,53 @@ export function ScheduleView() {
           shouldStickToAiThreadBottomRef.current = element.scrollHeight - element.clientHeight - element.scrollTop <= 48;
         }}
       >
-        {conversationSuggestions.length ? (
-          conversationSuggestions.map((suggestion) => {
-            const display = getSuggestionDisplayState(suggestion);
-            const isPendingSuggestion = suggestion.status === "pending";
-            return (
-              <div className="ai-chat-turn" key={suggestion.id}>
+        {conversationSuggestions.length || aiRequestProgress ? (
+          <>
+            {conversationSuggestions.map((suggestion) => {
+              const display = getSuggestionDisplayState(suggestion);
+              const isPendingSuggestion = suggestion.status === "pending";
+              return (
+                <div className="ai-chat-turn" key={suggestion.id}>
+                  <div className="chat-bubble user">
+                    <span>요청</span>
+                    <p data-user-content="true">{formatServiceCopy(suggestion.originalRequest || suggestion.reason || suggestion.summary)}</p>
+                  </div>
+                  <div className={`chat-bubble assistant ${display.kind}`}>
+                    <span>답변</span>
+                    <SuggestionReviewCard
+                      className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
+                      isPending={isMutating}
+                      suggestion={suggestion}
+                      kicker={isPendingSuggestion ? "확인 필요" : suggestion.statusLabel}
+                      readOnly={!isPendingSuggestion}
+                      compact
+                      onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
+                      onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            {aiRequestProgress ? (
+              <div className="ai-chat-turn ai-chat-turn-pending" data-testid="schedule-ai-pending-turn">
                 <div className="chat-bubble user">
                   <span>요청</span>
-                  <p data-user-content="true">{formatServiceCopy(suggestion.originalRequest || suggestion.reason || suggestion.summary)}</p>
+                  <p data-user-content="true">{formatServiceCopy(aiRequestProgress.prompt)}</p>
                 </div>
-                <div className={`chat-bubble assistant ${display.kind}`}>
+                <div className="chat-bubble assistant pending">
                   <span>답변</span>
-                  <SuggestionReviewCard
-                    className="ai-suggestion-card suggestion-diff-card chat-suggestion-card"
-                    isPending={isMutating}
-                    suggestion={suggestion}
-                    kicker={isPendingSuggestion ? "확인 필요" : suggestion.statusLabel}
-                    readOnly={!isPendingSuggestion}
-                    compact
-                    onApply={() => void handleSuggestionDecision("apply", suggestion.id)}
-                    onReject={() => void handleSuggestionDecision("reject", suggestion.id)}
-                  />
+                  <p className="assistant-pending-message" data-testid="schedule-ai-pending-message">
+                    <span>{aiRequestProgressMessage}</span>
+                    <span className="typing-dots" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                  </p>
                 </div>
               </div>
-            );
-          })
+            ) : null}
+          </>
         ) : (
           <div className="chat-empty-state">
             <strong>아직 대화가 없습니다.</strong>
@@ -2580,7 +2633,7 @@ export function ScheduleView() {
             <div className="schedule-mobile-action-strip" aria-label="주간 일정 빠른 작업">
               {isMutating ? (
                 <div className="schedule-mobile-ai-status" data-testid="schedule-mobile-ai-status" aria-live="polite">
-                  요청을 처리 중입니다. 완료되면 이 화면에 바로 표시됩니다.
+                  {aiRequestProgressMessage ?? "요청을 처리 중입니다."} 완료되면 이 화면에 바로 표시됩니다.
                 </div>
               ) : null}
               <button

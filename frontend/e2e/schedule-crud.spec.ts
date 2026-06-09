@@ -227,7 +227,15 @@ test("schedule mobile shows request progress while AI is processing", async ({ p
   await page.getByTestId("schedule-ai-request-input").fill("모바일에서 처리중 표시 확인");
   await page.getByTestId("schedule-ai-request-submit").click();
   await requestStartedPromise;
-  await expect(page.getByTestId("schedule-mobile-ai-status")).toContainText("요청을 처리 중입니다.");
+  await expect(page.getByTestId("schedule-ai-pending-turn")).toBeVisible();
+  await expect(page.getByTestId("schedule-ai-pending-message")).toContainText("요청을 정리하고 있어요");
+  await expect(page.getByTestId("schedule-mobile-ai-status")).toContainText(
+    /요청을 정리하고 있어요|일정을 확인하고 있어요|확인할 내용을 준비하고 있어요/,
+  );
+  await expect(page.getByTestId("schedule-ai-pending-message")).toContainText(
+    /일정을 확인하고 있어요|확인할 내용을 준비하고 있어요/,
+    { timeout: 3_000 },
+  );
   releaseResponse();
   await expect(page.locator(".notice-center")).toContainText(/확인이 필요합니다|변경 요청을 만들었습니다/, { timeout: 30_000 });
   await expect(page.getByTestId("schedule-mobile-ai-status")).toHaveCount(0, { timeout: 30_000 });
