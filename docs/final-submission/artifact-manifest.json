@@ -1,27 +1,28 @@
 {
-  "created_at": "2026-06-11T14:38:21.668329+00:00",
+  "created_at": "2026-06-11T14:48:21.723378+00:00",
   "course": "문제해결프로그래밍",
   "professor": "박경신",
   "student": "이근산",
   "student_id": "32183022",
+  "deployment_url": "https://timetable-608682434352.asia-northeast2.run.app/",
   "logo_png": "frontend/public/brand/time-table-logo-512.png",
   "logo_svg": "frontend/public/brand/time-table-logo.svg",
   "outputs": [
     {
       "path": "docs/final-submission/Time_Table_Final_Presentation_32183022.pptx",
-      "bytes": 2038973
+      "bytes": 2039042
     },
     {
       "path": "docs/final-submission/Time_Table_Final_Report_32183022.docx",
-      "bytes": 1435922
+      "bytes": 1435978
     },
     {
       "path": "docs/final-submission/source-submission-checklist.md",
-      "bytes": 1378
+      "bytes": 1611
     },
     {
       "path": "docs/final-submission/demo-script.md",
-      "bytes": 1369
+      "bytes": 1387
     },
     {
       "path": "docs/final-submission/screenshots/01-login.png",

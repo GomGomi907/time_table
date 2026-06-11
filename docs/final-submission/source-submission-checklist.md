@@ -7,12 +7,14 @@
 - 이름: 이근산
 - 학번: 32183022
 - GitHub remote: https://github.com/GomGomi907/time_table.git
+- 배포 링크: https://timetable-608682434352.asia-northeast2.run.app/
 
 ## e-learning 제출 파일
 
 1. `Time_Table_Final_Presentation_32183022.pptx`
 2. Source code 또는 공개 GitHub 링크
 3. 필요 시 `Time_Table_Final_Report_32183022.docx`
+4. 데모용 배포 링크: https://timetable-608682434352.asia-northeast2.run.app/
 
 ## 공개 GitHub 제출 전 제외할 것
 
@@ -33,5 +35,6 @@
 ## 발표 데모 권장 방식
 
 - 배포 링크만 전달하지 말고 직접 2–3분 demo를 보여준다.
+- 배포 링크: https://timetable-608682434352.asia-northeast2.run.app/
 - 흐름: 로그인 → 온보딩 → 대시보드 → 주간 일정 → 일정 추가 모달 → 집중 모드.
 - 배포/네트워크 문제가 생기면 PPT의 최신 캡처를 backup으로 사용한다.
