@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 interface ConfirmDialogProps {
   title: string;
-  description: string;
+  description: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   isPending?: boolean;

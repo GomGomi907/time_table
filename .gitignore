@@ -53,4 +53,5 @@
 
 # codex/OMX local runtime
 /.omx/
+/OMX/
 /oh-my-codex/

@@ -48,9 +48,10 @@ class GoogleRestInboundSyncClient implements GoogleInboundSyncClient {
     private final GoogleAccessTokenService googleAccessTokenService;
 
     @Override
-    public InboundSyncResult importCalendar(CalendarConnection connection, Instant rangeStart, Instant rangeEnd) {
+    public InboundSyncResult importCalendar(CalendarConnection connection, String calendarId, Instant rangeStart, Instant rangeEnd) {
         String accessToken = validAccessToken(connection);
         WebClient client = webClientBuilder.baseUrl("https://www.googleapis.com").build();
+        String resolvedCalendarId = calendarId == null || calendarId.isBlank() ? "primary" : calendarId.trim();
 
         int affectedCount = 0;
         String pageToken = null;
@@ -58,7 +59,7 @@ class GoogleRestInboundSyncClient implements GoogleInboundSyncClient {
             String currentPageToken = pageToken;
             JsonNode payload = client.get()
                     .uri(builder -> {
-                        builder.path("/calendar/v3/calendars/primary/events")
+                        builder.pathSegment("calendar", "v3", "calendars", resolvedCalendarId, "events")
                                 .queryParam("timeMin", rangeStart.toString())
                                 .queryParam("timeMax", rangeEnd.toString())
                                 .queryParam("singleEvents", true)

@@ -51,6 +51,7 @@ public class SyncOrchestrationService {
     private final AppProperties appProperties;
     private final GoogleInboundSyncClient googleInboundSyncClient;
     private final ProviderWriteProcessor providerWriteProcessor;
+    private final GoogleCalendarWebhookValidationService googleCalendarWebhookValidationService;
 
     @Value("${app.sync.polling.enabled:true}")
     private boolean pollingEnabled;
@@ -162,42 +163,72 @@ public class SyncOrchestrationService {
 
     @Transactional
     public WebhookReceiptResponse receiveGoogleCalendarWebhook(WebhookReceiptRequest request) {
-        AppUser user = currentUserProvider.getCurrentUser();
+        GoogleCalendarWebhookValidationService.ValidationResult validation =
+                googleCalendarWebhookValidationService.validate(new GoogleCalendarWebhookValidationService.WebhookHeaders(
+                        request.channelId(),
+                        request.resourceId(),
+                        request.channelToken(),
+                        request.resourceState(),
+                        request.messageNumber(),
+                        request.channelExpiration(),
+                        request.resourceUri()
+                ));
+        if (!validation.shouldSync()) {
+            return WebhookReceiptResponse.ignored(
+                    request.resourceState(),
+                    validation.code(),
+                    validation.detail()
+            );
+        }
+
         SyncRequestOptions options = defaultOptions();
         ManualSyncResponse run = executeInboundSync(
-                user.getId(),
+                validation.userId(),
                 SyncTargetSystem.GOOGLE_CALENDAR,
                 SyncTriggerSource.WEBHOOK,
                 options,
-                request.channelId(),
-                request.resourceState()
+                new WebhookMetadata(
+                        validation.channelId(),
+                        validation.resourceId(),
+                        validation.resourceState(),
+                        validation.messageNumber(),
+                        validation.resourceUri()
+                ),
+                validation.calendarId()
         );
 
         SyncConflict conflict = null;
-        if (request.resourceState() != null && !request.resourceState().isBlank()) {
+        if (validation.resourceState() != null && !validation.resourceState().equalsIgnoreCase("sync")) {
             conflict = new SyncConflict();
-            conflict.setUserId(user.getId());
+            conflict.setUserId(validation.userId());
             conflict.setSyncLogId(UUID.fromString(run.syncRunId()));
             conflict.setProvider("google");
             conflict.setTargetSystem(SyncTargetSystem.GOOGLE_CALENDAR);
             conflict.setSummary("Google Calendar 변경 알림이 수신되었습니다.");
             conflict.setDetails("Google Calendar webhook notification triggered an inbound read; review local changes if this notification overlaps manual edits.");
-            conflict.setExternalRef(blankToNull(request.resourceId()));
+            conflict.setExternalRef(blankToNull(validation.resourceId()));
             conflict.setStatus(SyncConflictStatus.PENDING);
             conflict.setPayload("""
-                    {"channelId":"%s","resourceId":"%s","resourceState":"%s"}
+                    {"channelId":"%s","resourceId":"%s","resourceState":"%s","messageNumber":%d}
                     """.formatted(
-                    blankToEmpty(request.channelId()),
-                    blankToEmpty(request.resourceId()),
-                    blankToEmpty(request.resourceState())
+                    blankToEmpty(validation.channelId()),
+                    blankToEmpty(validation.resourceId()),
+                    blankToEmpty(validation.resourceState()),
+                    validation.messageNumber()
             ));
             conflict = syncConflictRepository.save(conflict);
         }
 
+        googleCalendarWebhookValidationService.recordAccepted(
+                validation.channelRowId(),
+                validation.messageNumber(),
+                validation.resourceUri()
+        );
+
         return new WebhookReceiptResponse(
                 run.syncRunId(),
                 conflict == null ? null : conflict.getId().toString(),
-                request.resourceState(),
+                validation.resourceState(),
                 run.status(),
                 run.detail()
         );
@@ -222,8 +253,8 @@ public class SyncOrchestrationService {
             SyncTargetSystem targetSystem,
             SyncTriggerSource triggerSource,
             SyncRequestOptions options,
-            String webhookChannelId,
-            String webhookResourceState
+            WebhookMetadata webhookMetadata,
+            String calendarId
     ) {
         CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(userId, "google")
                 .orElseThrow(() -> new UserActionRequiredException("Google 연동이 필요합니다."));
@@ -240,8 +271,13 @@ public class SyncOrchestrationService {
         syncLogEntry.setAffectedCount(0);
         syncLogEntry.setRangeStart(options.rangeStart());
         syncLogEntry.setRangeEnd(options.rangeEnd());
-        syncLogEntry.setWebhookChannelId(blankToNull(webhookChannelId));
-        syncLogEntry.setWebhookResourceState(blankToNull(webhookResourceState));
+        if (webhookMetadata != null) {
+            syncLogEntry.setWebhookChannelId(blankToNull(webhookMetadata.channelId()));
+            syncLogEntry.setWebhookResourceId(blankToNull(webhookMetadata.resourceId()));
+            syncLogEntry.setWebhookResourceState(blankToNull(webhookMetadata.resourceState()));
+            syncLogEntry.setWebhookMessageNumber(webhookMetadata.messageNumber());
+            syncLogEntry.setWebhookResourceUri(blankToNull(webhookMetadata.resourceUri()));
+        }
         syncLogEntry.setStartedAt(Instant.now());
         syncLogEntry.setDetail(detailFor(targetSystem, triggerSource));
         syncLogEntry = syncLogEntryRepository.save(syncLogEntry);
@@ -249,7 +285,7 @@ public class SyncOrchestrationService {
         try {
             SyncRunResult result = options.direction() == SyncDirection.OUTBOUND
                     ? executeOutboundSync(userId, targetSystem)
-                    : executeInboundProviderSync(connection, targetSystem, options);
+                    : executeInboundProviderSync(connection, targetSystem, options, calendarId);
 
             syncLogEntry.setStatus(result.status());
             syncLogEntry.setAffectedCount(result.affectedCount());
@@ -284,11 +320,13 @@ public class SyncOrchestrationService {
     private SyncRunResult executeInboundProviderSync(
             CalendarConnection connection,
             SyncTargetSystem targetSystem,
-            SyncRequestOptions options
+            SyncRequestOptions options,
+            String calendarId
     ) {
         GoogleInboundSyncClient.InboundSyncResult result = switch (targetSystem) {
             case GOOGLE_CALENDAR -> googleInboundSyncClient.importCalendar(
                     connection,
+                    calendarId == null || calendarId.isBlank() ? "primary" : calendarId.trim(),
                     options.rangeStart(),
                     options.rangeEnd()
             );
@@ -411,6 +449,15 @@ public class SyncOrchestrationService {
     ) {
     }
 
+    private record WebhookMetadata(
+            String channelId,
+            String resourceId,
+            String resourceState,
+            Long messageNumber,
+            String resourceUri
+    ) {
+    }
+
     private record SyncRunResult(int affectedCount, SyncExecutionStatus status, String detail) {
     }
 
@@ -430,7 +477,11 @@ public class SyncOrchestrationService {
     public record WebhookReceiptRequest(
             String channelId,
             String resourceId,
-            String resourceState
+            String channelToken,
+            String resourceState,
+            String messageNumber,
+            String channelExpiration,
+            String resourceUri
     ) {
     }
 
@@ -559,5 +610,8 @@ public class SyncOrchestrationService {
             String status,
             String detail
     ) {
+        static WebhookReceiptResponse ignored(String resourceState, String status, String detail) {
+            return new WebhookReceiptResponse(null, null, resourceState, status, detail);
+        }
     }
 }

@@ -58,7 +58,14 @@ public class SyncLogEntry extends AuditableEntity {
 
     private String webhookChannelId;
 
+    private String webhookResourceId;
+
     private String webhookResourceState;
+
+    private Long webhookMessageNumber;
+
+    @Column(columnDefinition = "text")
+    private String webhookResourceUri;
 
     @Column(nullable = false)
     private Instant startedAt;

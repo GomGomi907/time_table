@@ -75,6 +75,7 @@ class GoogleRestInboundSyncClientTest {
 
         GoogleInboundSyncClient.InboundSyncResult result = client.importCalendar(
                 connection(userId),
+                "primary",
                 Instant.parse("2026-05-01T00:00:00Z"),
                 Instant.parse("2026-05-08T00:00:00Z")
         );

@@ -66,10 +66,26 @@ public class SyncController {
     public ResponseEntity<ApiEnvelope<SyncOrchestrationService.WebhookReceiptResponse>> receiveGoogleCalendarWebhook(
             @RequestHeader(value = "X-Goog-Channel-Id", required = false) String channelId,
             @RequestHeader(value = "X-Goog-Resource-Id", required = false) String resourceId,
-            @RequestHeader(value = "X-Goog-Resource-State", required = false) String resourceState
+            @RequestHeader(value = "X-Goog-Channel-Token", required = false) String channelToken,
+            @RequestHeader(value = "X-Goog-Resource-State", required = false) String resourceState,
+            @RequestHeader(value = "X-Goog-Message-Number", required = false) String messageNumber,
+            @RequestHeader(value = "X-Goog-Channel-Expiration", required = false) String channelExpiration,
+            @RequestHeader(value = "X-Goog-Resource-URI", required = false) String resourceUri
     ) {
-        return ApiResponses.ok(syncOrchestrationService.receiveGoogleCalendarWebhook(
-                new SyncOrchestrationService.WebhookReceiptRequest(channelId, resourceId, resourceState)
-        ));
+        SyncOrchestrationService.WebhookReceiptResponse response = syncOrchestrationService.receiveGoogleCalendarWebhook(
+                new SyncOrchestrationService.WebhookReceiptRequest(
+                        channelId,
+                        resourceId,
+                        channelToken,
+                        resourceState,
+                        messageNumber,
+                        channelExpiration,
+                        resourceUri
+                )
+        );
+        if (response.syncRunId() == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ApiResponses.ok(response);
     }
 }

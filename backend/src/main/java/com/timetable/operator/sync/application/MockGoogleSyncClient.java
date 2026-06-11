@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 class MockGoogleSyncClient implements GoogleInboundSyncClient, GoogleOutboundSyncClient {
 
     @Override
-    public InboundSyncResult importCalendar(CalendarConnection connection, Instant rangeStart, Instant rangeEnd) {
+    public InboundSyncResult importCalendar(CalendarConnection connection, String calendarId, Instant rangeStart, Instant rangeEnd) {
         return new InboundSyncResult(0, "No local calendar fixture is created.");
     }
 

@@ -156,7 +156,7 @@ export function SuggestionReviewCard({
             return (
               <li className="suggestion-preview-item" key={`${item.actionType}-${item.targetId ?? index}-${index}`}>
                 <span>{formatAiActionLabel(item.actionType)}</span>
-                <strong>{formatServiceCopy(item.title)}</strong>
+                <strong data-user-content="true">{formatServiceCopy(item.title)}</strong>
                 {detail ? <p>{detail}</p> : null}
               </li>
             );

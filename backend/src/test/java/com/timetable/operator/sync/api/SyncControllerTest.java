@@ -3,6 +3,8 @@ package com.timetable.operator.sync.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,9 +28,12 @@ import com.timetable.operator.events.infrastructure.EventRepository;
 import com.timetable.operator.schedule.domain.ScheduleCategory;
 import com.timetable.operator.sync.application.GoogleInboundSyncClient;
 import com.timetable.operator.sync.application.GoogleOutboundSyncClient;
+import com.timetable.operator.sync.application.GoogleCalendarWebhookValidationService;
 import com.timetable.operator.sync.application.ProviderWriteOutboxService;
 import com.timetable.operator.sync.application.ProviderWriteProcessor;
 import com.timetable.operator.sync.application.SyncOrchestrationService;
+import com.timetable.operator.sync.domain.GoogleCalendarNotificationChannel;
+import com.timetable.operator.sync.domain.GoogleNotificationChannelStatus;
 import com.timetable.operator.sync.domain.ProviderWriteOperation;
 import com.timetable.operator.sync.domain.ProviderWriteOutbox;
 import com.timetable.operator.sync.domain.ProviderWriteState;
@@ -36,6 +41,7 @@ import com.timetable.operator.sync.domain.SyncMapping;
 import com.timetable.operator.sync.domain.SyncMappingLocalType;
 import com.timetable.operator.sync.domain.SyncProvider;
 import com.timetable.operator.sync.infrastructure.ProviderWriteOutboxRepository;
+import com.timetable.operator.sync.infrastructure.GoogleCalendarNotificationChannelRepository;
 import com.timetable.operator.sync.infrastructure.SyncMappingRepository;
 import com.timetable.operator.tasks.domain.Task;
 import com.timetable.operator.tasks.domain.TaskSourceType;
@@ -85,6 +91,9 @@ class SyncControllerTest {
     private ProviderWriteOutboxRepository providerWriteOutboxRepository;
 
     @Autowired
+    private GoogleCalendarNotificationChannelRepository notificationChannelRepository;
+
+    @Autowired
     private SyncMappingRepository syncMappingRepository;
 
     @Autowired
@@ -107,8 +116,9 @@ class SyncControllerTest {
         ReflectionTestUtils.setField(providerWriteProcessor, "googleWriteEnabled", true);
         ReflectionTestUtils.setField(syncOrchestrationService, "googleWriteEnabled", true);
         providerWriteOutboxRepository.deleteAll();
+        notificationChannelRepository.deleteAll();
 
-        when(googleInboundSyncClient.importCalendar(any(CalendarConnection.class), any(Instant.class), any(Instant.class)))
+        when(googleInboundSyncClient.importCalendar(any(CalendarConnection.class), anyString(), any(Instant.class), any(Instant.class)))
                 .thenReturn(new GoogleInboundSyncClient.InboundSyncResult(2, "Mock Calendar inbound read applied."));
         when(googleInboundSyncClient.importTasks(any(CalendarConnection.class), any(Instant.class), any(Instant.class)))
                 .thenReturn(new GoogleInboundSyncClient.InboundSyncResult(3, "Mock Tasks inbound read applied."));
@@ -187,12 +197,18 @@ class SyncControllerTest {
                 .andExpect(jsonPath("$.meta.externalReadEnabled").value(true))
                 .andExpect(jsonPath("$.meta.externalWriteEnabled").value(false));
 
+        AppUser savedUser = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .orElseThrow();
+        createNotificationChannel(savedUser, connection, "channel-123", "resource-456", "secret-token", null);
+
         MvcResult webhookResult = mockMvc.perform(post("/api/sync/google/calendar/webhook")
-                        .with(user("tester").roles("USER"))
-                        .with(csrf())
                         .header("X-Goog-Channel-Id", "channel-123")
                         .header("X-Goog-Resource-Id", "resource-456")
-                        .header("X-Goog-Resource-State", "exists"))
+                        .header("X-Goog-Channel-Token", "secret-token")
+                        .header("X-Goog-Resource-State", "exists")
+                        .header("X-Goog-Message-Number", "2")
+                        .header("X-Goog-Resource-URI", "https://www.googleapis.com/calendar/v3/calendars/primary/events"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.syncRunId", notNullValue()))
                 .andExpect(jsonPath("$.data.conflictId", notNullValue()))
@@ -272,6 +288,96 @@ class SyncControllerTest {
     }
 
     @Test
+    void googleCalendarWebhookAcceptsAnonymousCallbackAndRoutesByChannelRegistry() throws Exception {
+        AppUser savedUser = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .orElseThrow();
+        createNotificationChannel(savedUser, connection, "channel-anon", "resource-anon", "webhook-secret", null);
+
+        clearInvocations(googleInboundSyncClient);
+
+        mockMvc.perform(post("/api/sync/google/calendar/webhook")
+                        .header("X-Goog-Channel-Id", "channel-anon")
+                        .header("X-Goog-Resource-Id", "resource-anon")
+                        .header("X-Goog-Channel-Token", "webhook-secret")
+                        .header("X-Goog-Resource-State", "exists")
+                        .header("X-Goog-Message-Number", "3")
+                        .header("X-Goog-Channel-Expiration", "Tue, 11 Jun 2026 20:00:00 GMT")
+                        .header("X-Goog-Resource-URI", "https://www.googleapis.com/calendar/v3/calendars/primary/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.targetSystem").doesNotExist())
+                .andExpect(jsonPath("$.data.status").value("success"))
+                .andExpect(jsonPath("$.data.resourceState").value("exists"));
+
+        verify(googleInboundSyncClient).importCalendar(
+                any(CalendarConnection.class),
+                org.mockito.ArgumentMatchers.eq("primary"),
+                any(Instant.class),
+                any(Instant.class)
+        );
+        assertThat(notificationChannelRepository.findAll())
+                .singleElement()
+                .extracting(GoogleCalendarNotificationChannel::getLastMessageNumber)
+                .isEqualTo(3L);
+    }
+
+    @Test
+    void googleCalendarWebhookNoopsUnknownSpoofedAndDuplicateNotifications() throws Exception {
+        AppUser savedUser = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
+        CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(savedUser.getId(), "google")
+                .orElseThrow();
+        createNotificationChannel(savedUser, connection, "channel-valid", "resource-valid", "expected-token", 7L);
+
+        clearInvocations(googleInboundSyncClient);
+
+        mockMvc.perform(post("/api/sync/google/calendar/webhook")
+                        .header("X-Goog-Channel-Id", "unknown-channel")
+                        .header("X-Goog-Resource-Id", "resource-valid")
+                        .header("X-Goog-Channel-Token", "expected-token")
+                        .header("X-Goog-Resource-State", "exists")
+                        .header("X-Goog-Message-Number", "8"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/sync/google/calendar/webhook")
+                        .header("X-Goog-Channel-Id", "channel-valid")
+                        .header("X-Goog-Resource-Id", "resource-valid")
+                        .header("X-Goog-Channel-Token", "wrong-token")
+                        .header("X-Goog-Resource-State", "exists")
+                        .header("X-Goog-Message-Number", "8"))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/api/sync/google/calendar/webhook")
+                        .header("X-Goog-Channel-Id", "channel-valid")
+                        .header("X-Goog-Resource-Id", "resource-valid")
+                        .header("X-Goog-Channel-Token", "expected-token")
+                        .header("X-Goog-Resource-State", "exists")
+                        .header("X-Goog-Message-Number", "7"))
+                .andExpect(status().isNoContent());
+
+        verify(googleInboundSyncClient, never()).importCalendar(
+                any(CalendarConnection.class),
+                anyString(),
+                any(Instant.class),
+                any(Instant.class)
+        );
+    }
+
+    @Test
+    void manualSyncStillRequiresAuthenticatedSessionAndCsrf() throws Exception {
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/sync/google/calendar")
+                        .with(user("tester").roles("USER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void outboundCalendarWriteFailureMarksOutboxRetryableAndDoesNotReportSuccess() throws Exception {
         AppUser user = appUserRepository.findByEmail("local@time-table.dev").orElseThrow();
         CalendarConnection connection = calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
@@ -336,6 +442,28 @@ class SyncControllerTest {
         Event unsynced = eventRepository.findById(event.getId()).orElseThrow();
         assertThat(unsynced.getSyncState()).isEqualTo(PlannerSyncState.DIRTY_PENDING_WRITE);
         assertThat(unsynced.getExternalSourceId()).isNull();
+    }
+
+    private GoogleCalendarNotificationChannel createNotificationChannel(
+            AppUser user,
+            CalendarConnection connection,
+            String channelId,
+            String resourceId,
+            String token,
+            Long lastMessageNumber
+    ) {
+        GoogleCalendarNotificationChannel channel = new GoogleCalendarNotificationChannel();
+        channel.setUserId(user.getId());
+        channel.setCalendarConnectionId(connection.getId());
+        channel.setCalendarId("primary");
+        channel.setChannelId(channelId);
+        channel.setResourceId(resourceId);
+        channel.setResourceUri("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+        channel.setChannelTokenHash(GoogleCalendarWebhookValidationService.hashToken(token));
+        channel.setStatus(GoogleNotificationChannelStatus.ACTIVE);
+        channel.setExpirationAt(Instant.now().plus(1, ChronoUnit.DAYS));
+        channel.setLastMessageNumber(lastMessageNumber);
+        return notificationChannelRepository.save(channel);
     }
 
     @Test

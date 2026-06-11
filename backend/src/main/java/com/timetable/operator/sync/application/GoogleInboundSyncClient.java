@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public interface GoogleInboundSyncClient {
 
-    InboundSyncResult importCalendar(CalendarConnection connection, Instant rangeStart, Instant rangeEnd);
+    InboundSyncResult importCalendar(CalendarConnection connection, String calendarId, Instant rangeStart, Instant rangeEnd);
 
     InboundSyncResult importTasks(CalendarConnection connection, Instant rangeStart, Instant rangeEnd);
 

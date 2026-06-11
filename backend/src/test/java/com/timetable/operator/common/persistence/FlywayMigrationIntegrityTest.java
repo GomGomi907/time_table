@@ -120,6 +120,44 @@ class FlywayMigrationIntegrityTest {
         }
     }
 
+    @Test
+    void latestMigrationCreatesGoogleCalendarNotificationChannelRegistry() throws Exception {
+        String jdbcUrl = "jdbc:h2:file:%s;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
+                .formatted(tempDir.resolve("notification-channel-registry").toAbsolutePath().toString().replace('\\', '/'));
+
+        Flyway.configure()
+                .dataSource(jdbcUrl, "sa", "")
+                .locations("classpath:db/migration")
+                .load()
+                .migrate();
+
+        UUID userId = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
+
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, "sa", "")) {
+            insertUser(connection, userId);
+            insertCalendarConnection(connection, userId, connectionId);
+            insertGoogleCalendarNotificationChannel(
+                    connection,
+                    userId,
+                    connectionId,
+                    "channel-1",
+                    "resource-1",
+                    "hash-1"
+            );
+
+            assertEquals(1, rowCount(connection, "google_calendar_notification_channels"));
+            assertThrows(SQLException.class, () -> insertGoogleCalendarNotificationChannel(
+                    connection,
+                    userId,
+                    connectionId,
+                    "channel-1",
+                    "resource-2",
+                    "hash-2"
+            ));
+        }
+    }
+
     private void insertUser(Connection connection, UUID userId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 insert into users (id, created_at, updated_at, email, display_name, provider)
@@ -225,6 +263,57 @@ class FlywayMigrationIntegrityTest {
             var resultSet = statement.executeQuery();
             resultSet.next();
             return resultSet.getInt(1);
+        }
+    }
+
+    private void insertCalendarConnection(Connection connection, UUID userId, UUID connectionId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                insert into calendar_connections (
+                    id, created_at, updated_at, user_id, provider, status, google_subject, email
+                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            statement.setObject(1, connectionId);
+            statement.setTimestamp(2, Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")));
+            statement.setTimestamp(3, Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")));
+            statement.setObject(4, userId);
+            statement.setString(5, "google");
+            statement.setString(6, "CONNECTED");
+            statement.setString(7, "google-subject");
+            statement.setString(8, userId + "@example.com");
+            statement.executeUpdate();
+        }
+    }
+
+    private void insertGoogleCalendarNotificationChannel(
+            Connection connection,
+            UUID userId,
+            UUID calendarConnectionId,
+            String channelId,
+            String resourceId,
+            String tokenHash
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                insert into google_calendar_notification_channels (
+                    id, created_at, updated_at, user_id, calendar_connection_id, calendar_id,
+                    channel_id, resource_id, resource_uri, channel_token_hash, status,
+                    expiration_at, last_message_number, last_notification_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """)) {
+            statement.setObject(1, UUID.randomUUID());
+            statement.setTimestamp(2, Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")));
+            statement.setTimestamp(3, Timestamp.from(Instant.parse("2026-01-01T00:00:00Z")));
+            statement.setObject(4, userId);
+            statement.setObject(5, calendarConnectionId);
+            statement.setString(6, "primary");
+            statement.setString(7, channelId);
+            statement.setString(8, resourceId);
+            statement.setString(9, "https://www.googleapis.com/calendar/v3/calendars/primary/events");
+            statement.setString(10, tokenHash);
+            statement.setString(11, "ACTIVE");
+            statement.setTimestamp(12, Timestamp.from(Instant.parse("2026-01-08T00:00:00Z")));
+            statement.setLong(13, 1L);
+            statement.setTimestamp(14, Timestamp.from(Instant.parse("2026-01-01T00:01:00Z")));
+            statement.executeUpdate();
         }
     }
 

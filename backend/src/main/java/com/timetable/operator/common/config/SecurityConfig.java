@@ -61,6 +61,7 @@ public class SecurityConfig {
                     if (appProperties.mockLoginEnabled()) {
                         authorize.requestMatchers(HttpMethod.GET, "/api/auth/mock/login", "/api/auth/mock/callback").permitAll();
                     }
+                    authorize.requestMatchers(HttpMethod.POST, "/api/sync/google/calendar/webhook").permitAll();
                     authorize.requestMatchers(HttpMethod.GET, "/oauth2/**", "/login/oauth2/**").permitAll();
                     if (h2ConsoleEnabled) {
                         authorize.requestMatchers("/h2-console/**").permitAll();
@@ -125,7 +126,8 @@ public class SecurityConfig {
                 PathPatternRequestMatcher.withDefaults().matcher("/oauth2/**"),
                 PathPatternRequestMatcher.withDefaults().matcher("/login/oauth2/**"),
                 PathPatternRequestMatcher.withDefaults().matcher("/api/auth/mock/**"),
-                PathPatternRequestMatcher.withDefaults().matcher("/actuator/health")
+                PathPatternRequestMatcher.withDefaults().matcher("/actuator/health"),
+                PathPatternRequestMatcher.withDefaults().matcher("/api/sync/google/calendar/webhook")
         ));
         if (h2ConsoleEnabled) {
             requestMatchers.add(PathPatternRequestMatcher.withDefaults().matcher("/h2-console/**"));

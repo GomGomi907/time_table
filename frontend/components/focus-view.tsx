@@ -414,7 +414,9 @@ export function FocusView() {
                 </svg>
               </Link>
               <p className="eyebrow">지금 할 일</p>
-              <h1>{formatServiceCopy(primaryTitle)}</h1>
+              <h1 data-user-content={currentItem || recommendedTask || fallbackBlock ? "true" : undefined}>
+                {formatServiceCopy(primaryTitle)}
+              </h1>
               <p className="focus-copy">
                 {currentItem
                   ? `${formatClock(currentItem.startAt, session?.timezone)}부터 진행 중이며, 남은 시간은 ${formatRelativeMinutes(

@@ -136,9 +136,8 @@ function buildPrimaryAction({
     return {
       label: "실행 모드 시작",
       href: "/focus",
-      detail: currentItem
-        ? `${formatServiceCopy(currentItem.title)}을 이어서 진행할 수 있습니다.`
-        : `${formatServiceCopy(recommendedTask?.title ?? "할 일")}부터 시작할 수 있습니다.`,
+      detail: currentItem ? "을 이어서 진행할 수 있습니다." : "부터 시작할 수 있습니다.",
+      detailTitle: currentItem?.title ?? recommendedTask?.title ?? "할 일",
     };
   }
 
@@ -287,11 +286,20 @@ export function DashboardView() {
                 <div className="today-flow-copy">
                   <p className="eyebrow">{todayLabel} 예정</p>
                   <h2>{dayHeadline}</h2>
-                  <p>{nextShiftDescription}</p>
+                  <p>
+                    {liveOrNextBlock ? (
+                      <>
+                        지금/다음 {formatClockValue(liveOrNextBlock.startTime)} ·{" "}
+                        <span data-user-content="true">{formatServiceCopy(liveOrNextBlock.activity)}</span>
+                      </>
+                    ) : (
+                      nextShiftDescription
+                    )}
+                  </p>
                 </div>
                 <div className="today-action-strip" aria-label="지금 할 일 요약">
                   <span>지금 할 일</span>
-                  <strong>
+                  <strong data-user-content={currentItem || recommendedTask || liveOrNextBlock ? "true" : undefined}>
                     {currentItem
                       ? formatServiceCopy(currentItem.title)
                       : recommendedTask
@@ -300,7 +308,16 @@ export function DashboardView() {
                           ? formatServiceCopy(liveOrNextBlock.activity)
                           : "주간 일정 정리"}
                   </strong>
-                  <p>{primaryAction.detail}</p>
+                  <p>
+                    {"detailTitle" in primaryAction ? (
+                      <>
+                        <span data-user-content="true">{formatServiceCopy(primaryAction.detailTitle)}</span>
+                        {primaryAction.detail}
+                      </>
+                    ) : (
+                      primaryAction.detail
+                    )}
+                  </p>
                 </div>
                 <Link className="solid-btn link-btn today-primary-action" data-testid="dashboard-primary-action" href={primaryAction.href}>
                   {primaryAction.label}
@@ -324,7 +341,7 @@ export function DashboardView() {
                           {formatClockValue(block.startTime)}–{formatClockValue(block.endTime)}
                         </span>
                         <div>
-                          <strong>{formatServiceCopy(block.activity)}</strong>
+                          <strong data-user-content="true">{formatServiceCopy(block.activity)}</strong>
                           <p>
                             {CATEGORY_LABELS[block.category] ?? block.category}
                             {isLive ? " · 지금 진행 중" : ""}

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useTransition } from "react";
 
 import { api } from "@/lib/api";
+import { BrandLogo } from "@/components/brand-logo";
 import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { useAppStore } from "@/stores/app-store";
@@ -171,7 +172,9 @@ export function AppShell({
     >
       <aside className="side-nav">
         <div className="brand-block">
-          <span className="brand-mark">TT</span>
+          <span className="brand-mark logo-mark">
+            <BrandLogo />
+          </span>
           <div>
             <p className="brand-name">Time Table</p>
             <p className="brand-sub">일정 운영판</p>
@@ -201,6 +204,11 @@ export function AppShell({
         >
           {isPending ? "세션 종료 중..." : "로그아웃"}
         </button>
+
+        <nav className="side-legal-links" aria-label="서비스 고지">
+          <Link href="/privacy">개인정보처리방침</Link>
+          <Link href="/terms">서비스 약관</Link>
+        </nav>
       </aside>
 
       <main className="content-shell">

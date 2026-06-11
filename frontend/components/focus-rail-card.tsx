@@ -68,11 +68,11 @@ export function FocusRailCard({
             <>
               <li>
                 <span>현재 할 일</span>
-                <b>{formatServiceCopy(currentItem.title)}</b>
+                <b data-user-content="true">{formatServiceCopy(currentItem.title)}</b>
               </li>
               <li>
                 <span>목표</span>
-                <b>{currentItem.goal?.title ?? "없음"}</b>
+                <b data-user-content={currentItem.goal ? "true" : undefined}>{currentItem.goal?.title ?? "없음"}</b>
               </li>
               <li>
                 <span>우선순위</span>
@@ -82,7 +82,7 @@ export function FocusRailCard({
           ) : visibleTasks.length ? (
             visibleTasks.map((task) => (
               <li key={task.id}>
-                <span>{formatServiceCopy(task.title)}</span>
+                <span data-user-content="true">{formatServiceCopy(task.title)}</span>
                 <b>{formatRelativeMinutes(task.estimatedMinutes)}</b>
               </li>
             ))
@@ -90,7 +90,7 @@ export function FocusRailCard({
             <>
               <li>
                 <span>다음 일정</span>
-                <b>{formatServiceCopy(fallbackBlock.activity)}</b>
+                <b data-user-content="true">{formatServiceCopy(fallbackBlock.activity)}</b>
               </li>
               <li>
                 <span>예정 시간</span>
@@ -129,8 +129,8 @@ export function FocusRailCard({
                     {formatClockValue(block.startTime)} - {formatClockValue(block.endTime)}
                   </span>
                   </div>
-                  <strong>{formatServiceCopy(block.activity)}</strong>
-                  {note ? <p className="next-card-note">{note}</p> : null}
+                  <strong data-user-content="true">{formatServiceCopy(block.activity)}</strong>
+                  {note ? <p className="next-card-note" data-user-content="true">{note}</p> : null}
                 </div>
               );
             })}

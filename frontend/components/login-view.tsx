@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import { api } from "@/lib/api";
+import { BrandLogo } from "@/components/brand-logo";
 import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 
@@ -54,7 +56,12 @@ export function LoginView() {
     <div className="status-screen">
       <div className="login-panel login-panel-rich">
         <section className="login-hero">
-          <p className="eyebrow">Time Table</p>
+          <div className="login-brand" aria-label="Time Table">
+            <span className="brand-mark logo-mark">
+              <BrandLogo />
+            </span>
+            <p className="eyebrow">Time Table</p>
+          </div>
           <h1>오늘 일정과 지금 할 일을 바로 보여줍니다.</h1>
           <p>오늘 일정, 지금 할 일, 주간 일정표만 한 화면에 정리해 보여줍니다.</p>
         </section>
@@ -95,6 +102,12 @@ export function LoginView() {
               </button>
             ) : null}
           </div>
+
+          <nav className="legal-links" aria-label="서비스 고지">
+            <Link href="/">서비스 소개</Link>
+            <Link href="/privacy">개인정보처리방침</Link>
+            <Link href="/terms">서비스 약관</Link>
+          </nav>
         </section>
       </div>
     </div>

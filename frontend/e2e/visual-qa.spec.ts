@@ -84,6 +84,31 @@ function preferredAction(
     .first();
 }
 
+test("copy hygiene exempts user-authored content but still fails app-authored leaks", async ({ page }) => {
+  await page.setContent(`
+    <main>
+      <p data-user-content="true">사용자가 적은 검증 메모 validationTrace</p>
+      <p>정상 안내 문구입니다.</p>
+    </main>
+  `);
+  await assertNoInternalUserCopy(page);
+
+  await page.setContent(`
+    <main>
+      <p>validationTrace</p>
+    </main>
+  `);
+
+  let caughtAppAuthoredLeak = false;
+  try {
+    await assertNoInternalUserCopy(page);
+  } catch (error) {
+    caughtAppAuthoredLeak = error instanceof Error && error.message.includes("Internal implementation copy leaked");
+  }
+
+  expect(caughtAppAuthoredLeak).toBe(true);
+});
+
 async function assertReleaseVisualDiscipline(page: Page) {
   await assertNoHorizontalOverflow(page);
   await assertNoVisibleElementOverflowsViewport(page);

@@ -935,7 +935,9 @@ function WeeklyStack({
           </p>
           <div className={`mobile-now-card ${focusScheduleBlock ? categoryTone(focusScheduleBlock.category) : "empty"}`}>
             <span>{focusScheduleLabel}</span>
-            <strong>{focusScheduleBlock ? formatServiceCopy(focusScheduleBlock.activity) : "표시할 일정이 없습니다."}</strong>
+            <strong data-user-content={focusScheduleBlock ? "true" : undefined}>
+              {focusScheduleBlock ? formatServiceCopy(focusScheduleBlock.activity) : "표시할 일정이 없습니다."}
+            </strong>
             {focusScheduleBlock ? (
               <small>
                 {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
@@ -975,8 +977,8 @@ function WeeklyStack({
                             <span className="event-time">
                               {formatClockValue(item.block.startTime)} - {formatClockValue(item.block.endTime)}
                             </span>
-                            <strong>{formatServiceCopy(item.block.activity)}</strong>
-                            {note ? <span>{note}</span> : null}
+                            <strong data-user-content="true">{formatServiceCopy(item.block.activity)}</strong>
+                            {note ? <span data-user-content="true">{note}</span> : null}
                           </button>
                         );
                       })()
@@ -989,7 +991,7 @@ function WeeklyStack({
                           onClick={() => onOccurrenceSelect?.(item.occurrence)}
                         >
                           <span className="event-time">{formatOccurrenceTimeRange(item.occurrence, resolvedTimeZone)}</span>
-                          <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                          <strong data-user-content="true">{formatServiceCopy(item.occurrence.title)}</strong>
                           <span>{occurrenceKindLabel(item.occurrence)}</span>
                         </button>
                     )
@@ -1060,11 +1062,11 @@ function WeeklyStack({
                 }
               >
                 <span className="current-schedule-kicker">{focusScheduleLabel}</span>
-                <strong>{formatServiceCopy(focusScheduleBlock.activity)}</strong>
+                <strong data-user-content="true">{formatServiceCopy(focusScheduleBlock.activity)}</strong>
                 <span className="current-schedule-time">
                   {formatClockValue(focusScheduleBlock.startTime)} - {formatClockValue(focusScheduleBlock.endTime)}
                 </span>
-                {note ? <span className="current-schedule-note">{note}</span> : null}
+                {note ? <span className="current-schedule-note" data-user-content="true">{note}</span> : null}
               </button>
             );
           })()
@@ -1117,9 +1119,9 @@ function WeeklyStack({
                             <span className="event-time">
                               {formatClockValue(item.block.startTime)} - {formatClockValue(item.block.endTime)}
                             </span>
-                            <strong>{formatServiceCopy(item.block.activity)}</strong>
+                            <strong data-user-content="true">{formatServiceCopy(item.block.activity)}</strong>
                             {isCurrentBlock ? <span className="current-event-chip">지금 일정</span> : null}
-                            {note ? <p className="event-note">{note}</p> : null}
+                            {note ? <p className="event-note" data-user-content="true">{note}</p> : null}
                           </button>
                         );
                       }
@@ -1133,7 +1135,7 @@ function WeeklyStack({
                           onClick={() => onOccurrenceSelect?.(item.occurrence)}
                         >
                           <span className="event-time">{formatOccurrenceTimeRange(item.occurrence, resolvedTimeZone)}</span>
-                          <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                          <strong data-user-content="true">{formatServiceCopy(item.occurrence.title)}</strong>
                           <span className="current-event-chip">{occurrenceKindLabel(item.occurrence)}</span>
                         </button>
                       );
@@ -1266,7 +1268,7 @@ function AiDraftProjection({
         {draftItems.map((item) => (
           <li className="ai-draft-projection-item" key={item.key} data-testid="ai-draft-projection-item">
             <span>{formatAiActionLabel(item.actionType)} · {item.targetType}</span>
-            <strong>{formatServiceCopy(item.title)}</strong>
+            <strong data-user-content="true">{formatServiceCopy(item.title)}</strong>
             <small>{item.detail}</small>
             {item.reason ? <p>{formatServiceCopy(item.reason)}</p> : null}
           </li>
@@ -1342,7 +1344,7 @@ function MonthlyMosaic({
                 <>
                   <strong>{occurrences.length}개 일정</strong>
                   <small>{formatDurationLabel(totalMinutes)}</small>
-                  <span className="monthly-day-preview">{formatServiceCopy(occurrences[0].title)}</span>
+                  <span className="monthly-day-preview" data-user-content="true">{formatServiceCopy(occurrences[0].title)}</span>
                   {drafts.length ? (
                     <span className="monthly-day-draft" data-testid="monthly-draft-badge">
                       확인할 변경 {drafts.length}개
@@ -1354,7 +1356,7 @@ function MonthlyMosaic({
                   <strong>{drafts.length}개 확인할 변경</strong>
                   <small>반영 전</small>
                   <span className="monthly-day-draft" data-testid="monthly-draft-badge">
-                    {formatServiceCopy(drafts[0].title)}
+                    <span data-user-content="true">{formatServiceCopy(drafts[0].title)}</span>
                   </span>
                 </>
               ) : (
@@ -1537,7 +1539,7 @@ function SelectedDayTimeline({
                   <div className="occurrence-edit-trigger" aria-label={`확인할 변경: ${formatServiceCopy(item.draft.title)}`}>
                     <span className="agenda-occurrence-time">{item.draft.detail}</span>
                     <div>
-                      <strong>{formatServiceCopy(item.draft.title)}</strong>
+                      <strong data-user-content="true">{formatServiceCopy(item.draft.title)}</strong>
                       <span>확인할 변경 · 반영 전</span>
                     </div>
                   </div>
@@ -1551,7 +1553,7 @@ function SelectedDayTimeline({
                   <button className="occurrence-edit-trigger" type="button" onClick={() => onOccurrenceSelect(item.occurrence)}>
                     <span className="agenda-occurrence-time">{formatOccurrenceTimeRange(item.occurrence, timeZone)}</span>
                     <div>
-                      <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                      <strong data-user-content="true">{formatServiceCopy(item.occurrence.title)}</strong>
                       <span>
                         {occurrenceKindLabel(item.occurrence)}
                         {item.occurrence.synthetic ? " · 반복" : ""}
@@ -1691,7 +1693,7 @@ function AgendaStream({
                       <div className="occurrence-edit-trigger" aria-label={`확인할 변경: ${formatServiceCopy(item.draft.title)}`}>
                         <span className="agenda-occurrence-time">{item.draft.detail}</span>
                         <div>
-                          <strong>{formatServiceCopy(item.draft.title)}</strong>
+                          <strong data-user-content="true">{formatServiceCopy(item.draft.title)}</strong>
                           <span>확인할 변경 · 반영 전</span>
                         </div>
                       </div>
@@ -1707,7 +1709,7 @@ function AgendaStream({
                           {formatOccurrenceTimeRange(item.occurrence, timeZone)}
                         </span>
                         <div>
-                          <strong>{formatServiceCopy(item.occurrence.title)}</strong>
+                          <strong data-user-content="true">{formatServiceCopy(item.occurrence.title)}</strong>
                           <span>
                             {occurrenceKindLabel(item.occurrence)}
                             {item.occurrence.synthetic ? " · 반복" : ""}
@@ -3072,7 +3074,12 @@ export function ScheduleView() {
       {deleteCandidate ? (
         <ConfirmDialog
           title="일정 블록을 삭제할까요?"
-          description={`"${deleteCandidate.activity}" 블록을 삭제합니다. 삭제한 블록은 되돌릴 수 없습니다.`}
+          description={
+            <>
+              <span data-user-content="true">"{deleteCandidate.activity}"</span>
+              {" 블록을 삭제합니다. 삭제한 블록은 되돌릴 수 없습니다."}
+            </>
+          }
           confirmLabel="삭제"
           isPending={isMutating}
           onCancel={() => setDeleteCandidate(null)}

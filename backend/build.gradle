@@ -47,3 +47,16 @@ tasks.named('test') {
 	useJUnitPlatform()
 	systemProperty 'app.encryption.key', 'test-encryption-key-for-integration-tests'
 }
+
+tasks.register('aiBaselineEval', Test) {
+	description = 'Runs the app-backed AI assistant baseline eval suite.'
+	group = 'verification'
+	useJUnitPlatform()
+	filter {
+		includeTestsMatching 'com.timetable.operator.agent.api.AiAssistantAppBaselineEvalTest'
+	}
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	systemProperty 'app.encryption.key', 'test-encryption-key-for-integration-tests'
+	shouldRunAfter test
+}
