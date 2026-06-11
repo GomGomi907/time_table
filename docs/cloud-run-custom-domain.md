@@ -1,6 +1,6 @@
 # Cloud Run custom domain migration — `time-table.cloud`
 
-Status: service migrated to a Cloud Run domain-mapping-supported region; domain ownership verification pending.
+Status: Cloud Run domain mapping created; Gabia A/AAAA DNS records are pending before Google-managed certificate provisioning can complete.
 
 ## Current target
 
@@ -9,7 +9,7 @@ Status: service migrated to a Cloud Run domain-mapping-supported region; domain 
 - Target region for direct domain mapping: `asia-northeast1`
 - Current reachable fallback URL: `https://timetable-608682434352.asia-northeast1.run.app`
 - Previous service region kept for rollback: `asia-northeast2`
-- OAuth redirect URI to register after domain mapping: `https://time-table.cloud/login/oauth2/code/google`
+- OAuth redirect URI to register after domain DNS/certificate is live: `https://time-table.cloud/login/oauth2/code/google`
 
 ## Completed
 
@@ -30,56 +30,67 @@ Smoke evidence from the `asia-northeast1` fallback URL:
 | `/terms` | HTTP 200 |
 | `/actuator/health` | HTTP 200 |
 
-## Blocker
-
-Cloud Run rejected the direct domain mapping because `time-table.cloud` is not verified for the active Google account/project yet.
-
-Current Gabia DNS evidence:
-
-- `TXT www.time-table.cloud = google-site-verification=amHPb-1KiTBL85r1Ks9ScxlOJE3Dh0thUpTRaebEIDw`
-- `TXT time-table.cloud` is not present on Gabia authoritative nameservers.
-
-For the apex URL `https://time-table.cloud`, the Google verification TXT must be added on the root/apex host (`@`, blank, or `time-table.cloud` depending on the Gabia UI), not only on `www`.
+Google domain ownership is verified for the Cloud account/project:
 
 ```powershell
-gcloud beta run domain-mappings create --service=timetable --domain=time-table.cloud --region=asia-northeast1 --platform=managed
+gcloud domains list-user-verified --project=gen-lang-client-0555168800
+# ID
+# time-table.cloud
 ```
 
-Observed error:
-
-```text
-The provided domain does not appear to be verified for the current account.
-To verify it, run: gcloud domains verify time-table.cloud
-```
-
-`gcloud domains verify time-table.cloud` opens Search Console:
-
-```text
-https://search.google.com/search-console/welcome?authuser=0&new_domain_name=time-table.cloud&pli=1
-```
-
-Complete domain verification with the same Google account that owns the Cloud project, or add that account as a verified owner in Search Console.
-
-## Next commands after verification
+Cloud Run direct domain mapping was created:
 
 ```powershell
-gcloud domains list-user-verified
-
 gcloud beta run domain-mappings create `
   --service=timetable `
   --domain=time-table.cloud `
   --region=asia-northeast1 `
-  --platform=managed
-
-gcloud beta run domain-mappings describe `
-  --domain=time-table.cloud `
-  --region=asia-northeast1 `
+  --project=gen-lang-client-0555168800 `
   --platform=managed
 ```
 
-Then add every `resourceRecords` value returned by `domain-mappings describe` at the domain registrar DNS panel. After propagation and Google-managed certificate provisioning, verify:
+Current mapping status:
+
+```text
+Ready: Unknown
+Reason: CertificatePending
+Message: Waiting for certificate provisioning. You must configure your DNS records for certificate issuance to begin.
+DomainRoutable: True
+```
+
+## Required Gabia DNS records
+
+Add these records at the apex/root host in Gabia (`@`, blank, or `time-table.cloud` depending on the Gabia UI):
+
+| Host | Type | Value |
+|---|---|---|
+| `@` | `A` | `216.239.32.21` |
+| `@` | `A` | `216.239.34.21` |
+| `@` | `A` | `216.239.36.21` |
+| `@` | `A` | `216.239.38.21` |
+| `@` | `AAAA` | `2001:4860:4802:32::15` |
+| `@` | `AAAA` | `2001:4860:4802:34::15` |
+| `@` | `AAAA` | `2001:4860:4802:36::15` |
+| `@` | `AAAA` | `2001:4860:4802:38::15` |
+
+Current DNS evidence after mapping creation still shows no apex A/AAAA records:
+
+```text
+Resolve-DnsName time-table.cloud A    -> no A record yet
+Resolve-DnsName time-table.cloud AAAA -> no AAAA record yet
+```
+
+## Verify after Gabia DNS is updated
+
+After propagation and Google-managed certificate provisioning, verify:
 
 ```powershell
+gcloud beta run domain-mappings describe `
+  --domain=time-table.cloud `
+  --region=asia-northeast1 `
+  --project=gen-lang-client-0555168800 `
+  --platform=managed
+
 Invoke-WebRequest -UseBasicParsing https://time-table.cloud/login
 Invoke-WebRequest -UseBasicParsing https://time-table.cloud/privacy
 Invoke-WebRequest -UseBasicParsing https://time-table.cloud/terms
@@ -100,4 +111,4 @@ After `https://time-table.cloud` resolves successfully:
 3. OAuth client → Authorized redirect URIs
    - Add `https://time-table.cloud/login/oauth2/code/google`
 
-Keep the `asia-northeast1.run.app` URL only as a rollout fallback; the public review URLs should use `time-table.cloud`.
+Keep the `asia-northeast1.run.app` URL only as a rollout fallback; the public review URLs should use `time-table.cloud` once DNS and certificate provisioning complete.
