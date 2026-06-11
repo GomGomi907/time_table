@@ -1,0 +1,91 @@
+{
+  "folder": "docs/final-submission",
+  "deployment_url": "https://timetable-608682434352.asia-northeast2.run.app/",
+  "github": "https://github.com/GomGomi907/time_table.git",
+  "primary_submission_files": [
+    "Time_Table_Final_Presentation_32183022.pptx",
+    "Time_Table_Final_Report_32183022.docx",
+    "Time_Table_Individual_Reflection_32183022.pdf",
+    "Time_Table_Individual_Reflection_32183022.md",
+    "source-submission-checklist.md",
+    "demo-script.md"
+  ],
+  "files": [
+    {
+      "path": "artifact-manifest.json",
+      "bytes": 1490
+    },
+    {
+      "path": "demo-script.md",
+      "bytes": 1387
+    },
+    {
+      "path": "individual-reflection-preview/contact-sheet.jpg",
+      "bytes": 85612
+    },
+    {
+      "path": "individual-reflection-preview/page-1.png",
+      "bytes": 378803
+    },
+    {
+      "path": "individual-reflection-preview/page-2.png",
+      "bytes": 275068
+    },
+    {
+      "path": "individual-reflection-validation.json",
+      "bytes": 291
+    },
+    {
+      "path": "README.md",
+      "bytes": 2289
+    },
+    {
+      "path": "screenshots/01-login.png",
+      "bytes": 387373
+    },
+    {
+      "path": "screenshots/02-onboarding.png",
+      "bytes": 396855
+    },
+    {
+      "path": "screenshots/03-dashboard.png",
+      "bytes": 259050
+    },
+    {
+      "path": "screenshots/04-schedule.png",
+      "bytes": 265630
+    },
+    {
+      "path": "screenshots/05-schedule-add-demo.png",
+      "bytes": 197557
+    },
+    {
+      "path": "screenshots/06-focus.png",
+      "bytes": 493430
+    },
+    {
+      "path": "source-submission-checklist.md",
+      "bytes": 1611
+    },
+    {
+      "path": "Time_Table_Final_Presentation_32183022.pptx",
+      "bytes": 2039042
+    },
+    {
+      "path": "Time_Table_Final_Report_32183022.docx",
+      "bytes": 1435978
+    },
+    {
+      "path": "Time_Table_Individual_Reflection_32183022.md",
+      "bytes": 7934
+    },
+    {
+      "path": "Time_Table_Individual_Reflection_32183022.pdf",
+      "bytes": 127029
+    },
+    {
+      "path": "validation-report.md",
+      "bytes": 2043
+    }
+  ]
+}
