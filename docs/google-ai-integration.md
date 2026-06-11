@@ -20,16 +20,20 @@ http://localhost:8080/login/oauth2/code/google
 ```
 
 배포된 Cloud Run 서비스에서는 로컬 redirect URI만으로는 로그인할 수 없다. 같은 OAuth 웹
-클라이언트의 **Authorized redirect URIs**에 서비스 URL 기반 콜백도 반드시 추가한다.
+클라이언트의 **Authorized redirect URIs**에 공개 도메인 기반 콜백도 반드시 추가한다.
 
 ```text
-https://timetable-608682434352.asia-northeast2.run.app/login/oauth2/code/google
+https://time-table.cloud/login/oauth2/code/google
 ```
 
-그리고 Cloud Run 환경 변수의 `APP_FRONTEND_URL`도 같은 origin으로 맞춘다.
+그리고 Cloud Run 환경 변수의 `APP_FRONTEND_URL`도 같은 origin으로 맞춘다. `time-table.cloud`
+도메인 검증/Cloud Run 매핑이 끝나기 전 smoke fallback은
+`https://timetable-608682434352.asia-northeast1.run.app`를 사용한다.
 
 ```text
-APP_FRONTEND_URL=https://timetable-608682434352.asia-northeast2.run.app
+APP_FRONTEND_URL=https://time-table.cloud
+NEXT_PUBLIC_SITE_URL=https://time-table.cloud
+NEXT_PUBLIC_API_BASE_URL=
 ```
 
 현재 로컬 `client_secret_*.json`에 `http://localhost:8080/login/oauth2/code/google`만

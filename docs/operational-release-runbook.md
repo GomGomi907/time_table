@@ -80,7 +80,9 @@ Accept one of:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-release.ps1 -Full -RequireDocker
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-deployed-release.ps1 -BaseUrl https://timetable-608682434352.asia-northeast2.run.app/
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-deployed-release.ps1 -BaseUrl https://time-table.cloud/
+# Until DNS/managed certificate provisioning is complete, use:
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-deployed-release.ps1 -BaseUrl https://timetable-608682434352.asia-northeast1.run.app/
 ```
 
 `-Full -RequireDocker` is intentionally fail-closed: if Docker/Testcontainers cannot run, the report must say BLOCKED and beta promotion waits for Cloud Build/CI evidence from a clean checkout.
@@ -137,7 +139,7 @@ Local developer H2 checksum mismatch does not block release if the fresh Postgre
 Use a safe beta test account and safe test calendar/task objects.
 
 1. Register deployed callback:
-   `https://<service-url>/login/oauth2/code/google`
+   `https://time-table.cloud/login/oauth2/code/google`
 2. Login through Google OAuth.
 3. Read known calendar event.
 4. Create/update one safe test event.

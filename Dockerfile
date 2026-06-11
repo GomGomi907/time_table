@@ -51,7 +51,7 @@ COPY --from=frontend-build /workspace/frontend/.next/standalone /app/frontend
 COPY --from=frontend-build /workspace/frontend/.next/static /app/frontend/.next/static
 COPY docker/start-cloud-run.sh /app/start-cloud-run.sh
 
-RUN chmod +x /app/start-cloud-run.sh
+RUN sed -i 's/\r$//' /app/start-cloud-run.sh && chmod +x /app/start-cloud-run.sh
 
 EXPOSE 8080
 
