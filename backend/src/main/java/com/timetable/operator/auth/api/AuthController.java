@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -64,6 +65,24 @@ public class AuthController {
         if (session != null) {
             session.invalidate();
         }
+        SecurityContextHolder.clearContext();
+        response.setHeader("Clear-Site-Data", "\"cookies\"");
+        return ResponseEntity.noContent().location(URI.create("/")).build();
+    }
+
+    @PostMapping("/google/disconnect")
+    public AuthService.SessionResponse disconnectGoogle() {
+        return authService.disconnectGoogle();
+    }
+
+    @PostMapping("/account/delete")
+    public ResponseEntity<Void> deleteAccount(HttpServletRequest request, HttpServletResponse response) {
+        authService.deleteCurrentAccount();
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+        SecurityContextHolder.clearContext();
         response.setHeader("Clear-Site-Data", "\"cookies\"");
         return ResponseEntity.noContent().location(URI.create("/")).build();
     }

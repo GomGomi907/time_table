@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "Time Table 서비스 이용 약관입니다.",
 };
 
+const SUPPORT_EMAIL = "tkdrmsdl90715@gmail.com";
+
 export default function TermsPage() {
   return (
     <main className="legal-shell">
@@ -14,7 +16,7 @@ export default function TermsPage() {
           <p className="eyebrow">Time Table</p>
           <h1>서비스 약관</h1>
           <p>
-            시행일: <time dateTime="2026-06-11">2026년 6월 11일</time>
+            시행일: <time dateTime="2026-06-12">2026년 6월 12일</time>
           </p>
         </header>
 
@@ -42,6 +44,11 @@ export default function TermsPage() {
           <p>
             사용자는 본인에게 권한이 있는 Google 계정만 연결해야 합니다. Google 연결을 해제하면 일부 일정
             동기화 기능이 제한될 수 있습니다. 사용자는 자신의 계정, 브라우저, 기기 보안 유지에 책임이 있습니다.
+          </p>
+          <p>
+            로그인 후 계정 관리 영역에서 Google 연결 해제와 계정·데이터 삭제를 직접 실행할 수 있습니다.
+            Google 연결 해제는 저장된 OAuth 토큰을 삭제하고 새 동기화·반영을 중지하며, 계정 삭제는 서비스 내
+            계정과 일정·할 일·동기화 기록을 삭제합니다.
           </p>
         </section>
 
@@ -101,8 +108,8 @@ export default function TermsPage() {
         <section className="legal-section">
           <h2>10. 문의</h2>
           <p>
-            서비스 이용, 데이터 처리, 약관에 관한 문의는 서비스 운영자 또는 Google OAuth 동의 화면에 표시되는
-            사용자 지원 이메일로 연락해 주세요.
+            서비스 이용, 데이터 처리, 약관, 계정 삭제 지원은{" "}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>로 연락해 주세요.
           </p>
         </section>
 

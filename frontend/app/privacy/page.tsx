@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 };
 
 const GOOGLE_USER_DATA_POLICY_URL = "https://developers.google.com/terms/api-services-user-data-policy";
+const SUPPORT_EMAIL = "tkdrmsdl90715@gmail.com";
 
 export default function PrivacyPage() {
   return (
@@ -16,7 +17,7 @@ export default function PrivacyPage() {
           <p className="eyebrow">Time Table</p>
           <h1>개인정보처리방침</h1>
           <p>
-            시행일: <time dateTime="2026-06-11">2026년 6월 11일</time>
+            시행일: <time dateTime="2026-06-12">2026년 6월 12일</time>
           </p>
         </header>
 
@@ -66,22 +67,29 @@ export default function PrivacyPage() {
             와 Limited Use 요구사항을 준수합니다. 필요한 최소 권한만 요청하며, 새로운 목적이나 범위로
             Google 사용자 데이터를 사용해야 하는 경우에는 방침을 갱신하고 필요한 동의를 다시 요청합니다.
           </p>
+          <p>
+            Google 사용자 데이터는 일반화된 AI/ML 모델을 학습·개선하는 데 사용하지 않습니다. 사용자가 AI 일정
+            재배치 초안을 요청한 경우에 한해 필요한 일정 맥락과 요청 문구를 최소 범위로 처리하며, 제안은
+            사용자의 확인과 승인 전에는 외부 캘린더에 반영하지 않습니다.
+          </p>
         </section>
 
         <section className="legal-section">
           <h2>5. 보관 및 삭제</h2>
           <ul className="legal-list">
             <li>서비스 제공에 필요한 정보는 계정 유지 기간 동안 보관합니다.</li>
-            <li>동기화 로그와 보안 로그는 오류 대응과 부정 이용 방지를 위해 필요한 기간 동안 보관할 수 있습니다.</li>
-            <li>사용자가 계정 삭제 또는 Google 연결 해제를 요청하면, 법령상 보관이 필요한 정보를 제외하고 서비스 내 개인정보와 Google 연동 데이터를 삭제하거나 비식별 처리합니다.</li>
+            <li>Google 연결 해제를 실행하면 저장된 Google OAuth 토큰과 권한 상태를 삭제하고 새 동기화·반영을 중지합니다.</li>
+            <li>계정·데이터 삭제를 실행하면 법령상 보관이 필요한 정보를 제외하고 서비스 계정, 일정·할 일·목표, 동기화 기록, AI 요청 기록을 삭제합니다.</li>
+            <li>보안·오류 대응 로그는 필요한 기간 동안만 보관하며 기본 운영 기준은 최대 90일입니다.</li>
           </ul>
         </section>
 
         <section className="legal-section">
           <h2>6. 공유 및 위탁</h2>
           <p>
-            Time Table은 서비스 운영에 필요한 인프라, 인증, 데이터베이스, 오류 모니터링 제공자에게
-            필요한 범위의 처리를 위탁할 수 있습니다. 법령상 요구, 보안 사고 대응, 사용자의 명시적 동의가
+            Time Table은 서비스 운영에 필요한 범위에서 Google Cloud Run, Cloud SQL, Secret Manager,
+            Google OAuth, Google Calendar API, Google Tasks API, Google Gemini API 등 인프라·인증·동기화·AI
+            처리 제공자에게 처리를 위탁할 수 있습니다. 법령상 요구, 보안 사고 대응, 사용자의 명시적 동의가
             있는 경우를 제외하고 개인정보나 Google 사용자 데이터를 판매하지 않습니다.
           </p>
         </section>
@@ -99,13 +107,22 @@ export default function PrivacyPage() {
           <h2>8. 이용자의 권리</h2>
           <p>
             사용자는 자신의 개인정보 열람, 정정, 삭제, 처리 정지, Google 연결 해제를 요청할 수 있습니다.
-            권리 행사는 서비스 운영자 또는 Google OAuth 동의 화면에 표시되는 사용자 지원 이메일로 요청할 수
-            있습니다.
+            로그인 후 계정 관리 영역에서 Google 연결 해제와 계정·데이터 삭제를 직접 실행할 수 있으며,
+            지원이 필요한 경우{" "}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>로 요청할 수 있습니다.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2>9. 변경</h2>
+          <h2>9. 문의</h2>
+          <p>
+            개인정보, Google 사용자 데이터, 계정 삭제, 보안 취약점 신고는{" "}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>로 연락해 주세요.
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2>10. 변경</h2>
           <p>
             본 방침은 서비스 기능, 법령, Google 정책 변경에 따라 갱신될 수 있습니다. 중요한 변경이 있는 경우
             서비스 화면 또는 별도 안내를 통해 고지합니다.

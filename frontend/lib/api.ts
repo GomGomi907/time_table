@@ -265,6 +265,19 @@ export const api = {
     csrfTokenCache = null;
   },
 
+  disconnectGoogle() {
+    return requestRaw<AuthSession>("/api/auth/google/disconnect", {
+      method: "POST",
+    });
+  },
+
+  async deleteAccount() {
+    await requestRaw("/api/auth/account/delete", {
+      method: "POST",
+    });
+    csrfTokenCache = null;
+  },
+
   getSettings() {
     return requestEnvelope<SettingsResponse>("/api/settings");
   },

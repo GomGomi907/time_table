@@ -77,6 +77,8 @@ if (fs.existsSync(apiModule)) {
     "saveOnboardingAnswers",
     "completeOnboarding",
     "logout",
+    "disconnectGoogle",
+    "deleteAccount",
     "getWeekSchedule",
     "getScheduleMutationPreflight",
     "createScheduleBlock",

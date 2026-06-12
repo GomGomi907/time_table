@@ -6,6 +6,7 @@ import { useEffect, useState, useTransition } from "react";
 
 import { api } from "@/lib/api";
 import { BrandLogo } from "@/components/brand-logo";
+import { GoogleMark } from "@/components/google-mark";
 import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 
@@ -69,6 +70,13 @@ export function LoginView() {
         <section className="login-action-card">
           <p className="panel-kicker">시작</p>
           <h2>시작하기</h2>
+          <div className="oauth-disclosure" aria-label="Google 데이터 사용 안내">
+            <strong>Google로 계속하면</strong>
+            <p>
+              이름·이메일로 계정을 만들고, 사용자가 승인한 Calendar/Tasks 데이터만 오늘 일정·할 일 표시와
+              승인 기반 일정 반영에 사용합니다. 연결 해제와 계정 삭제는 로그인 후 언제든지 가능합니다.
+            </p>
+          </div>
 
           {loginMessage ? (
             <div className="inline-message info">
@@ -86,7 +94,7 @@ export function LoginView() {
 
           <div className="guest-actions">
             <button
-              className="solid-btn wide-btn"
+              className="google-signin-button wide-btn"
               disabled={isPending}
               onClick={() =>
                 startTransition(() => {
@@ -94,7 +102,8 @@ export function LoginView() {
                 })
               }
             >
-              {isPending ? "로그인 준비 중..." : "Google로 시작"}
+              <GoogleMark />
+              <span>{isPending ? "로그인 준비 중..." : "Google로 계속하기"}</span>
             </button>
             {sessionPhase === "error" ? (
               <button className="ghost-btn wide-btn" data-testid="status-retry-action" onClick={() => void refreshSession()}>

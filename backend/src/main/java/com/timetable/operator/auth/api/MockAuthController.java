@@ -87,7 +87,7 @@ public class MockAuthController {
         connection.setRefreshToken("mock-google-refresh-token");
         connection.setTokenExpiresAt(Instant.now().plusSeconds(3_600));
         connection.setGrantedScopes(writeCapable
-                ? "https://www.googleapis.com/auth/calendar.events,https://www.googleapis.com/auth/tasks"
+                ? "https://www.googleapis.com/auth/calendar.events.owned,https://www.googleapis.com/auth/tasks"
                 : "https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/tasks.readonly");
         connection.setCalendarReadEnabled(true);
         connection.setTasksReadEnabled(true);

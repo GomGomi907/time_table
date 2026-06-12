@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useEffect, useTransition } from "react";
+import { ReactNode, useEffect, useState, useTransition } from "react";
 
 import { api } from "@/lib/api";
 import { BrandLogo } from "@/components/brand-logo";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useOnboardingBootstrap } from "@/hooks/use-onboarding-bootstrap";
 import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { useAppStore } from "@/stores/app-store";
@@ -53,6 +54,13 @@ export function AppShell({
   const clearSession = useAppStore((state) => state.clearSession);
   const showNotice = useAppStore((state) => state.showNotice);
   const [isPending, startTransition] = useTransition();
+  const [accountAction, setAccountAction] = useState<"disconnect" | "delete" | null>(null);
+  const [confirmAccountAction, setConfirmAccountAction] = useState<"disconnect" | "delete" | null>(null);
+
+  const googleConnected = ["CONNECTED", "SYNCING", "DEGRADED", "ERROR"].includes(
+    session?.googleConnectionStatus ?? "",
+  );
+
   async function handleLogout() {
     try {
       await api.logout();
@@ -69,6 +77,48 @@ export function AppShell({
         title: "로그아웃에 실패했습니다.",
         detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
       });
+    }
+  }
+
+  async function handleDisconnectGoogle() {
+    if (!googleConnected) {
+      return;
+    }
+
+    setAccountAction("disconnect");
+    try {
+      await api.disconnectGoogle();
+      await refreshSession();
+      setConfirmAccountAction(null);
+      showNotice({
+        tone: "info",
+        title: "Google 연결을 해제했습니다.",
+        detail: "다시 연결하려면 로그아웃 후 Google로 다시 로그인해 동의하면 됩니다.",
+      });
+    } catch (error) {
+      showNotice({
+        tone: "error",
+        title: "Google 연결 해제에 실패했습니다.",
+        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하면 됩니다.",
+      });
+    } finally {
+      setAccountAction(null);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setAccountAction("delete");
+    try {
+      await api.deleteAccount();
+      clearSession();
+      window.location.assign("/");
+    } catch (error) {
+      showNotice({
+        tone: "error",
+        title: "계정 삭제에 실패했습니다.",
+        detail: error instanceof Error ? error.message : "잠시 후 다시 시도하거나 지원 이메일로 문의해 주세요.",
+      });
+      setAccountAction(null);
     }
   }
 
@@ -197,9 +247,33 @@ export function AppShell({
         </nav>
 
 
+        <section className="account-control-panel" aria-label="계정 및 Google 연결 관리">
+          <p className="panel-kicker">Google 연결</p>
+          <p className={`connection-status-pill ${googleConnected ? "connected" : "disconnected"}`}>
+            {googleConnected ? "연결됨" : "연결 안 됨"}
+          </p>
+          <p className="micro-copy">
+            저장된 Google 토큰을 삭제하거나 Time Table 계정 데이터를 삭제할 수 있습니다.
+          </p>
+          <button
+            className="ghost-btn wide-btn compact-account-btn"
+            disabled={!googleConnected || isPending || accountAction !== null}
+            onClick={() => setConfirmAccountAction("disconnect")}
+          >
+            {accountAction === "disconnect" ? "해제 중..." : "Google 연결 해제"}
+          </button>
+          <button
+            className="danger-btn wide-btn compact-account-btn"
+            disabled={isPending || accountAction !== null}
+            onClick={() => setConfirmAccountAction("delete")}
+          >
+            {accountAction === "delete" ? "삭제 중..." : "계정·데이터 삭제"}
+          </button>
+        </section>
+
         <button
           className="ghost-btn wide-btn"
-          disabled={isPending}
+          disabled={isPending || accountAction !== null}
           onClick={() => startTransition(() => void handleLogout())}
         >
           {isPending ? "세션 종료 중..." : "로그아웃"}
@@ -234,6 +308,36 @@ export function AppShell({
         <aside className="app-right-rail" data-testid="app-right-rail" aria-label="보조 작업 패널">
           {rightRail}
         </aside>
+      ) : null}
+
+      {confirmAccountAction === "disconnect" ? (
+        <ConfirmDialog
+          title="Google 연결을 해제할까요?"
+          description="저장된 Google OAuth 토큰과 권한 상태를 삭제하고 새 동기화·외부 반영을 중지합니다. 서비스 안에 이미 저장된 일정 데이터는 계정 삭제 전까지 유지됩니다."
+          confirmLabel="연결 해제"
+          isPending={accountAction === "disconnect"}
+          onCancel={() => {
+            if (accountAction === null) {
+              setConfirmAccountAction(null);
+            }
+          }}
+          onConfirm={() => void handleDisconnectGoogle()}
+        />
+      ) : null}
+
+      {confirmAccountAction === "delete" ? (
+        <ConfirmDialog
+          title="계정과 데이터를 삭제할까요?"
+          description="Time Table 계정, 서비스 내 일정·할 일·목표, 동기화 기록, AI 요청 기록을 삭제합니다. 이 작업은 되돌릴 수 없습니다."
+          confirmLabel="계정·데이터 삭제"
+          isPending={accountAction === "delete"}
+          onCancel={() => {
+            if (accountAction === null) {
+              setConfirmAccountAction(null);
+            }
+          }}
+          onConfirm={() => void handleDeleteAccount()}
+        />
       ) : null}
     </div>
   );

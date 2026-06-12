@@ -102,7 +102,7 @@ public record AppProperties(
                     "openid",
                     "profile",
                     "email",
-                    "https://www.googleapis.com/auth/calendar.events",
+                    "https://www.googleapis.com/auth/calendar.events.owned",
                     "https://www.googleapis.com/auth/tasks"
             );
         }

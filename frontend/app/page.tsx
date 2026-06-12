@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 const FEATURES = [
   {
     title: "Google 일정 동기화",
-    description: "승인한 Google Calendar/Tasks 데이터를 불러와 오늘 일정과 주간 흐름을 한 화면에서 확인합니다.",
+    description: "승인한 Google Calendar/Tasks 데이터만 불러와 오늘 일정과 주간 흐름을 한 화면에서 확인합니다.",
   },
   {
     title: "승인 우선 AI 제안",
@@ -47,7 +47,7 @@ export default function HomePage() {
 
         <div className="guest-actions">
           <Link className="solid-btn link-btn" href="/login">
-            Google로 시작
+            로그인 화면으로 이동
           </Link>
           <Link className="ghost-btn link-btn" href="/privacy">
             개인정보처리방침
@@ -56,6 +56,10 @@ export default function HomePage() {
             서비스 약관
           </Link>
         </div>
+        <p className="public-oauth-note">
+          Google 로그인은 이름·이메일 확인과 사용자가 승인한 Calendar/Tasks 연동에만 사용됩니다.
+          연결 해제와 계정·데이터 삭제는 로그인 후 계정 관리 영역에서 직접 처리할 수 있습니다.
+        </p>
       </section>
 
       <section className="public-feature-grid" aria-label="핵심 기능">

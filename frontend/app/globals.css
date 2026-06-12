@@ -443,6 +443,56 @@ summary,
   align-items: stretch;
 }
 
+.google-signin-button {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid #dadce0;
+  border-radius: 999px;
+  background: #fff;
+  color: #3c4043;
+  box-shadow: 0 8px 18px rgba(60, 64, 67, 0.1);
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 0 18px;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.google-signin-button:hover:not(:disabled) {
+  border-color: #c6c9ce;
+  background: #f8fafd;
+  box-shadow: 0 12px 26px rgba(60, 64, 67, 0.14);
+  transform: translateY(-1px);
+}
+
+.google-signin-button:disabled {
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.google-mark {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.oauth-disclosure {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(91, 110, 225, 0.18);
+  border-radius: var(--radius);
+  background: rgba(237, 240, 255, 0.58);
+  padding: 15px 16px;
+}
+
+.oauth-disclosure p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
 .login-brand {
   display: flex;
   align-items: center;
@@ -473,6 +523,12 @@ summary,
 .legal-links a:hover {
   border-color: currentColor;
   color: var(--ink-strong);
+}
+
+.public-oauth-note {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 /* Public and legal pages */
@@ -726,6 +782,46 @@ summary,
 
 .side-nav .wide-btn {
   margin-top: auto;
+}
+
+.account-control-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.58);
+  padding: 14px;
+}
+
+.connection-status-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1;
+  padding: 7px 10px;
+}
+
+.connection-status-pill.connected {
+  background: rgba(15, 159, 110, 0.12);
+  color: var(--success);
+}
+
+.connection-status-pill.disconnected {
+  background: rgba(104, 113, 130, 0.12);
+  color: var(--muted);
+}
+
+.compact-account-btn {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 0.86rem;
+}
+
+.account-control-panel .wide-btn {
+  margin-top: 0;
 }
 
 .side-legal-links {

@@ -1,6 +1,7 @@
 package com.timetable.operator.auth.application;
 
 import com.timetable.operator.auth.domain.AppUser;
+import com.timetable.operator.auth.infrastructure.AppUserRepository;
 import com.timetable.operator.calendar.domain.CalendarConnection;
 import com.timetable.operator.calendar.domain.CalendarConnectionStatus;
 import com.timetable.operator.calendar.domain.CalendarSyncRun;
@@ -26,9 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final CurrentUserProvider currentUserProvider;
+    private final AppUserRepository appUserRepository;
     private final CalendarConnectionRepository calendarConnectionRepository;
     private final CalendarSyncRunRepository calendarSyncRunRepository;
     private final AppProperties appProperties;
+    private final GoogleTokenRevocationService googleTokenRevocationService;
 
     public SessionResponse getSession() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -115,6 +118,46 @@ public class AuthService {
         connection.setLastSuccessfulSyncAt(success ? Instant.now() : connection.getLastSuccessfulSyncAt());
         connection.setLastSyncError(errorMessage);
         calendarConnectionRepository.save(connection);
+    }
+
+    @Transactional
+    public SessionResponse disconnectGoogle() {
+        AppUser user = currentUserProvider.getCurrentUser();
+        calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .ifPresent(connection -> {
+                    googleTokenRevocationService.revokeIfConfigured(
+                            connection.getRefreshToken(),
+                            connection.getAccessToken()
+                    );
+                    connection.setStatus(CalendarConnectionStatus.NOT_CONNECTED);
+                    connection.setAccessToken(null);
+                    connection.setRefreshToken(null);
+                    connection.setTokenExpiresAt(null);
+                    connection.setLastSyncError(null);
+                    connection.setGrantedScopes("");
+                    connection.setCalendarReadEnabled(false);
+                    connection.setCalendarWriteEnabled(false);
+                    connection.setTasksReadEnabled(false);
+                    connection.setTasksWriteEnabled(false);
+                    connection.setCapabilityCheckedAt(Instant.now());
+                    connection.setCapabilityStatus("not_connected");
+                    connection.setCapabilityError("Google connection was disconnected by the user.");
+                    calendarConnectionRepository.save(connection);
+                });
+
+        return getSession();
+    }
+
+    @Transactional
+    public void deleteCurrentAccount() {
+        AppUser user = currentUserProvider.getCurrentUser();
+        calendarConnectionRepository.findByUserIdAndProvider(user.getId(), "google")
+                .ifPresent(connection -> googleTokenRevocationService.revokeIfConfigured(
+                        connection.getRefreshToken(),
+                        connection.getAccessToken()
+                ));
+        appUserRepository.deleteById(user.getId());
+        appUserRepository.flush();
     }
 
     private void applyGrantedScopes(CalendarConnection connection, Set<String> scopes) {
