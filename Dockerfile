@@ -49,6 +49,7 @@ COPY --from=node-runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=backend-build /workspace/backend/build/libs/*.jar /app/backend/app.jar
 COPY --from=frontend-build /workspace/frontend/.next/standalone /app/frontend
 COPY --from=frontend-build /workspace/frontend/.next/static /app/frontend/.next/static
+COPY --from=frontend-build /workspace/frontend/public /app/frontend/public
 COPY docker/start-cloud-run.sh /app/start-cloud-run.sh
 
 RUN sed -i 's/\r$//' /app/start-cloud-run.sh && chmod +x /app/start-cloud-run.sh
