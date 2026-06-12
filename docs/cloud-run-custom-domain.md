@@ -1,6 +1,6 @@
 # Cloud Run custom domain migration — `time-table.cloud`
 
-Status: Cloud Run domain mapping created; Gabia A/AAAA DNS records are pending before Google-managed certificate provisioning can complete.
+Status: live on Cloud Run direct domain mapping. Google-managed certificate is provisioned, apex A records are visible from public DoH resolvers, and Google OAuth no longer returns `redirect_uri_mismatch`.
 
 ## Current target
 
@@ -9,7 +9,7 @@ Status: Cloud Run domain mapping created; Gabia A/AAAA DNS records are pending b
 - Target region for direct domain mapping: `asia-northeast1`
 - Current reachable fallback URL: `https://timetable-608682434352.asia-northeast1.run.app`
 - Previous service region kept for rollback: `asia-northeast2`
-- OAuth redirect URI to register after domain DNS/certificate is live: `https://time-table.cloud/login/oauth2/code/google`
+- OAuth redirect URI: `https://time-table.cloud/login/oauth2/code/google`
 
 ## Completed
 
@@ -38,51 +38,7 @@ gcloud domains list-user-verified --project=gen-lang-client-0555168800
 # time-table.cloud
 ```
 
-Cloud Run direct domain mapping was created:
-
-```powershell
-gcloud beta run domain-mappings create `
-  --service=timetable `
-  --domain=time-table.cloud `
-  --region=asia-northeast1 `
-  --project=gen-lang-client-0555168800 `
-  --platform=managed
-```
-
-Current mapping status:
-
-```text
-Ready: Unknown
-Reason: CertificatePending
-Message: Waiting for certificate provisioning. You must configure your DNS records for certificate issuance to begin.
-DomainRoutable: True
-```
-
-## Required Gabia DNS records
-
-Add these records at the apex/root host in Gabia (`@`, blank, or `time-table.cloud` depending on the Gabia UI):
-
-| Host | Type | Value |
-|---|---|---|
-| `@` | `A` | `216.239.32.21` |
-| `@` | `A` | `216.239.34.21` |
-| `@` | `A` | `216.239.36.21` |
-| `@` | `A` | `216.239.38.21` |
-| `@` | `AAAA` | `2001:4860:4802:32::15` |
-| `@` | `AAAA` | `2001:4860:4802:34::15` |
-| `@` | `AAAA` | `2001:4860:4802:36::15` |
-| `@` | `AAAA` | `2001:4860:4802:38::15` |
-
-Current DNS evidence after mapping creation still shows no apex A/AAAA records:
-
-```text
-Resolve-DnsName time-table.cloud A    -> no A record yet
-Resolve-DnsName time-table.cloud AAAA -> no AAAA record yet
-```
-
-## Verify after Gabia DNS is updated
-
-After propagation and Google-managed certificate provisioning, verify:
+Cloud Run direct domain mapping is ready:
 
 ```powershell
 gcloud beta run domain-mappings describe `
@@ -90,25 +46,51 @@ gcloud beta run domain-mappings describe `
   --region=asia-northeast1 `
   --project=gen-lang-client-0555168800 `
   --platform=managed
-
-Invoke-WebRequest -UseBasicParsing https://time-table.cloud/login
-Invoke-WebRequest -UseBasicParsing https://time-table.cloud/privacy
-Invoke-WebRequest -UseBasicParsing https://time-table.cloud/terms
-Invoke-WebRequest -UseBasicParsing https://time-table.cloud/actuator/health
 ```
+
+Observed status:
+
+```text
+Ready: True
+CertificateProvisioned: True
+DomainRoutable: True
+```
+
+## Gabia DNS records
+
+Apex/root A records are configured:
+
+| Host | Type | Value |
+|---|---|---|
+| `@` | `A` | `216.239.32.21` |
+| `@` | `A` | `216.239.34.21` |
+| `@` | `A` | `216.239.36.21` |
+| `@` | `A` | `216.239.38.21` |
+
+Cloud Run also supplied AAAA records, but Gabia did not expose an AAAA option during setup. IPv4 A records are sufficient for the current HTTPS deployment.
+
+Public DoH evidence:
+
+```text
+dns.google A time-table.cloud -> 216.239.32.21, 216.239.34.21, 216.239.36.21, 216.239.38.21
+cloudflare A time-table.cloud -> 216.239.32.21, 216.239.34.21, 216.239.36.21, 216.239.38.21
+```
+
+Some local/system resolvers can lag behind public DoH and still return no A record during propagation. Use `https://dns.google/resolve?name=time-table.cloud&type=A` as the cross-check source when diagnosing resolver cache delay.
 
 ## Google OAuth configuration
 
-After `https://time-table.cloud` resolves successfully:
+Google OAuth client `608682434352-84cplp66gcmc5eq29fpdb1mlidrv5rp9.apps.googleusercontent.com` must keep:
 
-1. Google Auth Platform → Branding
-   - Homepage: `https://time-table.cloud/`
-   - Privacy policy: `https://time-table.cloud/privacy`
-   - Terms of service: `https://time-table.cloud/terms`
-   - App logo: `frontend/public/brand/time-table-logo-512.png`
-2. Google Auth Platform → Branding → Authorized domains
-   - Add `time-table.cloud`
-3. OAuth client → Authorized redirect URIs
-   - Add `https://time-table.cloud/login/oauth2/code/google`
+- Authorized redirect URI: `https://time-table.cloud/login/oauth2/code/google`
+- Recommended authorized JavaScript origin: `https://time-table.cloud`
 
-Keep the `asia-northeast1.run.app` URL only as a rollout fallback; the public review URLs should use `time-table.cloud` once DNS and certificate provisioning complete.
+Verification evidence after adding the redirect URI:
+
+```text
+https://time-table.cloud/oauth2/authorization/google
+-> Google Sign in page
+-> no redirect_uri_mismatch / Error 400 markers
+```
+
+Keep the `asia-northeast1.run.app` URL only as a rollout fallback; public review URLs should use `time-table.cloud`.
